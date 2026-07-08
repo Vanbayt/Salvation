@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Splash" parent="Night.Theme.Splash" />
+    <style name="CornerSize16Percent">
+        <item name="cornerSize">16%</item>
+    </style>
+</resources>

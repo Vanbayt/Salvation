@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/full_player"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:paddingTop="16dp"
+    android:paddingBottom="16dp">
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/slide_down"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginStart="12dp"
+        app:icon="@drawable/ic_expand_more"
+        app:iconSize="28dp"
+        app:iconTint="?attr/colorOnSurface"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/nowPlaying"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Сейчас играет"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/colorOnSurface"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="@id/slide_down"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/slide_down" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/playlist"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginEnd="12dp"
+        app:icon="@drawable/ic_more_vert"
+        app:iconSize="28dp"
+        app:iconTint="?attr/colorOnSurface"
+        app:layout_constraintBottom_toBottomOf="@id/slide_down"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/slide_down" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/album_cover_frame"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="@android:color/transparent"
+        app:cardCornerRadius="48dp"
+        app:cardElevation="0dp"
+        app:layout_constraintBottom_toTopOf="@id/textLayout"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/slide_down">
+
+        <org.akanework.gramophone.ui.components.TransformableImageView
+            android:id="@+id/full_sheet_cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            app:srcCompat="@drawable/ic_library" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/textLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toTopOf="@id/compose_slider_view"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <org.akanework.gramophone.ui.components.MarqueeTextView
+            android:id="@+id/full_song_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceHeadlineMedium"
+            android:textColor="?attr/colorOnSurface"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="Stereo Hearts (ft. Adam)" />
+
+        <org.akanework.gramophone.ui.components.MarqueeTextView
+            android:id="@+id/full_song_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0.7"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/full_song_name"
+            tools:text="Gym Class Heroes" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/compose_slider_view"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@id/position"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/position"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginBottom="16dp"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toTopOf="@id/compose_play_button"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:text="1:24" />
+
+    <TextView
+        android:id="@+id/duration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="24dp"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toBottomOf="@id/position"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/position"
+        tools:text="3:31" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/favor"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginStart="16dp"
+        android:checkable="true"
+        app:icon="@drawable/sl_check_fav"
+        app:iconSize="28dp"
+        app:iconTint="@color/sl_fav_button"
+        app:layout_constraintBottom_toBottomOf="@id/compose_play_button"
+        app:layout_constraintEnd_toStartOf="@id/sheet_previous_song"
+        app:layout_constraintHorizontal_chainStyle="spread_inside"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/compose_play_button" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sheet_previous_song"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        app:icon="@drawable/ic_skip_previous"
+        app:iconSize="36dp"
+        app:iconTint="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toBottomOf="@id/compose_play_button"
+        app:layout_constraintEnd_toStartOf="@id/compose_play_button"
+        app:layout_constraintStart_toEndOf="@id/favor"
+        app:layout_constraintTop_toTopOf="@id/compose_play_button" />
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/compose_play_button"
+        android:layout_width="88dp"
+        android:layout_height="88dp"
+        android:layout_marginBottom="12dp"
+        app:layout_constraintBottom_toTopOf="@id/actionBar"
+        app:layout_constraintEnd_toStartOf="@id/sheet_next_song"
+        app:layout_constraintStart_toEndOf="@id/sheet_previous_song" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sheet_next_song"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        app:icon="@drawable/ic_skip_next"
+        app:iconSize="36dp"
+        app:iconTint="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toBottomOf="@id/compose_play_button"
+        app:layout_constraintEnd_toStartOf="@id/sheet_random"
+        app:layout_constraintStart_toEndOf="@id/compose_play_button"
+        app:layout_constraintTop_toTopOf="@id/compose_play_button" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sheet_random"
+        style="@style/Widget.Material3.Button.IconButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginEnd="16dp"
+        android:checkable="true"
+        app:icon="@drawable/ic_shuffle"
+        app:iconSize="28dp"
+        app:iconTint="@color/sl_check_button"
+        app:layout_constraintBottom_toBottomOf="@id/compose_play_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/sheet_next_song"
+        app:layout_constraintTop_toTopOf="@id/compose_play_button" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/actionBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/lyrics"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            app:icon="@drawable/ic_article"
+            app:iconSize="24dp"
+            app:iconTint="?attr/colorOnSurfaceVariant"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sheet_loop"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:checkable="true"
+            app:icon="@drawable/ic_repeat"
+            app:iconSize="24dp"
+            app:iconTint="@color/sl_check_button"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
