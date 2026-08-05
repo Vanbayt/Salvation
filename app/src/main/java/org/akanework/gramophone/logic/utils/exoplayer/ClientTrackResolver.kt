@@ -249,6 +249,10 @@ object ClientTrackResolver {
         httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val body = resp.body?.string() ?: return emptyList()
+            if (body.contains("No results for") || body.contains("Try different keywords")) {
+                Log.d(TAG, "Search for '$query' returned no direct results, skipping fallback recommendations.")
+                return emptyList()
+            }
             val json = JSONObject(body)
 
             fun parse(obj: Any) {
