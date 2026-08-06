@@ -16,6 +16,9 @@ object ClientTrackResolver {
     private const val TAG = "ClientTrackResolver"
     private const val BACKEND_BASE_URL = "http://185.196.41.31"
 
+    @Volatile
+    private var lastVisitorData: String = ""
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -276,6 +279,10 @@ object ClientTrackResolver {
                 return emptyList()
             }
             val json = JSONObject(body)
+            val vData = json.optJSONObject("responseContext")?.optString("visitorData", "") ?: ""
+            if (vData.isNotEmpty()) {
+                lastVisitorData = vData
+            }
 
             fun parse(obj: Any) {
                 when (obj) {
@@ -503,6 +510,9 @@ object ClientTrackResolver {
                             put("clientVersion", cVer)
                             put("hl", "en")
                             put("gl", "US")
+                            if (lastVisitorData.isNotEmpty()) {
+                                put("visitorData", lastVisitorData)
+                            }
                         })
                     })
                     put("videoId", videoId)
