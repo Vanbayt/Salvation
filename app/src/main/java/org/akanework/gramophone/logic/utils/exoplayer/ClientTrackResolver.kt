@@ -303,12 +303,16 @@ object ClientTrackResolver {
                                     ?.optString("videoId", "") ?: ""
                             }
 
+                            var cardDur = 0.0
                             val subRuns = card.optJSONObject("subtitle")?.optJSONArray("runs")
                             if (subRuns != null) {
                                 for (i in 0 until subRuns.length()) {
                                     val r = subRuns.optJSONObject(i)
                                     val t = r?.optString("text", "") ?: ""
-                                    if (t.isNotEmpty() && t != " • " && t != "Song" && t != "Video") {
+                                    if (t.contains(":")) {
+                                        val d = parseDurationSec(t)
+                                        if (d > 0) cardDur = d
+                                    } else if (t.isNotEmpty() && t != " • " && t != "Song" && t != "Video") {
                                         if (uploader.isEmpty()) uploader = t
                                     }
                                 }
@@ -323,7 +327,7 @@ object ClientTrackResolver {
                                         id = vid,
                                         title = title,
                                         uploader = if (uploader.isNotEmpty()) uploader else info.artist,
-                                        duration = 0.0,
+                                        duration = cardDur,
                                         isOfficialSong = isOfficial,
                                         source = "YouTube Music Card (Top Result)"
                                     )
@@ -337,6 +341,7 @@ object ClientTrackResolver {
                             var vid = ""
                             var title = ""
                             var uploader = ""
+                            var candDur = 0.0
                             var isOfficial = false
 
                             if (item.has("playlistItemData")) {
@@ -359,17 +364,22 @@ object ClientTrackResolver {
                                 }
                             }
 
-                            if (flex != null && flex.length() > 1) {
-                                val flex1 = flex.optJSONObject(1)
-                                val textObj = flex1?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")?.optJSONObject("text")
-                                val runs = textObj?.optJSONArray("runs")
-                                if (runs != null) {
-                                    for (i in 0 until runs.length()) {
-                                        val r = runs.optJSONObject(i)
-                                        val t = r?.optString("text", "") ?: ""
-                                        if (t.isNotEmpty() && t != " • " && t != "Song" && t != "Video") {
-                                            if (uploader.isEmpty()) {
-                                                uploader = t
+                            if (flex != null) {
+                                for (fIdx in 1 until flex.length()) {
+                                    val flexObj = flex.optJSONObject(fIdx)
+                                    val textObj = flexObj?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")?.optJSONObject("text")
+                                    val runs = textObj?.optJSONArray("runs")
+                                    if (runs != null) {
+                                        for (i in 0 until runs.length()) {
+                                            val r = runs.optJSONObject(i)
+                                            val t = r?.optString("text", "") ?: ""
+                                            if (t.contains(":")) {
+                                                val d = parseDurationSec(t)
+                                                if (d > 0) candDur = d
+                                            } else if (t.isNotEmpty() && t != " • " && t != "Song" && t != "Video") {
+                                                if (uploader.isEmpty()) {
+                                                    uploader = t
+                                                }
                                             }
                                         }
                                     }
@@ -389,7 +399,7 @@ object ClientTrackResolver {
                                         id = vid,
                                         title = title,
                                         uploader = uploader,
-                                        duration = 0.0,
+                                        duration = candDur,
                                         isOfficialSong = isOfficial,
                                         source = "YouTube Music (WEB_REMIX)"
                                     )
@@ -495,7 +505,37 @@ object ClientTrackResolver {
 
         if (artistMatches) score += 300
 
+        val targetDur = info.duration.toDouble()
+        if (targetDur > 0 && c.duration > 0) {
+            val diff = Math.abs(targetDur - c.duration)
+            if (diff > 30 || (c.duration < 0.6 * targetDur && diff > 15)) {
+                return -2000 // Hard rejection for duration mismatch / snippet / bootleg
+            } else if (diff > 12) {
+                score -= 600
+            } else if (diff > 5) {
+                score -= 200
+            } else if (diff <= 3) {
+                score += 200
+            }
+        }
+
         return score
+    }
+
+    private fun parseDurationSec(s: String): Double {
+        val clean = s.trim()
+        if (!clean.contains(":")) return 0.0
+        val parts = clean.split(":")
+        try {
+            if (parts.size == 2) {
+                return (parts[0].toDouble() * 60.0) + parts[1].toDouble()
+            } else if (parts.size == 3) {
+                return (parts[0].toDouble() * 3600.0) + (parts[1].toDouble() * 60.0) + parts[2].toDouble()
+            }
+        } catch (e: Exception) {
+            return 0.0
+        }
+        return 0.0
     }
 
     private fun cleanNormalize(s: String): String {
