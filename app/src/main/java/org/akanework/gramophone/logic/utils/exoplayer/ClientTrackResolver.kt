@@ -121,7 +121,7 @@ object ClientTrackResolver {
             val startTime = System.currentTimeMillis()
 
             for ((cand, score) in scoredCandidates.take(5)) {
-                val directUrl = extractPlayerStreamUrl(cand.id)
+                val directUrl = extractPlayerStreamUrl(cand.id, info.duration)
                 if (!directUrl.isNullOrEmpty()) {
                     winnerCandidate = cand
                     winnerUrl = directUrl
@@ -570,7 +570,7 @@ object ClientTrackResolver {
         return cleanNormalize(if (subParts.isNotEmpty()) subParts[0] else t)
     }
 
-    private fun extractPlayerStreamUrl(videoId: String): String? {
+    private fun extractPlayerStreamUrl(videoId: String, targetDurationSec: Int = 0): String? {
         val profiles = listOf(
             Pair("ANDROID_VR", "1.54.26"),
             Pair("TVHTML5", "7.20240101.01.00"),
@@ -609,6 +609,16 @@ object ClientTrackResolver {
                     val playability = json.optJSONObject("playabilityStatus")
                     val status = playability?.optString("status", "") ?: ""
                     if (status != "OK") return@use
+
+                    val videoDetails = json.optJSONObject("videoDetails")
+                    val playerLengthSec = videoDetails?.optString("lengthSeconds", "0")?.toIntOrNull() ?: 0
+                    if (targetDurationSec > 0 && playerLengthSec > 0) {
+                        val diff = Math.abs(targetDurationSec - playerLengthSec)
+                        if (diff > 30 || (playerLengthSec < 0.6 * targetDurationSec && diff > 15)) {
+                            Log.w(TAG, "Rejected candidate $videoId due to exact Player duration mismatch: ${playerLengthSec}s vs ${targetDurationSec}s")
+                            return null
+                        }
+                    }
 
                     val streamingData = json.optJSONObject("streamingData") ?: return@use
                     val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return@use
