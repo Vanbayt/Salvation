@@ -451,7 +451,12 @@ object ClientTrackResolver {
             return -2000 // Hard rejection so it can NEVER win
         }
 
-        val severeVersionKeywords = listOf("acoustic", "live", "cover", "instrumental", "karaoke", "orchestral", "unplugged")
+        val severeVersionKeywords = listOf(
+            "acoustic", "live", "cover", "instrumental", "karaoke", "orchestral", "unplugged",
+            "keyboards", "keyboard", "guitar", "guitars", "bass", "drums", "vocal", "vocals",
+            "piano", "synth", "arrangement", "raw session", "raw sessions", "outtake", "rough mix",
+            "alternate take", "demo"
+        )
         for (vk in severeVersionKeywords) {
             val inTarget = targetTitle.contains(vk)
             val inCand = candTitle.contains(vk)
@@ -460,13 +465,17 @@ object ClientTrackResolver {
             else if (!inTarget && inCand) score -= 1500
         }
 
-        val moderateVersionKeywords = listOf("remix", "radio edit", "deluxe", "remaster", "remastered", "extended", "edit", "slowed", "reverb", "nightcore", "demo")
+        val moderateVersionKeywords = listOf("remix", "radio edit", "deluxe", "remaster", "extended", "slowed", "reverb", "nightcore", "8-bit")
         for (vk in moderateVersionKeywords) {
             val inTarget = targetTitle.contains(vk)
             val inCand = candTitle.contains(vk)
             if (inTarget && inCand) score += 400
             else if (inTarget && !inCand) score -= 400
             else if (!inTarget && inCand) score -= 500
+        }
+
+        if (!c.title.contains("(") && !c.title.contains("[")) {
+            score += 50 // Bonus for clean studio title without extra parentheses
         }
 
         if (!artistMatches && targetArtist.isNotEmpty() && !c.isOfficialSong) {
