@@ -479,7 +479,7 @@ object ClientTrackResolver {
         )
         for (vk in severeVersionKeywords) {
             val inTarget = targetTitle.contains(vk)
-            val inCand = candTitle.contains(vk)
+            val inCand = candTitle.contains(vk) || cUploaderClean.contains(vk)
             if (inTarget && inCand) score += 500
             else if (inTarget && !inCand) score -= 500
             else if (!inTarget && inCand) score -= 1500
@@ -488,7 +488,7 @@ object ClientTrackResolver {
         val moderateVersionKeywords = listOf("remix", "radio edit", "deluxe", "remaster", "extended", "slowed", "reverb", "nightcore", "8-bit")
         for (vk in moderateVersionKeywords) {
             val inTarget = targetTitle.contains(vk)
-            val inCand = candTitle.contains(vk)
+            val inCand = candTitle.contains(vk) || cUploaderClean.contains(vk)
             if (inTarget && inCand) score += 400
             else if (inTarget && !inCand) score -= 400
             else if (!inTarget && inCand) score -= 500
@@ -498,16 +498,16 @@ object ClientTrackResolver {
             score += 50 // Bonus for clean studio title without extra parentheses
         }
 
-        if (!artistMatches && targetArtist.isNotEmpty() && !c.isOfficialSong) {
-            return -1000 // Hard rejection if artist does not match
+        if (!artistMatches && primaryArtistClean.isNotEmpty()) {
+            score -= 1000 // Penalty if candidate artist does not match requested artist
         }
 
         if (!titleMatches && targetTitle.isNotEmpty()) {
             return -1000 // Hard rejection if title does not match
         }
 
-        if (c.isOfficialSong && (titleMatches || artistMatches)) {
-            score += 1000 // Official song matching bonus
+        if (c.isOfficialSong && titleMatches && artistMatches) {
+            score += 1000 // Official song matching bonus (only when artist and title match)
         }
 
         if (candTitle == targetTitle) score += 500
