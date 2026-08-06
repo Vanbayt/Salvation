@@ -165,7 +165,7 @@ class ViewPagerFragment : BaseFragment(true) {
                 }
 
                 R.id.settings -> {
-                    activity.startActivity(Intent(activity, MainSettingsActivity::class.java))
+                    activity.startFragment(SettingsFragment())
                 }
 
                 R.id.shuffle -> {

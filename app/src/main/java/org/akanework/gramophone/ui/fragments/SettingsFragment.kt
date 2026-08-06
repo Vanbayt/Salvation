@@ -36,6 +36,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import org.akanework.gramophone.ui.MainActivity
 import java.io.File
 import androidx.preference.PreferenceManager
@@ -88,6 +90,8 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
+    var logsText by remember { mutableStateOf("") }
 
     // --- ПРОФИЛЬ ---
     val authPrefs = context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
@@ -287,9 +291,27 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 5. О ПРИЛОЖЕНИИ
+            // 5. ОТЛАДКА И ЛОГИ
             item {
                 AnimatedListItem(index = 4) {
+                    SettingsGroupCard(title = "Отладка и логи") {
+                        SettingsRow(
+                            icon = Icons.Rounded.BugReport,
+                            title = "Логи и диагностика",
+                            subtitle = "Просмотр и копирование логов воспроизведения",
+                            onClick = {
+                                org.akanework.gramophone.logic.utils.PlaybackLogger.init(context)
+                                logsText = org.akanework.gramophone.logic.utils.PlaybackLogger.getLogs()
+                                showDiagnosticsDialog = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 6. О ПРИЛОЖЕНИИ
+            item {
+                AnimatedListItem(index = 5) {
                     SettingsGroupCard(title = "О приложении") {
                         SettingsRow(
                             icon = Icons.Rounded.Info,
@@ -345,6 +367,55 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { showSleepTimerDialog = false }) { Text("Отмена") }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    }
+
+    // 🔥 ДИАЛОГ ЛОГОВ И ДИАГНОСТИКИ
+    if (showDiagnosticsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiagnosticsDialog = false },
+            title = { Text("Логи воспроизведения", fontWeight = FontWeight.Bold) },
+            text = {
+                val scrollState = rememberScrollState()
+                Box(
+                    modifier = Modifier
+                        .heightIn(max = 400.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = if (logsText.isNotEmpty()) logsText else "Логи пока пусты.",
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Salvation Logs", logsText)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Логи скопированы в буфер", Toast.LENGTH_SHORT).show()
+                }) {
+                    Text("Скопировать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    org.akanework.gramophone.logic.utils.PlaybackLogger.clearLogs()
+                    logsText = "Логи очищены."
+                    Toast.makeText(context, "Логи очищены", Toast.LENGTH_SHORT).show()
+                }) {
+                    Text("Очистить")
+                }
             },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )

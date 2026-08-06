@@ -57,44 +57,8 @@ class MainSettingsFragment : BasePreferenceFragment() {
             "experimental" -> {
                 startActivity(ExperimentalSettingsActivity::class.java)
             }
-
-            "diagnostics" -> {
-                showDiagnosticsDialog()
-            }
         }
         return super.onPreferenceTreeClick(preference)
-    }
-
-    private fun showDiagnosticsDialog() {
-        val ctx = context ?: return
-        org.akanework.gramophone.logic.utils.PlaybackLogger.init(ctx)
-        val logs = org.akanework.gramophone.logic.utils.PlaybackLogger.getLogs()
-
-        val scrollView = android.widget.ScrollView(ctx)
-        val textView = android.widget.TextView(ctx).apply {
-            text = logs
-            textSize = 11f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setPadding(32, 24, 32, 24)
-            setTextIsSelectable(true)
-        }
-        scrollView.addView(textView)
-
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-            .setTitle("Логи воспроизведения")
-            .setView(scrollView)
-            .setPositiveButton("Скопировать") { _, _ ->
-                val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("Salvation Logs", logs)
-                clipboard.setPrimaryClip(clip)
-                android.widget.Toast.makeText(ctx, "Лог скопирован в буфер обмена", android.widget.Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton("Очистить") { _, _ ->
-                org.akanework.gramophone.logic.utils.PlaybackLogger.clearLogs()
-                android.widget.Toast.makeText(ctx, "Логи очищены", android.widget.Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Закрыть", null)
-            .show()
     }
 
 }
