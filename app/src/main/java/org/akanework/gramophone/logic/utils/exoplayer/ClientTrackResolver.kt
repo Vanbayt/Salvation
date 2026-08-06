@@ -72,12 +72,15 @@ object ClientTrackResolver {
             queries.add("${info.artist} ${info.title}")
             queries.add(info.title)
 
-            var bestCandidate: CandidateV2? = null
-            var highestScore = -9999
+            val scoredCandidates = mutableListOf<Pair<CandidateV2, Int>>()
+            val seenCandidateIds = mutableSetOf<String>()
 
             for (q in queries) {
                 val candidates = searchYTM(q, info)
                 for (c in candidates) {
+                    if (seenCandidateIds.contains(c.id)) continue
+                    seenCandidateIds.add(c.id)
+
                     val score = scoreCandidate(c, info)
                     sendTelemetry(
                         type = "SCORE_EVAL",
@@ -89,17 +92,18 @@ object ClientTrackResolver {
                         score = score,
                         official = c.isOfficialSong
                     )
-                    if (score > highestScore && score >= 100) {
-                        highestScore = score
-                        bestCandidate = c
+                    if (score >= 100) {
+                        scoredCandidates.add(Pair(c, score))
                     }
                 }
-                if (bestCandidate != null && highestScore >= 700) {
+                if (scoredCandidates.any { it.second >= 700 }) {
                     break
                 }
             }
 
-            if (bestCandidate == null) {
+            scoredCandidates.sortByDescending { it.second }
+
+            if (scoredCandidates.isEmpty()) {
                 sendTelemetry(
                     type = "ERROR",
                     trackId = info.trackId,
@@ -108,41 +112,60 @@ object ClientTrackResolver {
                 return rawUri
             }
 
-            sendTelemetry(
-                type = "WINNER_SELECTED",
-                trackId = info.trackId,
-                candidateId = bestCandidate.id,
-                title = bestCandidate.title,
-                score = highestScore
-            )
-
-            // 4. Extract direct audio stream URL via InnerTube Player API
+            var winnerCandidate: CandidateV2? = null
+            var winnerUrl: String? = null
+            var winnerScore = 0
             val startTime = System.currentTimeMillis()
-            val directStreamUrl = extractPlayerStreamUrl(bestCandidate.id)
+
+            for ((cand, score) in scoredCandidates.take(5)) {
+                val directUrl = extractPlayerStreamUrl(cand.id)
+                if (!directUrl.isNullOrEmpty()) {
+                    winnerCandidate = cand
+                    winnerUrl = directUrl
+                    winnerScore = score
+                    break
+                } else {
+                    sendTelemetry(
+                        type = "STREAM_WARNING",
+                        trackId = info.trackId,
+                        candidateId = cand.id,
+                        message = "Failed to extract stream for Candidate ${cand.id}, trying next candidate..."
+                    )
+                }
+            }
+
             val elapsed = System.currentTimeMillis() - startTime
 
-            if (directStreamUrl.isNullOrEmpty()) {
+            if (winnerCandidate == null || winnerUrl.isNullOrEmpty()) {
                 sendTelemetry(
                     type = "ERROR",
                     trackId = info.trackId,
-                    message = "Failed to extract stream for winner VideoID ${bestCandidate.id}"
+                    message = "All top candidates failed stream extraction"
                 )
                 return rawUri
             }
+
+            sendTelemetry(
+                type = "WINNER_SELECTED",
+                trackId = info.trackId,
+                candidateId = winnerCandidate.id,
+                title = winnerCandidate.title,
+                score = winnerScore
+            )
 
             // 5. Send SUCCESS Telemetry
             sendTelemetry(
                 type = "SUCCESS",
                 trackId = info.trackId,
-                candidateId = bestCandidate.id,
-                streamUrl = directStreamUrl,
+                candidateId = winnerCandidate.id,
+                streamUrl = winnerUrl,
                 duration = info.duration,
                 source = "Client YTM WEB_REMIX",
                 elapsedTimeMs = elapsed
             )
 
-            Log.i(TAG, "Successfully resolved direct stream for track ${info.trackId} -> $directStreamUrl")
-            return Uri.parse(directStreamUrl)
+            Log.i(TAG, "Successfully resolved direct stream for track ${info.trackId} -> $winnerUrl")
+            return Uri.parse(winnerUrl)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error resolving stream URL for $rawUri", e)
