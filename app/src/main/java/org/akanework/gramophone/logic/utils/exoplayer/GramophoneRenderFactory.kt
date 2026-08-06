@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.video.VideoRendererEventListener
+import org.akanework.gramophone.logic.utils.MonoAudioProcessor
 import org.akanework.gramophone.logic.utils.PostAmpAudioSink
 import org.akanework.gramophone.logic.utils.ReplayGainAudioProcessor
 import org.nift4.alacdecoder.AlacRenderer
@@ -26,6 +27,7 @@ import org.nift4.alacdecoder.AlacRenderer
 class GramophoneRenderFactory(
     context: Context,
     private val rgAp: ReplayGainAudioProcessor,
+    private val monoAp: MonoAudioProcessor,
     private val configurationListener: (Format?) -> Unit,
     private val audioSinkListener: (DefaultAudioSink) -> Unit,
     private val disableGaplessOffload: Boolean
@@ -105,7 +107,7 @@ class GramophoneRenderFactory(
         builder.setAudioProcessorChain(object : AudioProcessorChain {
             override fun getAudioProcessors(inputFormat: Format): Array<out AudioProcessor> {
                 rgAp.setRootFormat(inputFormat)
-                return arrayOf(rgAp)
+                return arrayOf(monoAp, rgAp)
             }
 
             override fun applyPlaybackParameters(playbackParameters: PlaybackParameters): PlaybackParameters {

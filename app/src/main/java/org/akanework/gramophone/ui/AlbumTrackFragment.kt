@@ -70,6 +70,7 @@ class AlbumTracksFragment : Fragment() {
                                     .setTitle(track.title)
                                     .setArtist(track.artist ?: currentAlbum?.artistName)
                                     .setArtworkUri(finalCover?.toUri())
+                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                     .setExtras(extrasBundle)
                                     .build()
                             )

@@ -400,7 +400,14 @@ private class AuthenticatedDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val newHeaders = dataSpec.httpRequestHeaders.toMutableMap()
+        val targetUri = ClientTrackResolver.resolveStreamUrl(context, dataSpec.uri)
+        val specToUse = if (targetUri != dataSpec.uri) {
+            dataSpec.buildUpon().setUri(targetUri).build()
+        } else {
+            dataSpec
+        }
+
+        val newHeaders = specToUse.httpRequestHeaders.toMutableMap()
         val token = org.akanework.gramophone.logic.api.AuthManager.getToken(context)
 
         // 1. Подставляем токен авторизации
@@ -408,26 +415,46 @@ private class AuthenticatedDataSource(
             newHeaders["Authorization"] = "Bearer $token"
         }
 
-        // 2. Явно формируем заголовок Range для перемотки FLAC
-        if (dataSpec.position > 0 || dataSpec.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
+        // 2. Формируем заголовок Range для перемотки по байтам
+        if (specToUse.position > 0 || specToUse.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
             val rangeHeader = buildString {
                 append("bytes=")
-                append(dataSpec.position)
+                append(specToUse.position)
                 append("-")
-                // Если плеер знает точную длину куска, указываем конец диапазона
-                if (dataSpec.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
-                    append(dataSpec.position + dataSpec.length - 1)
+                if (specToUse.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
+                    append(specToUse.position + specToUse.length - 1)
                 }
             }
             newHeaders["Range"] = rangeHeader
         }
 
-        // 3. Собираем новый запрос с обновленными заголовками
-        val newSpec = dataSpec.buildUpon()
+        // 3. Собираем новый запрос с сохранением позиции и заголовками
+        val newSpec = specToUse.buildUpon()
             .setHttpRequestHeaders(newHeaders)
             .build()
 
-        return upstream.open(newSpec)
+        val bytesRemaining = upstream.open(newSpec)
+
+        // 4. ДИНАМИЧЕСКАЯ ОБРАБОТКА X-Content-Duration
+        try {
+            val trackId = dataSpec.uri.lastPathSegment ?: ""
+            val respHeaders = upstream.responseHeaders
+            val durationHeader = respHeaders.entries
+                .find { it.key.equals("X-Content-Duration", ignoreCase = true) }
+                ?.value?.firstOrNull()
+            if (!durationHeader.isNullOrEmpty()) {
+                val durationSec = durationHeader.toLongOrNull() ?: 0L
+                if (durationSec > 0L) {
+                    org.akanework.gramophone.logic.GramophonePlaybackService.updateTrackDuration(
+                        trackId,
+                        durationSec * 1000L
+                    )
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        return bytesRemaining
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {

@@ -71,6 +71,7 @@ class ComposeContainerFragment : Fragment() {
                                                     .setTitle(track.title)
                                                     .setArtist(track.artist)
                                                     .setArtworkUri(track.cover?.toUri())
+                                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                                     .setExtras(extrasBundle)
                                                     .build()
                                             )

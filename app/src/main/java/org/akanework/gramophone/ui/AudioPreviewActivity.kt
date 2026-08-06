@@ -161,11 +161,12 @@ class AudioPreviewActivity : BaseActivity(), View.OnClickListener {
         }
         // TODO de-dupe
         val rgAp = ReplayGainAudioProcessor()
+        val monoAp = org.akanework.gramophone.logic.utils.MonoAudioProcessor()
         player = ExoPlayer.Builder(
             this,
             GramophoneRenderFactory(
                 this,
-                rgAp, {}, {},
+                rgAp, monoAp, {}, {},
                 Flags.OFFLOAD && prefs.getStringStrict("offload", "0")?.toIntOrNull() == 3
             )
                 .setPcmEncodingRestrictionLifted(true)

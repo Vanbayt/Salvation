@@ -1,11 +1,13 @@
 package org.akanework.gramophone.ui.adapters
 
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil3.load
 import org.akanework.gramophone.R
@@ -21,6 +23,9 @@ import coil3.request.allowHardware
 
 
 data class SearchHistoryItem(val query: String)
+data class HeaderItem(val title: String)
+data class ArtistCarouselItem(val artists: List<Artist>)
+data class AlbumCarouselItem(val albums: List<Album>)
 
 class OnlineSearchAdapter(
     private val isGridMode: Boolean = false,
@@ -55,6 +60,9 @@ class OnlineSearchAdapter(
         private const val TYPE_TRACK = 1
         private const val TYPE_ALBUM = 2
         private const val TYPE_HISTORY = 3
+        private const val TYPE_HEADER = 4
+        private const val TYPE_ARTIST_CAROUSEL = 5
+        private const val TYPE_ALBUM_CAROUSEL = 6
     }
 
     fun submitList(newItems: List<Any>) {
@@ -65,6 +73,9 @@ class OnlineSearchAdapter(
 
     override fun getItemViewType(position: Int): Int {
         return when (items[position]) {
+            is HeaderItem -> TYPE_HEADER
+            is ArtistCarouselItem -> TYPE_ARTIST_CAROUSEL
+            is AlbumCarouselItem -> TYPE_ALBUM_CAROUSEL
             is Artist -> TYPE_ARTIST
             is Album -> TYPE_ALBUM
             is SearchHistoryItem -> TYPE_HISTORY
@@ -74,6 +85,63 @@ class OnlineSearchAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
+            TYPE_HEADER -> {
+                val tv = TextView(parent.context).apply {
+                    setPadding(
+                        (16 * resources.displayMetrics.density).toInt(),
+                        (16 * resources.displayMetrics.density).toInt(),
+                        (16 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt()
+                    )
+                    textSize = 18f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    val typedValue = android.util.TypedValue()
+                    context.theme.resolveAttribute(com.google.android.material.R.attr.colorOnBackground, typedValue, true)
+                    setTextColor(typedValue.data)
+                }
+                HeaderViewHolder(tv)
+            }
+            TYPE_ARTIST_CAROUSEL, TYPE_ALBUM_CAROUSEL -> {
+                val rv = RecyclerView(parent.context).apply {
+                    layoutManager = LinearLayoutManager(parent.context, LinearLayoutManager.HORIZONTAL, false)
+                    clipToPadding = false
+                    val density = resources.displayMetrics.density
+                    setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+
+                    // 🔥 УСТРАНЕНИЕ КОНФЛИКТА С СВАЙПОМ ViewPager2: Предотвращаем перехват касания родителем
+                    addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
+                        private var startX = 0f
+                        private var startY = 0f
+
+                        override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                            when (e.action) {
+                                MotionEvent.ACTION_DOWN -> {
+                                    startX = e.x
+                                    startY = e.y
+                                    rv.parent?.requestDisallowInterceptTouchEvent(true)
+                                }
+                                MotionEvent.ACTION_MOVE -> {
+                                    val dx = Math.abs(e.x - startX)
+                                    val dy = Math.abs(e.y - startY)
+                                    if (dx > dy) {
+                                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                                    } else {
+                                        rv.parent?.requestDisallowInterceptTouchEvent(false)
+                                    }
+                                }
+                                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                    rv.parent?.requestDisallowInterceptTouchEvent(false)
+                                }
+                            }
+                            return false
+                        }
+
+                        override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {}
+                        override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {}
+                    })
+                }
+                CarouselViewHolder(rv)
+            }
             TYPE_HISTORY -> {
                 val view = LayoutInflater.from(parent.context).inflate(R.layout.item_search_history, parent, false)
                 HistoryViewHolder(view)
@@ -116,6 +184,9 @@ class OnlineSearchAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val item = items[position]
         when {
+            holder is HeaderViewHolder && item is HeaderItem -> holder.bind(item)
+            holder is CarouselViewHolder && item is ArtistCarouselItem -> holder.bindArtists(item.artists)
+            holder is CarouselViewHolder && item is AlbumCarouselItem -> holder.bindAlbums(item.albums)
             holder is HistoryViewHolder && item is SearchHistoryItem -> holder.bind(item)
             holder is ArtistViewHolder && item is Artist -> holder.bind(item)
             holder is GridArtistViewHolder && item is Artist -> holder.bind(item)
@@ -126,6 +197,34 @@ class OnlineSearchAdapter(
     }
 
     override fun getItemCount() = items.size
+
+    inner class CarouselViewHolder(private val recyclerView: RecyclerView) : RecyclerView.ViewHolder(recyclerView) {
+        fun bindArtists(artists: List<Artist>) {
+            val adapter = OnlineSearchAdapter(
+                isCarouselMode = true,
+                onClick = {},
+                onArtistClick = onArtistClick
+            )
+            recyclerView.adapter = adapter
+            adapter.submitList(artists)
+        }
+
+        fun bindAlbums(albums: List<Album>) {
+            val adapter = OnlineSearchAdapter(
+                isCarouselMode = true,
+                onClick = {},
+                onAlbumClick = onAlbumClick
+            )
+            recyclerView.adapter = adapter
+            adapter.submitList(albums)
+        }
+    }
+
+    inner class HeaderViewHolder(private val textView: TextView) : RecyclerView.ViewHolder(textView) {
+        fun bind(header: HeaderItem) {
+            textView.text = header.title
+        }
+    }
 
     inner class HistoryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val queryText: TextView = view.findViewById(R.id.tv_history_query)
@@ -138,11 +237,16 @@ class OnlineSearchAdapter(
     inner class ArtistViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val name: TextView = view.findViewById(R.id.tv_artist_name)
         private val cover: ImageView = view.findViewById(R.id.iv_artist_avatar)
+        private fun fixCoverUrl(url: String?): String? {
+            if (url.isNullOrEmpty()) return null
+            return if (url.startsWith("/")) "http://185.196.41.31$url" else url
+        }
+
         fun bind(artist: Artist) {
             // 🔥 Устанавливаем уникальное имя и передаем View
             itemView.transitionName = "artist_card_${artist.id}"
             name.text = artist.name
-            artist.cover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
+            fixCoverUrl(artist.cover)?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onArtistClick(artist, itemView) }
         }
     }
@@ -159,7 +263,8 @@ class OnlineSearchAdapter(
         fun bind(track: Track) {
             title.text = track.title
             artist.text = track.artist
-            track.cover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
+            val finalCover = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+            finalCover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onClick(track) }
             menuBtn.setOnClickListener { onMenuClick(track, menuBtn) }
 
@@ -266,7 +371,8 @@ class OnlineSearchAdapter(
             itemView.transitionName = "album_card_${album.id}"
             title.text = album.title
             year.text = album.releaseYear?.toString() ?: ""
-            album.cover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
+            val finalCover = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
+            finalCover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onAlbumClick(album, itemView) }
         }
     }
@@ -284,8 +390,8 @@ class OnlineSearchAdapter(
             val yearStr = album.releaseYear?.toString() ?: ""
             subtitle.text = if (yearStr.isNotEmpty()) "${album.artistName} • $yearStr" else album.artistName
 
-            // 🔥 Магия динамического градиента
-            album.cover?.let { url ->
+            val finalCoverUrl = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
+            finalCoverUrl?.let { url ->
                 cover.load(url) {
                     allowHardware(false) // Разрешаем чтение пикселей
                     listener(

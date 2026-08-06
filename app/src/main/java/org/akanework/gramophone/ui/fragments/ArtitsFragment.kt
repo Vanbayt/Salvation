@@ -184,7 +184,7 @@ class ArtistFragment : Fragment() {
                                 Toast.makeText(context, "Добавлено в медиатеку", Toast.LENGTH_SHORT).show()
                             } else {
                                 btnLike.text = "В избранное"
-                                btnLike.setIconResource(R.drawable.ic_library)
+                                btnLike.setIconResource(R.drawable.ic_favorite)
                                 currentArtist?.isLiked = false
                                 Toast.makeText(context, "Удалено из медиатеки", Toast.LENGTH_SHORT).show()
                             }
@@ -235,7 +235,8 @@ class ArtistFragment : Fragment() {
         tvName.text = artist.name
 
         if (!artist.cover.isNullOrEmpty()) {
-            ivCover.load(artist.cover) {
+            val finalCover = if (artist.cover.startsWith("/")) "http://185.196.41.31${artist.cover}" else artist.cover
+            ivCover.load(finalCover) {
                 crossfade(true)
                 crossfade(300)
             }
@@ -248,7 +249,7 @@ class ArtistFragment : Fragment() {
             btnLike.setIconResource(R.drawable.ic_favorite_filled)
         } else {
             btnLike.text = "В избранное"
-            btnLike.setIconResource(R.drawable.ic_library)
+            btnLike.setIconResource(R.drawable.ic_favorite)
         }
 
         val tracks = artist.tracks ?: emptyList()
@@ -274,6 +275,7 @@ class ArtistFragment : Fragment() {
                                         .setTitle(track.title)
                                         .setArtist(track.artist)
                                         .setArtworkUri(track.cover?.toUri())
+                                        .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                         .setExtras(extrasBundle)
                                         .build()
                                 )

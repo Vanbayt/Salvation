@@ -158,6 +158,7 @@ class MainActivity : BaseActivity() {
     private var isLiked by mutableStateOf(false)
     private var isShuffle by mutableStateOf(false)
     private var isLoop by mutableStateOf(false)
+    private var repeatModeState by mutableIntStateOf(Player.REPEAT_MODE_OFF)
     private var currentBottomTab by mutableStateOf(AppTab.HOME)
 
     // 🔥 Ссылка на пейджер
@@ -166,12 +167,22 @@ class MainActivity : BaseActivity() {
     private val progressHandler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
         override fun run() {
-            val player = getPlayer() ?: return
-            if (player.isPlaying) {
-                val dur = if (player.duration > 0) player.duration.toFloat() else 1f
-                trackDuration = dur
-                currentPosition = player.currentPosition.toFloat().coerceIn(0f, dur)
-                progressHandler.postDelayed(this, 32)
+            val player = getPlayer()
+            if (player != null) {
+                val isPlaying = player.isPlaying || (player.playWhenReady && player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE)
+                if (isPlaying) {
+                    val currentId = player.currentMediaItem?.mediaId
+                    val dynamicDur = currentId?.let { org.akanework.gramophone.logic.GramophonePlaybackService.getTrackDuration(it) }
+                    val rawDur = if (player.duration > 0) player.duration else (player.currentMediaItem?.mediaMetadata?.durationMs ?: dynamicDur)
+                    val dur = if (rawDur != null && rawDur > 0) rawDur.toFloat() else 1f
+                    trackDuration = dur
+                    currentPosition = player.currentPosition.toFloat().coerceIn(0f, dur)
+                    progressHandler.postDelayed(this, 32)
+                } else {
+                    progressHandler.postDelayed(this, 500)
+                }
+            } else {
+                progressHandler.postDelayed(this, 500)
             }
         }
     }
@@ -1156,14 +1167,19 @@ class MainActivity : BaseActivity() {
                         .clip(CircleShape)
                         .background(if (isLoop) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                         .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val p = getPlayer() ?: return@clickable
-                            p.repeatMode = if (p.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
+                            p.repeatMode = when (p.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                                else -> Player.REPEAT_MODE_OFF
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painterResource(R.drawable.ic_repeat), "Loop",
+                        painterResource(if (repeatModeState == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat), "Loop",
                         modifier = Modifier.size(24.dp),
                         tint = if (isLoop) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1193,20 +1209,24 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    // 🔥 ФУНКЦИЯ startFragment ТЕПЕРЬ ВСЕГДА КЛАДЕТ ФРАГМЕНТ В ПРОЗРАЧНЫЙ СЛОЙ @+id/container
+    // 🔥 ФУНКЦИЯ startFragment ТЕПЕРЬ ВСЕГДА КЛАДЕТ ФРАГМЕНТ В ПРОЗРАЧНЫЙ СЛОЙ @+id/container С ИММЕРСИВНЫМИ АНИМАЦИЯМИ
     fun startFragment(frag: Fragment, sharedView: View? = null, transName: String? = null, args: (Bundle.() -> Unit)? = null) {
         supportFragmentManager.commit(allowStateLoss = true) {
             setReorderingAllowed(true)
             val currentFragment = supportFragmentManager.fragments.lastOrNull { it.isVisible && it.id == R.id.container }
 
+            frag.enterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 350 }
+            frag.returnTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 350 }
+
             if (sharedView != null && transName != null) {
-                currentFragment?.exitTransition = MaterialElevationScale(false).apply { duration = 300 }
-                currentFragment?.reenterTransition = MaterialElevationScale(true).apply { duration = 300 }
+                currentFragment?.exitTransition = MaterialElevationScale(false).apply { duration = 350 }
+                currentFragment?.reenterTransition = MaterialElevationScale(true).apply { duration = 350 }
                 addSharedElement(sharedView, transName)
                 addToBackStack(System.currentTimeMillis().toString())
                 replace(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } })
             } else {
-                setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
+                currentFragment?.exitTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 350 }
+                currentFragment?.reenterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 350 }
                 addToBackStack(System.currentTimeMillis().toString())
                 if (currentFragment != null) hide(currentFragment)
                 add(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } })
@@ -1367,6 +1387,25 @@ class MainActivity : BaseActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        getPlayer()?.let { player -> updatePlayerUI(player) }
+        progressHandler.removeCallbacks(progressRunnable)
+        progressHandler.post(progressRunnable)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        getPlayer()?.let { player -> updatePlayerUI(player) }
+        progressHandler.removeCallbacks(progressRunnable)
+        progressHandler.post(progressRunnable)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        progressHandler.removeCallbacks(progressRunnable)
+    }
+
     override fun onDestroy() {
         if (needsMissingOnDestroyCallWorkarounds() && (getPlayer()?.playWhenReady != true || getPlayer()?.mediaItemCount == 0)) {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -1391,7 +1430,10 @@ class MainActivity : BaseActivity() {
             }
             override fun onPlaybackStateChanged(playbackState: Int) = updatePlayerUI(controller)
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { isShuffle = shuffleModeEnabled }
-            override fun onRepeatModeChanged(repeatMode: Int) { isLoop = repeatMode == Player.REPEAT_MODE_ALL }
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                repeatModeState = repeatMode
+                isLoop = repeatMode != Player.REPEAT_MODE_OFF
+            }
         })
     }
 
@@ -1413,31 +1455,22 @@ class MainActivity : BaseActivity() {
         android.util.Log.d("SalvationLike", "updatePlayerUI: trackId='$trackId', isLiked_state=$isLiked, isPlaying=$isPlaying")
 
         isShuffle = controller.shuffleModeEnabled
-        isLoop = controller.repeatMode == Player.REPEAT_MODE_ALL
+        repeatModeState = controller.repeatMode
+        isLoop = controller.repeatMode != Player.REPEAT_MODE_OFF
 
         val originalUri = metadata.artworkUri?.toString() ?: ""
         coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
 
-        val dur = if (controller.duration > 0) controller.duration.toFloat() else 1f
+        val currentId = controller.currentMediaItem?.mediaId
+        val dynamicDur = currentId?.let { org.akanework.gramophone.logic.GramophonePlaybackService.getTrackDuration(it) }
+        val rawDur = if (controller.duration > 0) controller.duration else (controller.currentMediaItem?.mediaMetadata?.durationMs ?: dynamicDur)
+        val dur = if (rawDur != null && rawDur > 0) rawDur.toFloat() else 1f
         trackDuration = dur
         currentPosition = controller.currentPosition.toFloat().coerceIn(0f, dur)
     }
 
     private fun applyPhysicalShuffle(player: MediaController) {
-        val currentItemIndex = player.currentMediaItemIndex
-        if (currentItemIndex == -1 || player.mediaItemCount <= 1) return
-
-        val allItems = mutableListOf<MediaItem>()
-        for (i in 0 until player.mediaItemCount) {
-            allItems.add(player.getMediaItemAt(i))
-        }
-
-        val currentItem = allItems.removeAt(currentItemIndex)
-        allItems.shuffle()
-        allItems.add(0, currentItem)
-
-        player.replaceMediaItems(0, player.mediaItemCount, allItems)
-        player.seekToDefaultPosition(0)
+        org.akanework.gramophone.logic.utils.ShuffleUtils.applyPhysicalShuffle(player)
     }
 
     private fun syncLikedTracksCache() {

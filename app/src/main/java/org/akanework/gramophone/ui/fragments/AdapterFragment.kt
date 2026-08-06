@@ -229,6 +229,7 @@ class AdapterFragment : BaseFragment(null) {
                                     .setArtist(track.artist)
                                     .setArtworkUri(track.cover?.toUri())
                                     .setAlbumTitle(track.album)
+                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                     .build()
                             )
                             .build()

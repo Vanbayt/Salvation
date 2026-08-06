@@ -313,7 +313,7 @@ fun PlaylistDetailScreen(
                 }
 
                 // СПИСОК ТРЕКОВ
-                itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                itemsIndexed(tracks, key = { index, track -> "${index}_${track.id}" }) { index, track ->
                     Box(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).animateItem()) {
                         TrackListItem(
                             track = track,

@@ -68,21 +68,14 @@ class PlaylistQueueSheet(
         touchHelper.attachToRecyclerView(recyclerView)
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.adapter = playlistAdapter
-        recyclerView.scrollToPositionWithOffsetCompat(
-            playlistAdapter.playlist.first.indexOfFirst { i ->
-                i == (instance?.currentMediaItemIndex ?: 0)
-            }, // quick UX hack to show there's more songs above (well, if there is).
-            (context.resources.getDimensionPixelOffset(R.dimen.list_height) * 0.5f).toInt()
-        )
+        recyclerView.scrollToPosition(0)
         recyclerView.fastScroll(null, null)
         findViewById<Button>(R.id.clearQueue)!!.setOnClickListener {
             dismiss()
             instance?.clearMediaItems()
         }
         findViewById<Button>(R.id.scrollToPlaying)!!.setOnClickListener {
-            recyclerView.smoothScrollToPosition(playlistAdapter.playlist.first.indexOfFirst { i ->
-                i == (instance?.currentMediaItemIndex ?: 0)
-            })
+            recyclerView.smoothScrollToPosition(0)
         }
         activity.controllerViewModel.addRecreationalPlayerListener(lifecycle, this) {
             onMediaItemTransition(
@@ -228,10 +221,28 @@ class PlaylistQueueSheet(
             }
             val indexes = LinkedList<Int>()
             val s = instance.shuffleModeEnabled
-            var i = instance.currentTimeline.getFirstWindowIndex(s)
-            while (i != C.INDEX_UNSET) {
-                indexes.add(i)
-                i = instance.currentTimeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, s)
+            val curIdx = instance.currentMediaItemIndex
+
+            if (curIdx != C.INDEX_UNSET && curIdx < instance.mediaItemCount) {
+                // 1. Начинаем с играющего трека (Сейчас играет -> поз. 0)
+                var i: Int = curIdx
+                while (i != C.INDEX_UNSET) {
+                    indexes.add(i)
+                    i = instance.currentTimeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, s)
+                }
+
+                // 2. Добавляем ранее сыгранные треки в самый конец списка
+                var prev: Int = instance.currentTimeline.getFirstWindowIndex(s)
+                while (prev != C.INDEX_UNSET && prev != curIdx && !indexes.contains(prev)) {
+                    indexes.add(prev)
+                    prev = instance.currentTimeline.getNextWindowIndex(prev, Player.REPEAT_MODE_OFF, s)
+                }
+            } else {
+                var i = instance.currentTimeline.getFirstWindowIndex(s)
+                while (i != C.INDEX_UNSET) {
+                    indexes.add(i)
+                    i = instance.currentTimeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, s)
+                }
             }
             return Pair(indexes, items)
         }

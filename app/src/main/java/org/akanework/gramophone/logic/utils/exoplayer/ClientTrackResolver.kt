@@ -53,7 +53,45 @@ object ClientTrackResolver {
         try {
             // 1. Fetch Track Metadata from Backend
             val info = fetchTrackInfo(trackIdStr) ?: return rawUri
-            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (ISRC: ${info.isrc})")
+            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId})")
+
+            // 🔥 ПРЯМОЙ ПУТЬ ДЛЯ YOUTUBE MUSIC ТРЕКОВ: Зашитый Video ID не требует повторного поиска
+            val directVideoId = when {
+                info.sourceId.startsWith("ytmusic_") -> info.sourceId.removePrefix("ytmusic_")
+                info.sourceId.startsWith("yt_") -> info.sourceId.removePrefix("yt_")
+                info.sourceId.length == 11 && !info.sourceId.contains(" ") -> info.sourceId
+                else -> ""
+            }
+
+            if (directVideoId.isNotEmpty()) {
+                Log.d(TAG, "⚡ Direct Video ID recognized: $directVideoId. Bypassing client-side search!")
+                val directUrl = extractPlayerStreamUrl(directVideoId, info.duration)
+                if (!directUrl.isNullOrEmpty()) {
+                    sendTelemetry(
+                        type = "WINNER_SELECTED",
+                        trackId = info.trackId,
+                        candidateId = directVideoId,
+                        title = info.title,
+                        score = 2000
+                    )
+                    sendTelemetry(
+                        type = "SUCCESS",
+                        trackId = info.trackId,
+                        candidateId = directVideoId,
+                        streamUrl = directUrl,
+                        duration = info.duration,
+                        source = "Direct YT Match",
+                        elapsedTimeMs = 0
+                    )
+                    return Uri.parse(directUrl)
+                } else {
+                    // 🔥 ЕСЛИ КЛИЕНТСКИЙ ИЗВЛЕКАТЕЛЬ НЕ СМОГ ПОЛУЧИТЬ ПРЯМУЮ ССЫЛКУ:
+                    // ВОЗВРАЩАЕМ rawUri (http://185.196.41.31/stream/...), ЧТОБЫ СЕРВЕР САМ ОТДАЛ ПОТОК!
+                    // КАТЕГОРИЧЕСКИ ЗАПРЕЩАЕМ ЗАПУСК КЛИЕНТСКОГО ПОИСКА!
+                    Log.w(TAG, "Client direct extraction failed for $directVideoId. Delegating streaming directly to server stream URL!")
+                    return rawUri
+                }
+            }
 
             // 2. Send START Telemetry
             sendTelemetry(
@@ -242,6 +280,15 @@ object ClientTrackResolver {
                 .build()
 
             httpClient.newCall(req).execute().close()
+
+            val logMsg = when (type) {
+                "START" -> "Resolving track $trackId ($artist - $title) | ISRC: $isrc"
+                "WINNER_SELECTED" -> "Winner selected for track $trackId: VideoID=$candidateId, Title='$title', Score=$score"
+                "SUCCESS" -> "Success for track $trackId -> VideoID=$candidateId ($source) in ${elapsedTimeMs}ms"
+                "ERROR" -> "Error for track $trackId: $message"
+                else -> "Telemetry $type: VideoID=$candidateId, Score=$score $message"
+            }
+            org.akanework.gramophone.logic.utils.PlaybackLogger.log(type, logMsg)
         } catch (e: Exception) {
             Log.w(TAG, "Telemetry send failed: ${e.message}")
         }
@@ -518,12 +565,10 @@ object ClientTrackResolver {
         val targetDur = info.duration.toDouble()
         if (targetDur > 0 && c.duration > 0) {
             val diff = Math.abs(targetDur - c.duration)
-            if (diff > 30 || (c.duration < 0.6 * targetDur && diff > 15)) {
-                return -2000 // Hard rejection for duration mismatch / snippet / bootleg
-            } else if (diff > 12) {
-                score -= 600
+            if (diff > 15 || (c.duration < 0.6 * targetDur && diff > 10)) {
+                return -2000 // Hard rejection for duration mismatch > 15s
             } else if (diff > 5) {
-                score -= 200
+                score -= (diff * 30).toInt()
             } else if (diff <= 3) {
                 score += 200
             }

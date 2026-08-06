@@ -267,8 +267,18 @@ class OnlineSearchFragment : BaseFragment(true) {
                         val body = response.body()
                         val mergedList = mutableListOf<Any>()
 
-                        body?.artists?.let { mergedList.addAll(it) }
-                        body?.tracks?.let { mergedList.addAll(it) }
+                        if (!body?.artists.isNullOrEmpty()) {
+                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Исполнители"))
+                            mergedList.add(org.akanework.gramophone.ui.adapters.ArtistCarouselItem(body!!.artists!!))
+                        }
+                        if (!body?.albums.isNullOrEmpty()) {
+                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Альбомы"))
+                            mergedList.add(org.akanework.gramophone.ui.adapters.AlbumCarouselItem(body!!.albums!!))
+                        }
+                        if (!body?.tracks.isNullOrEmpty()) {
+                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Треки"))
+                            mergedList.addAll(body!!.tracks!!)
+                        }
 
                         if (mergedList.isEmpty()) {
                             tvSectionTitle.text = "Ничего не найдено"
@@ -361,6 +371,7 @@ class OnlineSearchFragment : BaseFragment(true) {
                                     .setArtist(track.artist)
                                     .setArtworkUri(if (track.cover != null) track.cover.toUri() else null)
                                     .setAlbumTitle(track.album)
+                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                     .setExtras(extrasBundle)
                                     .build()
                             )
@@ -407,6 +418,7 @@ class OnlineSearchFragment : BaseFragment(true) {
                     .setArtist(track.artist)
                     .setArtworkUri(finalCoverUrl.toUri())
                     .setAlbumTitle(track.album)
+                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                     .setExtras(extrasBundle)
                     .build()
             )

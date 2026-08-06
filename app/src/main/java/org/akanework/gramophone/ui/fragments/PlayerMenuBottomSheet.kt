@@ -142,23 +142,24 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
             view.findViewById<View>(R.id.menu_action_sleep).setOnClickListener {
                 val options = arrayOf("15 минут", "30 минут", "45 минут", "60 минут", "Отключить")
                 val times = arrayOf(15, 30, 45, 60, 0)
+                val appContext = activity.applicationContext
 
-                MaterialAlertDialogBuilder(requireContext())
+                MaterialAlertDialogBuilder(activity)
                     .setTitle("Таймер сна")
-                    .setItems(options) { _, which ->
+                    .setItems(options) { dialog, which ->
                         val minutes = times[which]
                         if (minutes > 0) {
                             activity.lifecycleScope.launch {
-                                Toast.makeText(context, "Музыка остановится через $minutes мин.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(appContext, "Музыка остановится через $minutes мин.", Toast.LENGTH_SHORT).show()
                                 delay(minutes * 60 * 1000L)
                                 controller.pause()
                             }
                         } else {
-                            Toast.makeText(context, "Таймер отключен", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(appContext, "Таймер отключен", Toast.LENGTH_SHORT).show()
                         }
+                        dismiss()
                     }
                     .show()
-                dismiss()
             }
 
             // 6. ЖАЛОБА НА ТРЕК

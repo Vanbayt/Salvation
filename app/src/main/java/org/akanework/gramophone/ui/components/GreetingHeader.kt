@@ -59,93 +59,59 @@ fun GreetingHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // Приподняли блок выше, убрав большой paddingTop
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Salvation",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary, // Акцентный цвет системы
-                letterSpacing = (-0.5).sp
-            )
+            Column {
+                Text(
+                    text = "Salvation",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = (-0.5).sp
+                )
+                Text(
+                    text = greetingText,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Кнопка Поиска
                 FilledTonalIconButton(
                     onClick = onSearchClick,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(44.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        // Делаем иконки мягкими и в цвет заголовка (НЕ черными)
                         contentColor = MaterialTheme.colorScheme.primary,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_search),
                         contentDescription = "Поиск",
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
                 // Кнопка Настроек
                 FilledTonalIconButton(
                     onClick = onSettingsClick,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(44.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        // Делаем иконки мягкими и в цвет заголовка (НЕ черными)
                         contentColor = MaterialTheme.colorScheme.primary,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_settings),
                         contentDescription = "Настройки",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Карточка "Мой микс"
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(32.dp))
-                .background(Brush.linearGradient(listOf(animatedColor1, animatedColor2)))
-                .padding(24.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = greetingText,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Ваш бесконечный микс",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                }
-
-                Box(modifier = Modifier.padding(start = 16.dp)) {
-                    CookiePlayButton(
-                        isPlaying = false,
-                        onClick = onMixClick
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }

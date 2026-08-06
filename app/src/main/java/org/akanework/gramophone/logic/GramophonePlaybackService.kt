@@ -113,6 +113,7 @@ import org.akanework.gramophone.logic.utils.LastPlayedManager
 import org.akanework.gramophone.logic.utils.LrcUtils.LrcParserOptions
 import org.akanework.gramophone.logic.utils.LrcUtils.extractAndParseLyrics
 import org.akanework.gramophone.logic.utils.LrcUtils.loadAndParseLyricsFile
+import org.akanework.gramophone.logic.utils.MonoAudioProcessor
 import org.akanework.gramophone.logic.utils.ReplayGainAudioProcessor
 import org.akanework.gramophone.logic.utils.ReplayGainUtil
 import org.akanework.gramophone.logic.utils.SemanticLyrics
@@ -147,6 +148,18 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         const val SERVICE_GET_LYRICS = "get_lyrics"
         const val SERVICE_TIMER_CHANGED = "changed_timer"
         var instanceForWidgetAndLyricsOnly: GramophonePlaybackService? = null
+        private val trackDurationMap = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+        fun updateTrackDuration(trackId: String, durationMs: Long) {
+            if (trackId.isNotEmpty() && durationMs > 0L) {
+                trackDurationMap[trackId] = durationMs
+            }
+        }
+
+        fun getTrackDuration(trackId: String?): Long? {
+            if (trackId == null) return null
+            return trackDurationMap[trackId]
+        }
     }
 
     private var lastSessionId = 0
@@ -170,6 +183,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
     private var lastSentHighlightedLyric: String? = null
     private lateinit var afFormatTracker: AfFormatTracker
     private lateinit var rgAp: ReplayGainAudioProcessor
+    private lateinit var monoAp: MonoAudioProcessor
     private var rgMode = 0 // 0 = disabled, 1 = track, 2 = album, 3 = smart
     private var updatedLyricAtLeastOnce = false
     private val downstreamFormat = hashSetOf<Pair<Any, Pair<Int, Format>>>()
@@ -338,6 +352,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             }
         }
         rgAp = ReplayGainAudioProcessor()
+        monoAp = MonoAudioProcessor()
         prefs.registerOnSharedPreferenceChangeListener(this)
         onSharedPreferenceChanged(prefs, null) // read initial values
 
@@ -365,7 +380,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             ExoPlayer.Builder(
                 this,
                 GramophoneRenderFactory(
-                    this, rgAp, this::onAudioSinkInputFormatChanged,
+                    this, rgAp, monoAp, this::onAudioSinkInputFormatChanged,
                     afFormatTracker::setAudioSink,
                     Flags.OFFLOAD && prefs.getStringStrict("offload", "0")?.toIntOrNull() == 3,
                 )
@@ -377,6 +392,11 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                     dataSourceFactory,
                     GramophoneExtractorsFactory().also {
                         it.setConstantBitrateSeekingEnabled(true)
+                        it.setConstantBitrateSeekingAlwaysEnabled(true)
+                        it.setAdtsExtractorFlags(
+                            androidx.media3.extractor.ts.AdtsExtractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING or
+                            androidx.media3.extractor.ts.AdtsExtractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING_ALWAYS
+                        )
                         if (prefs.getBooleanStrict("mp3_index_seeking", false))
                             it.setMp3ExtractorFlags(androidx.media3.extractor.mp3.Mp3Extractor.FLAG_ENABLE_INDEX_SEEKING)
                     }
@@ -710,6 +730,9 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String?) {
         var restart = false
+        if (key == null || key == "mono_audio") {
+            monoAp.isMonoEnabled = prefs.getBoolean("mono_audio", false)
+        }
         if (key == null || key == "rg_mode") {
             rgMode = prefs.getStringStrict("rg_mode", "0")!!.toInt()
             restart = !computeRgMode(true)

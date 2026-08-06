@@ -168,19 +168,16 @@ class FavoritesFragment : BaseFragment(null) {
 
                     if (response.isSuccessful) {
                         val newTracks = response.body() ?: emptyList()
-
-                        // --- 1. ЛОВУШКА ДЛЯ СЕТИ ---
                         if (newTracks.isNotEmpty()) {
-                            // Ищем трек, у которого точно должен быть ID (например, тот же Hallowed Be Thy Name)
-                            val testTrack = newTracks.find { it.artistId != null } ?: newTracks[0]
-                            android.util.Log.d("SALVATION_DEBUG", "СЕТЬ: Скачали трек [${testTrack.title}], ArtistId из JSON: ${testTrack.artistId}")
+                            fullTrackList.clear()
+                            fullTrackList.addAll(newTracks)
+                            filterAndApply()
                         }
-                        // ---------------------------
-
-                        if (newTracks.size < pageSize) isLastPage = true
-                        fullTrackList.addAll(newTracks)
-                        currentOffset += newTracks.size
-                        filterAndApply()
+                        isPreparingPlayback = false
+                        launchExoPlayer(clickedTrack, fullTrackList, shuffle)
+                    } else {
+                        isPreparingPlayback = false
+                        launchExoPlayer(clickedTrack, fullTrackList, shuffle)
                     }
                 }
 
@@ -201,13 +198,11 @@ class FavoritesFragment : BaseFragment(null) {
         }
 
         try {
-            val listToSend = if (shuffle) trackList.shuffled().take(100)
-            else {
-                val startIdx = trackList.indexOfFirst { it.id == clickedTrack?.id }.coerceAtLeast(0)
-                trackList.drop(startIdx).take(100)
-            }
+            val startIdx = if (clickedTrack != null) {
+                trackList.indexOfFirst { it.id == clickedTrack.id }.coerceAtLeast(0)
+            } else 0
 
-            val mediaItems = listToSend.map { track ->
+            val mediaItems = trackList.map { track ->
                 val extrasBundle = Bundle().apply {
                     putFloat("replay_gain", track.replayGain)
                     putString("ARTIST_ID", track.artistId)
@@ -215,10 +210,6 @@ class FavoritesFragment : BaseFragment(null) {
                     putString("PLAYING_FROM", "Избранное")
                 }
 
-                android.util.Log.d("SALVATION_DEBUG", "УПАКОВКА: Трек [${track.title}], кладем в Bundle ArtistId: ${track.artistId}")
-
-                // 🔥 1. ДОСТАЕМ И ПЕРЕВОДИМ ДЛИТЕЛЬНОСТЬ В МИЛЛИСЕКУНДЫ
-                // (Используем безопасный вызов на случай, если duration вдруг null или 0)
                 val trackDurationMs = (track.duration ?: 0).toLong() * 1000L
 
                 val builder = MediaItem.Builder()
@@ -228,33 +219,24 @@ class FavoritesFragment : BaseFragment(null) {
                         .setTitle(track.title)
                         .setArtist(track.artist)
                         .setArtworkUri(track.cover?.toUri())
+                        .setDurationMs(trackDurationMs.takeIf { it > 0 })
                         .setExtras(extrasBundle)
                         .build())
-
-                // 🔥 2. СКАРМЛИВАЕМ ДЛИТЕЛЬНОСТЬ ПЛЕЕРУ
-                if (trackDurationMs > 0L) {
-                    builder.setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder()
-                            .setEndPositionMs(trackDurationMs)
-                            .build()
-                    )
-                }
 
                 builder.build()
             }
 
-            // УБРАЛИ ОТСЮДА: controller.shuffleModeEnabled = shuffle
+            if (shuffle) {
+                val shuffledItems = org.akanework.gramophone.logic.utils.ShuffleUtils.balancedShuffle(mediaItems) { item ->
+                    item.mediaMetadata.artist?.toString()?.lowercase() ?: ""
+                }
+                controller.setMediaItems(shuffledItems, 0, 0L)
+            } else {
+                controller.setMediaItems(mediaItems, startIdx, 0L)
+            }
 
-            // Сначала загружаем треки
-            controller.setMediaItems(mediaItems, 0, 0L)
-
-            // Готовим плеер
             controller.prepare()
-
-            // 🔥 ВКЛЮЧАЕМ ТУМБЛЕР ТОЛЬКО ТЕПЕРЬ!
             controller.shuffleModeEnabled = shuffle
-
-            // Запускаем музыку
             controller.play()
 
         } catch (e: Exception) {

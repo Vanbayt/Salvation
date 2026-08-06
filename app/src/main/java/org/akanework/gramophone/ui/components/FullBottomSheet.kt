@@ -137,6 +137,7 @@ class FullBottomSheet
         private const val TAG = "FullBottomSheet"
     }
 
+    private var pendingSeekPositionMs: Long? = null
     private val touchListener =
         object : SeekBar.OnSeekBarChangeListener, Slider.OnSliderTouchListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -156,11 +157,11 @@ class FullBottomSheet
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 val mediaId = instance?.currentMediaItem
-                if (mediaId != null) {
-                    if (seekBar != null) {
-                        instance?.seekTo((seekBar.progress.toLong()))
-                        bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
-                    }
+                if (mediaId != null && seekBar != null) {
+                    val targetMs = seekBar.progress.toLong()
+                    pendingSeekPositionMs = targetMs
+                    instance?.seekTo(targetMs)
+                    bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
                 }
                 isUserTracking = false
                 progressDrawable.animate =
@@ -174,7 +175,9 @@ class FullBottomSheet
             override fun onStopTrackingTouch(slider: Slider) {
                 val mediaId = instance?.currentMediaItem
                 if (mediaId != null) {
-                    instance?.seekTo((slider.value.toLong()))
+                    val targetMs = slider.value.toLong()
+                    pendingSeekPositionMs = targetMs
+                    instance?.seekTo(targetMs)
                     bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
                 }
                 isUserTracking = false
@@ -707,6 +710,12 @@ class FullBottomSheet
             .show()
     }
 
+    fun onStart() {
+        runnableRunning = true
+        handler.removeCallbacks(positionRunnable)
+        handler.post(positionRunnable)
+    }
+
     fun onStop() {
         runnableRunning = false
     }
@@ -1143,15 +1152,18 @@ class FullBottomSheet
                 (mediaMetadata.userRating as? HeartRating)?.isHeart == true
             bottomSheetFavoriteButton.addOnCheckedChangeListener(this)
         }
+        updateDuration()
     }
 
     private fun updateDuration() {
+        val currentId = instance?.currentMediaItem?.mediaId
+        val dynamicDur = currentId?.let { GramophonePlaybackService.getTrackDuration(it) }
         val duration = instance?.contentDuration?.let { if (it == C.TIME_UNSET) null else it }
+            ?: instance?.duration?.let { if (it == C.TIME_UNSET) null else it }
             ?: instance?.currentMediaItem?.mediaMetadata?.durationMs
-        if (duration != null && duration.toInt() != bottomSheetFullSeekBar.max) {
-            bottomSheetFullDuration.setTextAnimation(
-                CalculationUtils.convertDurationToTimeStamp(duration)
-            )
+            ?: dynamicDur
+        if (duration != null && duration > 0) {
+            bottomSheetFullDuration.text = CalculationUtils.convertDurationToTimeStamp(duration)
             val position =
                 CalculationUtils.convertDurationToTimeStamp(instance?.currentPosition ?: 0)
             if (!isUserTracking) {
@@ -1314,19 +1326,27 @@ class FullBottomSheet
     private val positionRunnable = object : Runnable {
         override fun run() {
             updateDuration() // TODO: figure out which callback this can be put in.
-            val position =
-                CalculationUtils.convertDurationToTimeStamp(instance?.currentPosition ?: 0)
-            if (!isUserTracking) {
-                bottomSheetFullSeekBar.progress = instance?.currentPosition?.toInt() ?: 0
+            val currentPos = instance?.currentPosition ?: 0
+            if (pendingSeekPositionMs != null) {
+                if (instance?.playbackState == Player.STATE_BUFFERING || Math.abs(currentPos - pendingSeekPositionMs!!) > 3000) {
+                    bottomSheetFullPosition.text =
+                        CalculationUtils.convertDurationToTimeStamp(pendingSeekPositionMs!!)
+                } else {
+                    pendingSeekPositionMs = null
+                }
+            }
+            if (!isUserTracking && pendingSeekPositionMs == null) {
+                bottomSheetFullSeekBar.progress = currentPos.toInt()
                 bottomSheetFullSlider.value =
-                    min(instance?.currentPosition?.toFloat() ?: 0f, bottomSheetFullSlider.valueTo)
-                bottomSheetFullPosition.text = position
+                    min(currentPos.toFloat(), bottomSheetFullSlider.valueTo)
+                bottomSheetFullPosition.text =
+                    CalculationUtils.convertDurationToTimeStamp(currentPos)
             }
             bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
-            if (instance?.isPlaying == true && runnableRunning) {
-                handler.postDelayed(this, SLIDER_UPDATE_INTERVAL)
-            } else {
-                runnableRunning = false
+            if (runnableRunning) {
+                val isPlaying = instance?.isPlaying == true || (instance?.playWhenReady == true && instance?.playbackState != Player.STATE_ENDED && instance?.playbackState != Player.STATE_IDLE)
+                val interval = if (isPlaying) SLIDER_UPDATE_INTERVAL else 500L
+                handler.postDelayed(this, interval)
             }
         }
     }

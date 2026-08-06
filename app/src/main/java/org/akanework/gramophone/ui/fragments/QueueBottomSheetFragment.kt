@@ -16,20 +16,34 @@ import coil3.load
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import androidx.core.view.HapticFeedbackConstantsCompat
+import androidx.core.view.ViewCompat
 import org.akanework.gramophone.R
+import org.akanework.gramophone.logic.dpToPx
 import org.akanework.gramophone.ui.MainActivity
-import java.util.Collections
 
 class QueueBottomSheetFragment : BottomSheetDialogFragment() {
 
+    companion object {
+        private const val TYPE_HEADER = 0
+        private const val TYPE_ITEM = 1
+    }
+
+    sealed class QueueRow {
+        data class Header(val title: String) : QueueRow()
+        data class Item(
+            val mediaItem: MediaItem,
+            val originalIndex: Int,
+            val isCurrent: Boolean
+        ) : QueueRow()
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        // Используем твой новый layout_bottom_sheet_queue
         return inflater.inflate(R.layout.layout_bottom_sheet_queue, container, false)
     }
 
     override fun onStart() {
         super.onStart()
-        // Растягиваем очередь на весь экран (как в Spotify)
         val dialog = dialog as? BottomSheetDialog
         val bottomSheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
         bottomSheet?.let {
@@ -44,147 +58,224 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-val bottomSheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
         view.findViewById<View>(R.id.btn_close_queue).setOnClickListener { dismiss() }
 
         val activity = requireActivity() as MainActivity
         activity.controllerViewModel.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
 
-            // 1. Читаем ИСТОЧНИК из extras текущего играющего трека
             val currentItem = controller.currentMediaItem
             val playingFrom = currentItem?.mediaMetadata?.extras?.getString("PLAYING_FROM") ?: "Медиатека"
-
-            // Записываем в TextView
             view.findViewById<TextView>(R.id.tv_playing_from)?.text = "Играет из: $playingFrom"
 
-            val queue = mutableListOf<MediaItem>()
-            for (i in 0 until controller.mediaItemCount) {
-                queue.add(controller.getMediaItemAt(i))
+            val currentIndex = controller.currentMediaItemIndex
+            val rows = mutableListOf<QueueRow>()
+
+            if (currentIndex >= 0 && currentIndex < controller.mediaItemCount) {
+                // 1. Сейчас играет
+                rows.add(QueueRow.Header("Сейчас играет"))
+                rows.add(QueueRow.Item(controller.getMediaItemAt(currentIndex), currentIndex, isCurrent = true))
+
+                // 2. Далее в очереди
+                if (currentIndex + 1 < controller.mediaItemCount) {
+                    rows.add(QueueRow.Header("Далее в очереди"))
+                    for (i in (currentIndex + 1) until controller.mediaItemCount) {
+                        rows.add(QueueRow.Item(controller.getMediaItemAt(i), i, isCurrent = false))
+                    }
+                }
+
+                // 3. Ранее прослушано
+                if (currentIndex > 0) {
+                    rows.add(QueueRow.Header("Ранее прослушано"))
+                    for (i in 0 until currentIndex) {
+                        rows.add(QueueRow.Item(controller.getMediaItemAt(i), i, isCurrent = false))
+                    }
+                }
+            } else {
+                rows.add(QueueRow.Header("В очереди"))
+                for (i in 0 until controller.mediaItemCount) {
+                    rows.add(QueueRow.Item(controller.getMediaItemAt(i), i, isCurrent = (i == 0)))
+                }
             }
 
             val recycler = view.findViewById<RecyclerView>(R.id.rv_full_queue)
             recycler.layoutManager = LinearLayoutManager(requireContext())
 
-            // Создаем ItemTouchHelper ДО адаптера, чтобы передать его внутрь
             var itemTouchHelper: ItemTouchHelper? = null
 
             val adapter = FullQueueAdapter(
-                items = queue,
-                currentIndex = controller.currentMediaItemIndex,
-                onItemClick = { clickedIndex ->
-                    // При клике на трек в очереди - прыгаем на него
-                    controller.seekToDefaultPosition(clickedIndex)
+                rows = rows,
+                onItemClick = { originalIndex ->
+                    controller.seekToDefaultPosition(originalIndex)
                     controller.play()
-                    dismiss() // Закрываем очередь после выбора
+                    dismiss()
                 },
                 onDragStart = { viewHolder ->
-                    // Нажали на 3 полоски - начинаем перетаскивание
                     itemTouchHelper?.startDrag(viewHolder)
                 }
             )
             recycler.adapter = adapter
 
-            // 2. Логика Перетаскивания (Drag & Drop)
             val swipeAndDragHelper = object : ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0 // Разрешаем тянуть вверх и вниз
+                ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
             ) {
+                override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                    if (viewHolder is FullQueueAdapter.HeaderViewHolder) {
+                        return makeMovementFlags(0, 0)
+                    }
+                    return super.getMovementFlags(recyclerView, viewHolder)
+                }
+
                 override fun onMove(
                     recyclerView: RecyclerView,
                     viewHolder: RecyclerView.ViewHolder,
                     target: RecyclerView.ViewHolder
                 ): Boolean {
-                    val fromPosition = viewHolder.bindingAdapterPosition
-                    val toPosition = target.bindingAdapterPosition
+                    if (target is FullQueueAdapter.HeaderViewHolder) return false
 
-                    // Меняем элементы в нашем локальном списке
-                    Collections.swap(queue, fromPosition, toPosition)
-                    adapter.notifyItemMoved(fromPosition, toPosition)
+                    val fromPos = viewHolder.bindingAdapterPosition
+                    val toPos = target.bindingAdapterPosition
 
-                    // Говорим плееру поменять порядок на лету!
-                    controller.moveMediaItem(fromPosition, toPosition)
+                    val fromRow = rows.getOrNull(fromPos) as? QueueRow.Item ?: return false
+                    val toRow = rows.getOrNull(toPos) as? QueueRow.Item ?: return false
 
-                    // Обновляем currentIndex если перетащили текущий трек
-                    if (fromPosition == adapter.currentIndex) {
-                        adapter.currentIndex = toPosition
-                    } else if (toPosition == adapter.currentIndex) {
-                        adapter.currentIndex = fromPosition
-                    }
+                    rows[fromPos] = toRow
+                    rows[toPos] = fromRow
+                    adapter.notifyItemMoved(fromPos, toPos)
+
+                    controller.moveMediaItem(fromRow.originalIndex, toRow.originalIndex)
                     return true
                 }
 
-                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                    // Свайп влево/вправо пока отключен
+                override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                    super.onSelectedChanged(viewHolder, actionState)
+                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
+                        ViewCompat.performHapticFeedback(viewHolder.itemView, HapticFeedbackConstantsCompat.LONG_PRESS)
+                        viewHolder.itemView.animate()
+                            .scaleX(1.03f)
+                            .scaleY(1.03f)
+                            .translationZ(12.dpToPx(viewHolder.itemView.context).toFloat())
+                            .setDuration(150)
+                            .start()
+                    }
                 }
 
-                // Отключаем автоматический Drag по долгому нажатию на весь элемент
-                override fun isLongPressDragEnabled(): Boolean = false
+                override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                    super.clearView(recyclerView, viewHolder)
+                    viewHolder.itemView.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .translationZ(0f)
+                        .setDuration(150)
+                        .start()
+                }
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+                override fun isLongPressDragEnabled(): Boolean = true
             }
 
             itemTouchHelper = ItemTouchHelper(swipeAndDragHelper)
             itemTouchHelper.attachToRecyclerView(recycler)
 
-            // Скроллим к текущему треку
-            if (controller.currentMediaItemIndex >= 0) {
-                recycler.scrollToPosition(controller.currentMediaItemIndex)
-            }
+            recycler.scrollToPosition(0)
         }
     }
 
     private inner class FullQueueAdapter(
-        private val items: MutableList<MediaItem>,
-        var currentIndex: Int,
+        private val rows: MutableList<QueueRow>,
         private val onItemClick: (Int) -> Unit,
-        private val onDragStart: (ViewHolder) -> Unit
-    ) : RecyclerView.Adapter<FullQueueAdapter.ViewHolder>() {
+        private val onDragStart: (RecyclerView.ViewHolder) -> Unit
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        inner class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val title: TextView = view as TextView
+        }
+
+        inner class ItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val title: TextView = view.findViewById(R.id.tv_track_title)
             val artist: TextView = view.findViewById(R.id.tv_track_artist)
             val cover: ImageView = view.findViewById(R.id.iv_track_cover)
             val dragHandle: ImageView = view.findViewById(R.id.iv_drag_handle)
-
-            // 🔥 ХАК: Запоминаем родной цвет текста из XML (он уже правильный для любой темы)
             val defaultTitleColors = title.textColors
 
             init {
-                view.setOnClickListener { onItemClick(bindingAdapterPosition) }
+                view.setOnClickListener {
+                    val pos = bindingAdapterPosition
+                    val item = rows.getOrNull(pos) as? QueueRow.Item
+                    if (item != null) onItemClick(item.originalIndex)
+                }
+                view.setOnLongClickListener {
+                    val item = rows.getOrNull(bindingAdapterPosition) as? QueueRow.Item
+                    if (item != null) onDragStart(this)
+                    true
+                }
             }
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            return ViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_queue_track, parent, false))
+        override fun getItemViewType(position: Int): Int {
+            return when (rows[position]) {
+                is QueueRow.Header -> TYPE_HEADER
+                is QueueRow.Item -> TYPE_ITEM
+            }
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == TYPE_HEADER) {
+                val tv = TextView(parent.context).apply {
+                    layoutParams = ViewGroup.MarginLayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(
+                            16.dpToPx(context),
+                            16.dpToPx(context),
+                            16.dpToPx(context),
+                            8.dpToPx(context)
+                        )
+                    }
+                    setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium)
+                    setTextColor(context.getColor(R.color.sl_fav_button))
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                HeaderViewHolder(tv)
+            } else {
+                ItemViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_queue_track, parent, false))
+            }
         }
 
         @SuppressLint("ClickableViewAccessibility")
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val metadata = items[position].mediaMetadata
-            holder.title.text = metadata.title ?: "Неизвестно"
-            holder.artist.text = metadata.artist ?: "Неизвестно"
-
-            // 🎨 Раскрашиваем заголовок
-            if (position == currentIndex) {
-                // Текущий играющий трек (твой рабочий цвет)
-                holder.title.setTextColor(requireContext().getColor(R.color.sl_fav_button))
-            } else {
-                // Все остальные треки (возвращаем исходный цвет темы)
-                holder.title.setTextColor(holder.defaultTitleColors)
-            }
-
-            val originalUri = metadata.artworkUri?.toString() ?: ""
-            val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
-
-            holder.cover.setImageResource(R.drawable.ic_library)
-            if (coverUrl.isNotEmpty()) holder.cover.load(coverUrl)
-
-            // Слушаем прикосновения именно к иконке "три полоски" для Drag&Drop
-            holder.dragHandle.setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) {
-                    onDragStart(holder)
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (val row = rows[position]) {
+                is QueueRow.Header -> {
+                    (holder as HeaderViewHolder).title.text = row.title
                 }
-                false
+                is QueueRow.Item -> {
+                    val itemHolder = holder as ItemViewHolder
+                    val metadata = row.mediaItem.mediaMetadata
+                    itemHolder.title.text = metadata.title ?: "Неизвестно"
+                    itemHolder.artist.text = metadata.artist ?: "Неизвестно"
+
+                    if (row.isCurrent) {
+                        itemHolder.title.setTextColor(requireContext().getColor(R.color.sl_fav_button))
+                    } else {
+                        itemHolder.title.setTextColor(itemHolder.defaultTitleColors)
+                    }
+
+                    val originalUri = metadata.artworkUri?.toString() ?: ""
+                    val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+
+                    itemHolder.cover.setImageResource(R.drawable.ic_library)
+                    if (coverUrl.isNotEmpty()) itemHolder.cover.load(coverUrl)
+
+                    itemHolder.dragHandle.setOnTouchListener { _, event ->
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            onDragStart(itemHolder)
+                        }
+                        false
+                    }
+                }
             }
         }
 
-        override fun getItemCount() = items.size
+        override fun getItemCount() = rows.size
     }
 }

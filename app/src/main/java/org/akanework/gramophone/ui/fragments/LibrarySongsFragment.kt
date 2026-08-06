@@ -440,14 +440,9 @@ class LibrarySongsFragment : BaseFragment(true) {
     private fun launchExoPlayer(clickedTrack: Track, trackList: List<Track>, shuffle: Boolean) {
         val controller = mediaController ?: return
         try {
-            val listToSend = if (shuffle) {
-                trackList.shuffled().take(100)
-            } else {
-                val startIdx = trackList.indexOfFirst { it.id == clickedTrack.id }.takeIf { it >= 0 } ?: 0
-                trackList.drop(startIdx).take(100)
-            }
+            val startIdx = trackList.indexOfFirst { it.id == clickedTrack.id }.takeIf { it >= 0 } ?: 0
 
-            val mediaItems = listToSend.map { track ->
+            val mediaItems = trackList.map { track ->
                 val streamUrl = "http://185.196.41.31/stream/${track.id}"
                 val originalCover = track.cover ?: ""
                 val finalCoverUrl = if (originalCover.startsWith("/")) "http://185.196.41.31$originalCover" else originalCover
@@ -468,13 +463,22 @@ class LibrarySongsFragment : BaseFragment(true) {
                             .setArtist(track.artist)
                             .setArtworkUri(finalCoverUrl.toUri())
                             .setAlbumTitle(track.album)
+                            .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                             .setExtras(extrasBundle)
                             .build()
                     )
                     .build()
             }
 
-            controller.setMediaItems(mediaItems, 0, 0L)
+            if (shuffle) {
+                val shuffledItems = org.akanework.gramophone.logic.utils.ShuffleUtils.balancedShuffle(mediaItems) { item ->
+                    item.mediaMetadata.artist?.toString()?.lowercase() ?: ""
+                }
+                controller.setMediaItems(shuffledItems, 0, 0L)
+            } else {
+                controller.setMediaItems(mediaItems, startIdx, 0L)
+            }
+
             controller.prepare()
             controller.shuffleModeEnabled = shuffle
             controller.play()
@@ -509,6 +513,7 @@ class LibrarySongsFragment : BaseFragment(true) {
                     .setArtist(track.artist)
                     .setArtworkUri(finalCoverUrl.toUri())
                     .setAlbumTitle(track.album)
+                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                     .setExtras(extrasBundle)
                     .build()
             )

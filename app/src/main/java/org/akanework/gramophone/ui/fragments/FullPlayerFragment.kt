@@ -111,7 +111,11 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
-            btnLoop?.isChecked = repeatMode == Player.REPEAT_MODE_ALL
+            btnLoop?.isChecked = repeatMode != Player.REPEAT_MODE_OFF
+            btnLoop?.icon = when (repeatMode) {
+                Player.REPEAT_MODE_ONE -> androidx.appcompat.content.res.AppCompatResources.getDrawable(requireContext(), R.drawable.ic_repeat_one)
+                else -> androidx.appcompat.content.res.AppCompatResources.getDrawable(requireContext(), R.drawable.ic_repeat)
+            }
         }
     }
 
@@ -261,9 +265,13 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
 
         btnLoop?.setOnClickListener {
             val currentPlayer = controller ?: return@setOnClickListener
-            val isLooping = currentPlayer.repeatMode == Player.REPEAT_MODE_ALL
-            currentPlayer.repeatMode = if (isLooping) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
-            btnLoop?.isChecked = !isLooping
+            val nextMode = when (currentPlayer.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                else -> Player.REPEAT_MODE_OFF
+            }
+            currentPlayer.repeatMode = nextMode
         }
 
         btnQueue?.setOnClickListener {
@@ -325,7 +333,11 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         applyFavoriteColor(isLiked)
 
         btnShuffle?.isChecked = player.shuffleModeEnabled
-        btnLoop?.isChecked = player.repeatMode == Player.REPEAT_MODE_ALL
+        btnLoop?.isChecked = player.repeatMode != Player.REPEAT_MODE_OFF
+        btnLoop?.icon = when (player.repeatMode) {
+            Player.REPEAT_MODE_ONE -> androidx.appcompat.content.res.AppCompatResources.getDrawable(requireContext(), R.drawable.ic_repeat_one)
+            else -> androidx.appcompat.content.res.AppCompatResources.getDrawable(requireContext(), R.drawable.ic_repeat)
+        }
 
         val originalUri = metadata.artworkUri?.toString() ?: ""
         val finalCoverUrl = if (originalUri.startsWith("/")) {
@@ -426,19 +438,6 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
     }
 
     private fun applyPhysicalShuffle(player: MediaController) {
-        val currentItemIndex = player.currentMediaItemIndex
-        if (currentItemIndex == -1 || player.mediaItemCount <= 1) return
-
-        val allItems = mutableListOf<MediaItem>()
-        for (i in 0 until player.mediaItemCount) {
-            allItems.add(player.getMediaItemAt(i))
-        }
-
-        val currentItem = allItems.removeAt(currentItemIndex)
-        allItems.shuffle()
-        allItems.add(0, currentItem)
-
-        player.replaceMediaItems(0, player.mediaItemCount, allItems)
-        player.seekToDefaultPosition(0)
+        org.akanework.gramophone.logic.utils.ShuffleUtils.applyPhysicalShuffle(player)
     }
 }

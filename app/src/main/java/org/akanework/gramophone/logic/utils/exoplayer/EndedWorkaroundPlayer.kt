@@ -54,17 +54,35 @@ class EndedWorkaroundPlayer(exoPlayer: ExoPlayer) : ForwardingSimpleBasePlayer(e
     }
 
     override fun getState(): State {
+        var baseState = super.getState()
         if (isEnded) {
-            val superState = super.state
-            if (superState.playerError != null) {
+            if (baseState.playerError != null) {
                 isEnded = false
-                return superState
+            } else {
+                baseState = baseState.buildUpon().setPlaybackState(STATE_ENDED).setIsLoading(false).build()
             }
-            return superState.buildUpon().setPlaybackState(STATE_ENDED).setIsLoading(false).build()
         }
         if (player.currentTimeline.isEmpty) {
-            return super.state.buildUpon().setDeviceInfo(remoteDeviceInfo).build()
+            return baseState.buildUpon().setDeviceInfo(remoteDeviceInfo).build()
         }
-        return super.getState()
+
+        val currentId = player.currentMediaItem?.mediaId
+        val trackDur = currentId?.let { org.akanework.gramophone.logic.GramophonePlaybackService.getTrackDuration(it) }
+            ?: androidx.media3.common.C.TIME_UNSET
+        val dur = if (player.duration > 0) player.duration else trackDur
+
+        val updatedCommands = baseState.availableCommands.buildUpon()
+            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+            .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .build()
+
+        return baseState.buildUpon()
+            .setAvailableCommands(updatedCommands)
+            .build()
     }
 }

@@ -199,7 +199,7 @@ class AlbumFragment : Fragment() {
             if (album.isLiked) {
                 btnLike.setIconResource(R.drawable.ic_favorite_filled)
             } else {
-                btnLike.setIconResource(R.drawable.ic_library)
+                btnLike.setIconResource(R.drawable.ic_favorite)
             }
         }
 
@@ -226,6 +226,7 @@ class AlbumFragment : Fragment() {
                                     .setTitle(track.title)
                                     .setArtist(track.artist)
                                     .setArtworkUri(currentAlbum.cover?.toUri())
+                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                                     .setExtras(extrasBundle)
                                     .build()
                             )
@@ -258,7 +259,7 @@ class AlbumFragment : Fragment() {
                                 viewModel.album.value?.isLiked = true
                                 Toast.makeText(context, "Альбом добавлен", Toast.LENGTH_SHORT).show()
                             } else {
-                                btnLike.setIconResource(R.drawable.ic_library)
+                                btnLike.setIconResource(R.drawable.ic_favorite)
                                 viewModel.album.value?.isLiked = false
                                 Toast.makeText(context, "Альбом удален", Toast.LENGTH_SHORT).show()
                             }
@@ -339,6 +340,7 @@ class AlbumFragment : Fragment() {
                     .setArtist(track.artist)
                     .setArtworkUri(finalCoverUrl.toUri())
                     .setAlbumTitle(track.album)
+                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
                     .setExtras(extrasBundle)
                     .build()
             )
