@@ -420,14 +420,18 @@ object ClientTrackResolver {
         val targetTitle = info.title.lowercase().trim()
         val candTitle = c.title.lowercase().trim()
         val targetArtist = info.artist.lowercase().trim()
-        val candUploader = c.uploader.lowercase().trim()
-
         var score = 100
-        val titleMatches = candTitle.contains(targetTitle) || targetTitle.contains(candTitle)
 
         val primaryArtistClean = cleanNormalize(info.artist.split(";")[0].split(",")[0])
         val cUploaderClean = cleanNormalize(c.uploader)
         val cTitleClean = cleanNormalize(c.title)
+        val tTitleClean = cleanNormalize(info.title)
+
+        val targetCore = extractCoreTitle(info.title, primaryArtistClean)
+        val candCore = extractCoreTitle(c.title, primaryArtistClean)
+
+        val titleMatches = (cTitleClean == tTitleClean) ||
+                (targetCore.isNotEmpty() && candCore.isNotEmpty() && targetCore == candCore)
 
         val artistMatches = primaryArtistClean.isNotEmpty() && (
             cUploaderClean == primaryArtistClean ||
@@ -491,6 +495,20 @@ object ClientTrackResolver {
             .replace(Regex("[^a-z0-9а-я]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+    }
+
+    private fun extractCoreTitle(title: String, artist: String = ""): String {
+        var t = title
+        if (t.contains(" - ")) {
+            val parts = t.split(" - ")
+            val artClean = cleanNormalize(artist)
+            val p0Clean = cleanNormalize(parts[0])
+            if (artClean.isNotEmpty() && p0Clean == artClean) {
+                t = parts.drop(1).joinToString(" - ")
+            }
+        }
+        val subParts = t.split(Regex("\\(|\\[|-|\\bfeat\\b|\\blive\\b|\\bremix\\b", RegexOption.IGNORE_CASE))
+        return cleanNormalize(if (subParts.isNotEmpty()) subParts[0] else t)
     }
 
     private fun extractPlayerStreamUrl(videoId: String): String? {
