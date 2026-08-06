@@ -233,7 +233,6 @@ object ClientTrackResolver {
                 })
             })
             put("query", query)
-            put("params", "EgWKAQIYAWoKEAMQBBAFEA0QERgB")
         }
 
         val req = Request.Builder()
@@ -349,7 +348,7 @@ object ClientTrackResolver {
 
                             val itemStr = item.toString()
                             val uploaderLower = uploader.lowercase().trim()
-                            if (itemStr.contains("- Topic") || itemStr.contains("MUSIC_VIDEO_TYPE") || uploaderLower.contains(targetArtistLower) || targetArtistLower.contains(uploaderLower)) {
+                            if (itemStr.contains("- Topic") || itemStr.contains("MUSIC_VIDEO_TYPE_ATV") || uploaderLower == targetArtistLower || uploaderLower == "$targetArtistLower topic") {
                                 isOfficial = true
                             }
 
@@ -394,9 +393,21 @@ object ClientTrackResolver {
         val candUploader = c.uploader.lowercase().trim()
 
         var score = 100
-
         val titleMatches = candTitle.contains(targetTitle) || targetTitle.contains(candTitle)
-        val artistMatches = candUploader.contains(targetArtist) || targetArtist.contains(candUploader) || candTitle.contains(targetArtist)
+
+        val primaryArtistClean = cleanNormalize(info.artist.split(";")[0].split(",")[0])
+        val cUploaderClean = cleanNormalize(c.uploader)
+        val cTitleClean = cleanNormalize(c.title)
+
+        val artistMatches = primaryArtistClean.isNotEmpty() && (
+            cUploaderClean == primaryArtistClean ||
+            cUploaderClean == "$primaryArtistClean topic" ||
+            cUploaderClean == "$primaryArtistClean vevo" ||
+            cUploaderClean == "$primaryArtistClean official" ||
+            cUploaderClean == "$primaryArtistClean official channel" ||
+            (cUploaderClean.startsWith("$primaryArtistClean ") && (cUploaderClean.contains("topic") || cUploaderClean.contains("vevo") || cUploaderClean.contains("official"))) ||
+            (cUploaderClean.isEmpty() && (cTitleClean.startsWith("$primaryArtistClean ") || cTitleClean.endsWith(" $primaryArtistClean") || cTitleClean == primaryArtistClean))
+        )
 
         // Severe penalty for unwanted isolated tracks, covers, reactions, tutorials
         if (candTitle.contains("bass only") || candTitle.contains("drums only") || candTitle.contains("vocal only") ||
@@ -442,6 +453,14 @@ object ClientTrackResolver {
         if (artistMatches) score += 300
 
         return score
+    }
+
+    private fun cleanNormalize(s: String): String {
+        return s.lowercase()
+            .replace('ё', 'е')
+            .replace(Regex("[^a-z0-9а-я]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private fun extractPlayerStreamUrl(videoId: String): String? {
