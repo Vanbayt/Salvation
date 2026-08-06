@@ -464,49 +464,80 @@ object ClientTrackResolver {
     }
 
     private fun extractPlayerStreamUrl(videoId: String): String? {
-        val url = "https://www.youtube.com/youtubei/v1/player"
-        val reqBodyJson = JSONObject().apply {
-            put("context", JSONObject().apply {
-                put("client", JSONObject().apply {
-                    put("clientName", "ANDROID")
-                    put("clientVersion", "19.02.39")
-                    put("hl", "en")
-                    put("gl", "US")
-                })
-            })
-            put("videoId", videoId)
-        }
+        val profiles = listOf(
+            Pair("ANDROID_VR", "1.54.26"),
+            Pair("TVHTML5", "7.20240101.01.00"),
+            Pair("IOS", "19.29.1")
+        )
 
-        val req = Request.Builder()
-            .url(url)
-            .header("User-Agent", "com.google.android.youtube/19.02.39 (Linux; U; Android 14; US)")
-            .post(reqBodyJson.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+        for ((cName, cVer) in profiles) {
+            try {
+                val url = "https://www.youtube.com/youtubei/v1/player"
+                val reqBodyJson = JSONObject().apply {
+                    put("context", JSONObject().apply {
+                        put("client", JSONObject().apply {
+                            put("clientName", cName)
+                            put("clientVersion", cVer)
+                            put("hl", "en")
+                            put("gl", "US")
+                        })
+                    })
+                    put("videoId", videoId)
+                }
 
-        httpClient.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return null
-            val body = resp.body?.string() ?: return null
-            val json = JSONObject(body)
+                val req = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .post(reqBodyJson.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
 
-            val streamingData = json.optJSONObject("streamingData") ?: return null
-            val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return null
+                httpClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use
+                    val body = resp.body?.string() ?: return@use
+                    val json = JSONObject(body)
 
-            var bestUrl: String? = null
-            var highestBitrate = 0
+                    val playability = json.optJSONObject("playabilityStatus")
+                    val status = playability?.optString("status", "") ?: ""
+                    if (status != "OK") return@use
 
-            for (i in 0 until adaptiveFormats.length()) {
-                val fmt = adaptiveFormats.getJSONObject(i)
-                val mimeType = fmt.optString("mimeType", "")
-                if (mimeType.contains("audio/")) {
-                    val streamUrl = fmt.optString("url", "")
-                    val bitrate = fmt.optInt("bitrate", 0)
-                    if (streamUrl.isNotEmpty() && bitrate > highestBitrate) {
-                        highestBitrate = bitrate
-                        bestUrl = streamUrl
+                    val streamingData = json.optJSONObject("streamingData") ?: return@use
+                    val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return@use
+
+                    var bestUrl: String? = null
+                    var highestBitrate = 0
+
+                    for (i in 0 until adaptiveFormats.length()) {
+                        val fmt = adaptiveFormats.getJSONObject(i)
+                        val mimeType = fmt.optString("mimeType", "")
+                        if (mimeType.contains("audio/")) {
+                            var streamUrl = fmt.optString("url", "")
+                            if (streamUrl.isEmpty() && fmt.has("signatureCipher")) {
+                                val cipher = fmt.getString("signatureCipher")
+                                val params = cipher.split("&")
+                                for (p in params) {
+                                    if (p.startsWith("url=")) {
+                                        streamUrl = java.net.URLDecoder.decode(p.substring(4), "UTF-8")
+                                        break
+                                    }
+                                }
+                            }
+                            val bitrate = fmt.optInt("bitrate", 0)
+                            if (streamUrl.isNotEmpty() && bitrate > highestBitrate) {
+                                highestBitrate = bitrate
+                                bestUrl = streamUrl
+                            }
+                        }
+                    }
+
+                    if (!bestUrl.isNullOrEmpty()) {
+                        Log.i(TAG, "Successfully extracted direct audio URL using profile $cName for VideoID $videoId")
+                        return bestUrl
                     }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed profile $cName for VideoID $videoId: ${e.message}")
             }
-            return bestUrl
         }
+        return null
     }
 }
