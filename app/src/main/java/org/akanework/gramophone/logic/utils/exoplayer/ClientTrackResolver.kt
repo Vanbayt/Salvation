@@ -364,6 +364,16 @@ object ClientTrackResolver {
                                 }
                             }
 
+                            if (vid.isEmpty() && item.has("overlay")) {
+                                vid = item.optJSONObject("overlay")
+                                    ?.optJSONObject("musicItemThumbnailOverlayRenderer")
+                                    ?.optJSONObject("content")
+                                    ?.optJSONObject("musicPlayButtonRenderer")
+                                    ?.optJSONObject("playNavigationEndpoint")
+                                    ?.optJSONObject("watchEndpoint")
+                                    ?.optString("videoId", "") ?: ""
+                            }
+
                             if (flex != null) {
                                 for (fIdx in 1 until flex.length()) {
                                     val flexObj = flex.optJSONObject(fIdx)
