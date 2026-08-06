@@ -457,7 +457,7 @@ object ClientTrackResolver {
             val inCand = candTitle.contains(vk)
             if (inTarget && inCand) score += 500
             else if (inTarget && !inCand) score -= 500
-            else if (!inTarget && inCand) score -= 800
+            else if (!inTarget && inCand) score -= 1500
         }
 
         val moderateVersionKeywords = listOf("remix", "radio edit", "deluxe", "remaster", "remastered", "extended", "edit", "slowed", "reverb", "nightcore", "demo")
