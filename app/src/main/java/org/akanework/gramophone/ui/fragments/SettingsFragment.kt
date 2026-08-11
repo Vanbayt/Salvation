@@ -115,6 +115,11 @@ fun SettingsScreen(onBackClick: () -> Unit) {
         mutableStateOf(defaultPrefs.getBoolean("resume_after_call", true))
     }
 
+    // Автоперевод текста песен
+    var isLyricsAutoTranslateEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("lyrics_auto_translate", true))
+    }
+
     // --- КЭШ ---
     var imageCacheSize by remember { mutableStateOf("Вычисление...") }
     var dataCacheSize by remember { mutableStateOf("Вычисление...") }
@@ -259,9 +264,27 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 4. ДАННЫЕ И КЭШ
+            // 4. ТЕКСТ ПЕСЕН
             item {
                 AnimatedListItem(index = 3) {
+                    SettingsGroupCard(title = "Текст песен") {
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.Translate,
+                            title = "Автоперевод текста песен",
+                            subtitle = "Отображать перевод под оригинальными строками (при наличии)",
+                            checked = isLyricsAutoTranslateEnabled,
+                            onCheckedChange = { isChecked ->
+                                isLyricsAutoTranslateEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("lyrics_auto_translate", isChecked).apply()
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 5. ДАННЫЕ И КЭШ
+            item {
+                AnimatedListItem(index = 4) {
                     SettingsGroupCard(title = "Данные и кэш") {
                         SettingsRow(
                             icon = Icons.Rounded.Image,

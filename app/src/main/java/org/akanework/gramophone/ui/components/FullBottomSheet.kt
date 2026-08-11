@@ -466,6 +466,19 @@ class FullBottomSheet
         }
         bottomSheetFullControllerButton.setOnClickListener {
             ViewCompat.performHapticFeedback(it, HapticFeedbackConstantsCompat.CONTEXT_CLICK)
+            it.animate()
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(80)
+                .withEndAction {
+                    it.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .setInterpolator(android.view.animation.OvershootInterpolator(2.5f))
+                        .setDuration(250)
+                        .start()
+                }
+                .start()
             instance?.playOrPause()
         }
         bottomSheetFullPreviousButton.setOnClickListener {

@@ -66,6 +66,8 @@ object ClientTrackResolver {
             val info = fetchTrackInfo(trackIdStr) ?: return rawUri
             Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId})")
 
+            org.akanework.gramophone.logic.utils.SmartPlaybackManager.onTrackRequested("${info.artist} - ${info.title}")
+
             // 🔥 ПРЯМОЙ ПУТЬ ДЛЯ YOUTUBE MUSIC ТРЕКОВ: Зашитый Video ID не требует повторного поиска
             val directVideoId = when {
                 info.sourceId.startsWith("ytmusic_") -> info.sourceId.removePrefix("ytmusic_")
@@ -186,6 +188,7 @@ object ClientTrackResolver {
                     trackId = info.trackId,
                     message = "All top candidates failed stream extraction"
                 )
+                org.akanework.gramophone.logic.utils.SmartPlaybackManager.onHardFailure("Варианты трека не найдены", "${info.artist} - ${info.title}")
                 return rawUri
             }
 

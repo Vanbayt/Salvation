@@ -29,14 +29,20 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.preference.PreferenceManager
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.akanework.gramophone.R
@@ -73,6 +79,10 @@ fun LyricsScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    val defaultPrefs = remember(context) { PreferenceManager.getDefaultSharedPreferences(context) }
+    val isAutoTranslateEnabled = remember { defaultPrefs.getBoolean("lyrics_auto_translate", true) }
 
     // Handle system back gesture
     BackHandler {
@@ -220,8 +230,7 @@ fun LyricsScreen(
                 )
             }
 
-            // MiniPlayer-Styled Header Card with Expressive MiniPlayer Shapes:
-            // Top corners strong (32.dp), Bottom corners small (10.dp)
+            // MiniPlayer-Styled Header Card
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -398,15 +407,6 @@ fun LyricsScreen(
                                 when (item) {
                                     is LyricsDisplayItem.NormalLine -> {
                                         val line = item.line
-                                        val textColor by animateColorAsState(
-                                            targetValue = if (isActive) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                                            },
-                                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                                            label = "textColor"
-                                        )
 
                                         val lineScale by animateFloatAsState(
                                             targetValue = if (isActive) 1.05f else 1.0f,
@@ -455,15 +455,35 @@ fun LyricsScreen(
                                                     )
                                                 }
 
-                                                Text(
-                                                    text = line.text.ifEmpty { "♪" },
-                                                    color = textColor,
-                                                    fontSize = fontSize,
-                                                    fontWeight = fontWeight,
-                                                    textAlign = TextAlign.Start,
-                                                    lineHeight = lineHeight,
-                                                    modifier = Modifier.weight(1f)
-                                                )
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    val annotatedText = buildKaraokeAnnotatedString(
+                                                        line = line,
+                                                        currentPositionMs = currentPositionMs,
+                                                        isActive = isActive,
+                                                        activeColor = MaterialTheme.colorScheme.primary,
+                                                        inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                                                    )
+
+                                                    Text(
+                                                        text = annotatedText,
+                                                        fontSize = fontSize,
+                                                        fontWeight = fontWeight,
+                                                        textAlign = TextAlign.Start,
+                                                        lineHeight = lineHeight
+                                                    )
+
+                                                    if (isAutoTranslateEnabled && !line.translation.isNullOrBlank()) {
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = line.translation!!,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontSize = if (isActive) 16.sp else 14.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = if (isActive) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                                            lineHeight = if (isActive) 22.sp else 18.sp
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -509,7 +529,7 @@ fun LyricsScreen(
                                                     dotColor = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.40f)
                                                 )
 
-                                                // Progress indicator properly spaced below dots (NEVER overlapping!)
+                                                // Progress indicator properly spaced below dots
                                                 if (isActive && progressFraction in 0f..1f) {
                                                     Spacer(modifier = Modifier.height(14.dp))
                                                     LinearProgressIndicator(
@@ -556,6 +576,86 @@ fun LyricsScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun buildKaraokeAnnotatedString(
+    line: SemanticLyrics.LyricLine,
+    currentPositionMs: Long,
+    isActive: Boolean,
+    activeColor: Color,
+    inactiveColor: Color
+): AnnotatedString {
+    val text = line.text.ifEmpty { "♪" }
+    if (!isActive) {
+        return buildAnnotatedString {
+            withStyle(SpanStyle(color = inactiveColor)) {
+                append(text)
+            }
+        }
+    }
+
+    val words = line.words
+    if (!words.isNullOrEmpty()) {
+        return buildAnnotatedString {
+            words.forEach { word ->
+                val charStart = word.charRange.first.coerceIn(0, text.length)
+                val charEnd = (word.charRange.last + 1).coerceIn(charStart, text.length)
+
+                val isWordSung = currentPositionMs.toULong() >= word.begin
+                val isWordActive = isWordSung && (word.endInclusive == null || currentPositionMs.toULong() <= word.endInclusive!!)
+
+                val style = when {
+                    isWordActive -> SpanStyle(
+                        color = activeColor,
+                        fontWeight = FontWeight.Black
+                    )
+                    isWordSung -> SpanStyle(
+                        color = activeColor.copy(alpha = 0.90f),
+                        fontWeight = FontWeight.Bold
+                    )
+                    else -> SpanStyle(
+                        color = activeColor.copy(alpha = 0.35f),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (charStart < charEnd) {
+                    withStyle(style) {
+                        append(text.substring(charStart, charEnd))
+                    }
+                }
+            }
+            val lastEnd = words.lastOrNull()?.let { (it.charRange.last + 1).coerceIn(0, text.length) } ?: 0
+            if (lastEnd < text.length) {
+                withStyle(SpanStyle(color = activeColor.copy(alpha = 0.35f))) {
+                    append(text.substring(lastEnd))
+                }
+            }
+        }
+    }
+
+    // Smooth character sweep fallback across line duration
+    val startMs = line.start.toLong()
+    val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3000L
+    val duration = (endMs - startMs).coerceAtLeast(100L)
+    val elapsed = (currentPositionMs - startMs).coerceAtLeast(0L)
+    val progressFraction = (elapsed.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+
+    val sungCharCount = (text.length * progressFraction).toInt().coerceIn(0, text.length)
+
+    return buildAnnotatedString {
+        if (sungCharCount > 0) {
+            withStyle(SpanStyle(color = activeColor, fontWeight = FontWeight.Black)) {
+                append(text.substring(0, sungCharCount))
+            }
+        }
+        if (sungCharCount < text.length) {
+            withStyle(SpanStyle(color = activeColor.copy(alpha = 0.35f), fontWeight = FontWeight.SemiBold)) {
+                append(text.substring(sungCharCount))
             }
         }
     }

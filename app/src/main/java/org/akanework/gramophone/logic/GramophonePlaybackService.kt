@@ -453,6 +453,8 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             }
         })
 
+        org.akanework.gramophone.logic.utils.SmartPlaybackManager.init(this, player.exoPlayer)
+
         player.exoPlayer.addAnalyticsListener(EventLogger())
         player.exoPlayer.addAnalyticsListener(afFormatTracker)
         player.exoPlayer.addAnalyticsListener(this)

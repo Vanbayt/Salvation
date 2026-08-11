@@ -235,10 +235,25 @@ object LyricsRepository {
 
                 val lrcObj = lyricJson.optJSONObject("lrc") ?: continue
                 val lyricText = lrcObj.optString("lyric", "").trim()
+                val tlyricObj = lyricJson.optJSONObject("tlyric")
+                val tlyricText = tlyricObj?.optString("lyric", "")?.trim() ?: ""
 
                 if (lyricText.isNotEmpty() && lyricText != "null") {
                     val parsed = parseLrc(lyricText, options.trim, options.multiLine)
                     if (parsed != null) {
+                        if (parsed is SemanticLyrics.SyncedLyrics && tlyricText.isNotEmpty() && tlyricText != "null") {
+                            val parsedTranslation = parseLrc(tlyricText, options.trim, options.multiLine)
+                            if (parsedTranslation is SemanticLyrics.SyncedLyrics) {
+                                val transMap = parsedTranslation.text.associateBy { it.start }
+                                parsed.text.forEach { origLine ->
+                                    val match = transMap[origLine.start] ?: parsedTranslation.text.find { Math.abs(it.start.toLong() - origLine.start.toLong()) < 1200L }
+                                    if (match != null && match.text.isNotBlank()) {
+                                        origLine.translation = match.text
+                                    }
+                                }
+                            }
+                        }
+
                         return LyricsResult(
                             lyrics = parsed,
                             sourceName = "NetEase Music",
