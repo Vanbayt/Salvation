@@ -11,6 +11,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -48,7 +50,11 @@ class ComposeContainerFragment : Fragment() {
                 }
 
                 MaterialTheme(colorScheme = dynamicColorScheme) {
-                    playlist?.let { currentPlaylist ->
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        playlist?.let { currentPlaylist ->
                         PlaylistDetailScreen(
                             playlist = currentPlaylist,
                             onBackClick = { requireActivity().onBackPressed() },
@@ -88,6 +94,7 @@ class ComposeContainerFragment : Fragment() {
                         )
                     }
                 }
+            }
             }
         }
     }

@@ -5,11 +5,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -50,6 +51,10 @@ import org.akanework.gramophone.logic.api.*
 import java.io.File
 import java.io.FileOutputStream
 
+enum class PlaylistSortMode {
+    DEFAULT, TITLE_ASC, ARTIST_ASC
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailScreen(
@@ -68,11 +73,21 @@ fun PlaylistDetailScreen(
     // СТЕЙТЫ РЕЖИМА РЕДАКТИРОВАНИЯ
     var isEditing by remember { mutableStateOf(false) }
     var editTitle by remember { mutableStateOf(playlist.title) }
+    var isPublic by remember { mutableStateOf(playlist.isPublic) }
     var localCoverUrl by remember { mutableStateOf(playlist.coverUrl) }
 
     // Стейты Reorder Drag-and-Drop
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragAccumulatedY by remember { mutableFloatStateOf(0f) }
+
+    // Стейты Пакетного Выбора (Multi-Select)
+    var isMultiSelectMode by remember { mutableStateOf(false) }
+    val selectedTrackIds = remember { mutableStateListOf<Any>() }
+
+    // Стейты Поиска и Сортировки
+    var filterQuery by remember { mutableStateOf("") }
+    var currentSortMode by remember { mutableStateOf(PlaylistSortMode.DEFAULT) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     // Диалоги
     var showAddTracksSheet by remember { mutableStateOf(false) }
@@ -128,6 +143,7 @@ fun PlaylistDetailScreen(
     fun startEditing() {
         originalTracks = tracks.toList()
         editTitle = playlist.title
+        isPublic = playlist.isPublic
         isEditing = true
     }
 
@@ -135,14 +151,18 @@ fun PlaylistDetailScreen(
         tracks.clear()
         tracks.addAll(originalTracks)
         editTitle = playlist.title
+        isPublic = playlist.isPublic
         isEditing = false
+        isMultiSelectMode = false
+        selectedTrackIds.clear()
+        filterQuery = ""
     }
 
     fun savePlaylistChanges() {
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                if (editTitle != playlist.title) {
-                    val req = PlaylistUpdateRequest(title = editTitle)
+                if (editTitle != playlist.title || isPublic != playlist.isPublic) {
+                    val req = PlaylistUpdateRequest(title = editTitle, isPublic = isPublic)
                     NetworkClient.getApi(context).updatePlaylist(playlist.id, req).execute()
                 }
                 val reorderItems = tracks.mapIndexed { index, track ->
@@ -152,6 +172,9 @@ fun PlaylistDetailScreen(
 
                 withContext(Dispatchers.Main) {
                     isEditing = false
+                    isMultiSelectMode = false
+                    selectedTrackIds.clear()
+                    filterQuery = ""
                     Toast.makeText(context, "Изменения сохранены", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
@@ -177,6 +200,39 @@ fun PlaylistDetailScreen(
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { Toast.makeText(context, "Ошибка сети", Toast.LENGTH_SHORT).show() }
             }
+        }
+    }
+
+    fun applySort(mode: PlaylistSortMode) {
+        currentSortMode = mode
+        when (mode) {
+            PlaylistSortMode.TITLE_ASC -> tracks.sortBy { it.title ?: "" }
+            PlaylistSortMode.ARTIST_ASC -> tracks.sortBy { it.artist ?: "" }
+            PlaylistSortMode.DEFAULT -> loadTracks()
+        }
+    }
+
+    fun deleteSelectedTracks() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val idsToRemove = selectedTrackIds.toList()
+            idsToRemove.forEach { id ->
+                try {
+                    NetworkClient.getApi(context).removeTrackFromPlaylist(playlist.id, id).execute()
+                } catch (e: Exception) {}
+            }
+            withContext(Dispatchers.Main) {
+                tracks.removeAll { it.id in idsToRemove }
+                selectedTrackIds.clear()
+                Toast.makeText(context, "Выбранные треки удалены", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val filteredTracks = remember(tracks.toList(), filterQuery) {
+        if (filterQuery.isBlank()) tracks
+        else tracks.filter {
+            (it.title?.contains(filterQuery, ignoreCase = true) == true) ||
+                    (it.artist?.contains(filterQuery, ignoreCase = true) == true)
         }
     }
 
@@ -236,7 +292,15 @@ fun PlaylistDetailScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+    val gradientBrush = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.surfaceContainerLow,
+            MaterialTheme.colorScheme.surface
+        )
+    )
+
+    Box(modifier = Modifier.fillMaxSize().background(brush = gradientBrush)) {
         if (isLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         } else {
@@ -247,7 +311,7 @@ fun PlaylistDetailScreen(
             val headerScale by animateFloatAsState(if (firstVisibleIndex.value > 0) 0.85f else (1f - (firstVisibleOffset.value / 1500f)).coerceIn(0.85f, 1f))
 
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                // ШАПКА
+                // ШАПКА ПЛЕЙЛИСТА
                 item {
                     Column(
                         modifier = Modifier
@@ -264,7 +328,7 @@ fun PlaylistDetailScreen(
                         // ОБЛОЖКА ПЛЕЙЛИСТА
                         Box(
                             modifier = Modifier
-                                .size(240.dp)
+                                .size(230.dp)
                                 .clip(RoundedCornerShape(32.dp))
                                 .clickable(enabled = isEditing) {
                                     photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -289,7 +353,7 @@ fun PlaylistDetailScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         // НАЗВАНИЕ ПЛЕЙЛИСТА
                         if (isEditing) {
@@ -313,73 +377,131 @@ fun PlaylistDetailScreen(
                             )
                         }
 
-                        Text(
-                            text = "Плейлист • ${tracks.size} треков",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                        // СТАТИСТИКА И ЧИП ПРИВАТНОСТИ
+                        Row(
+                            modifier = Modifier.padding(top = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AssistChip(
+                                onClick = {},
+                                label = { Text("${tracks.size} треков", fontWeight = FontWeight.Medium) },
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            FilterChip(
+                                selected = isPublic,
+                                onClick = { if (isEditing) isPublic = !isPublic },
+                                label = { Text(if (isPublic) "Публичный" else "Приватный", fontWeight = FontWeight.Bold) },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(if (isPublic) R.drawable.ic_share else R.drawable.ic_person),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
 
                         // ПАНЕЛЬ КНОПОК МАТЕРИАЛ 3 EXPRESSIVE
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 20.dp),
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isEditing) {
                                 Button(
                                     onClick = { showAddTracksSheet = true },
-                                    modifier = Modifier.weight(1f).height(56.dp),
-                                    shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 ) {
-                                    Icon(painterResource(R.drawable.ic_add), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                                    Text("Добавить треки", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    Icon(painterResource(R.drawable.ic_add), contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                                    Text("Добавить треки", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                FilledTonalIconButton(
+                                    onClick = { isMultiSelectMode = !isMultiSelectMode },
+                                    modifier = Modifier.size(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = if (isMultiSelectMode) IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ) else IconButtonDefaults.filledTonalIconButtonColors()
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_library), contentDescription = "Выбор")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
                                 FilledTonalIconButton(
                                     onClick = { showAddEditorDialog = true },
-                                    modifier = Modifier.size(56.dp),
-                                    shape = RoundedCornerShape(18.dp)
+                                    modifier = Modifier.size(52.dp),
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Icon(painterResource(R.drawable.ic_person), contentDescription = "Соавтор")
                                 }
                             } else {
                                 Button(
                                     onClick = { if (tracks.isNotEmpty()) onPlayClick(tracks, 0) },
-                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    modifier = Modifier.weight(1f).height(54.dp),
                                     shape = RoundedCornerShape(18.dp)
                                 ) {
                                     Icon(painterResource(R.drawable.ic_play), contentDescription = "Play", modifier = Modifier.padding(end = 8.dp))
                                     Text("Слушать", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 FilledTonalIconButton(
                                     onClick = { startEditing() },
-                                    modifier = Modifier.size(56.dp),
+                                    modifier = Modifier.size(54.dp),
                                     shape = RoundedCornerShape(18.dp)
                                 ) {
                                     Icon(painterResource(R.drawable.ic_edit), contentDescription = "Редактировать")
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                FilledTonalIconButton(
-                                    onClick = {
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, "Слушай мой плейлист «${playlist.title}»!\n\nhttp://185.196.41.31/playlist/${playlist.id}")
-                                        }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Поделиться"))
-                                    },
-                                    modifier = Modifier.size(56.dp),
-                                    shape = RoundedCornerShape(18.dp)
-                                ) {
-                                    Icon(painterResource(R.drawable.ic_share), contentDescription = "Share")
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box {
+                                    FilledTonalIconButton(
+                                        onClick = { showSortMenu = true },
+                                        modifier = Modifier.size(54.dp),
+                                        shape = RoundedCornerShape(18.dp)
+                                    ) {
+                                        Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "Сортировка")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSortMenu,
+                                        onDismissRequest = { showSortMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("По умолчанию") },
+                                            onClick = { showSortMenu = false; applySort(PlaylistSortMode.DEFAULT) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("По названию (A-Z)") },
+                                            onClick = { showSortMenu = false; applySort(PlaylistSortMode.TITLE_ASC) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("По артисту (A-Z)") },
+                                            onClick = { showSortMenu = false; applySort(PlaylistSortMode.ARTIST_ASC) }
+                                        )
+                                    }
                                 }
                             }
+                        }
+
+                        // СТРОКА ПОИСКА/ФИЛЬТРА В РЕДАКТОРЕ
+                        if (isEditing) {
+                            OutlinedTextField(
+                                value = filterQuery,
+                                onValueChange = { filterQuery = it },
+                                placeholder = { Text("Фильтр треков в плейлисте...") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 4.dp)
+                            )
                         }
                     }
                 }
@@ -388,107 +510,170 @@ fun PlaylistDetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(20.dp)
+                            .height(16.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                             )
                     )
                 }
 
                 // СПИСОК ТРЕКОВ
-                itemsIndexed(tracks, key = { index, track -> "${index}_${track.id}" }) { index, track ->
+                itemsIndexed(filteredTracks, key = { index, track -> "${index}_${track.id}" }) { index, track ->
                     val isBeingDragged = draggingIndex == index
+                    val isSelected = selectedTrackIds.contains(track.id)
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                            .animateItem()
-                    ) {
-                        TrackListItem(
-                            track = track,
-                            isEditing = isEditing,
-                            isBeingDragged = isBeingDragged,
-                            onRemove = {
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { dismissValue ->
+                            if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 coroutineScope.launch(Dispatchers.IO) {
                                     NetworkClient.getApi(context).removeTrackFromPlaylist(playlist.id, track.id).execute()
                                     withContext(Dispatchers.Main) {
-                                        if (index in tracks.indices) tracks.removeAt(index)
+                                        tracks.remove(track)
+                                        Toast.makeText(context, "Удалено", Toast.LENGTH_SHORT).show()
                                     }
                                 }
-                            },
-                            modifier = Modifier.clickable(enabled = !isEditing) { onPlayClick(tracks, index) },
-                            dragModifier = if (isEditing) {
-                                Modifier.pointerInput(index, tracks.size) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            draggingIndex = index
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDragEnd = {
-                                            draggingIndex = null
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDragCancel = {
-                                            draggingIndex = null
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragAccumulatedY += dragAmount.y
+                                true
+                            } else false
+                        }
+                    )
 
-                                            val currIdx = draggingIndex ?: return@detectDragGesturesAfterLongPress
-                                            val stepPx = 160f // Высота карточки трека (~64dp в px)
-
-                                            if (dragAccumulatedY > stepPx && currIdx < tracks.size - 1) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                val temp = tracks[currIdx]
-                                                tracks[currIdx] = tracks[currIdx + 1]
-                                                tracks[currIdx + 1] = temp
-                                                draggingIndex = currIdx + 1
-                                                dragAccumulatedY -= stepPx
-                                            } else if (dragAccumulatedY < -stepPx && currIdx > 0) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                val temp = tracks[currIdx]
-                                                tracks[currIdx] = tracks[currIdx - 1]
-                                                tracks[currIdx - 1] = temp
-                                                draggingIndex = currIdx - 1
-                                                dragAccumulatedY += stepPx
-                                            }
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        enableDismissFromEndToStart = isEditing && !isBeingDragged,
+                        backgroundContent = {
+                            val color by animateColorAsState(
+                                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) MaterialTheme.colorScheme.errorContainer else Color.Transparent
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(color)
+                                    .padding(end = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(painterResource(R.drawable.ic_close), contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                        }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                .animateItem()
+                        ) {
+                            TrackListItem(
+                                track = track,
+                                isEditing = isEditing,
+                                isBeingDragged = isBeingDragged,
+                                isMultiSelectMode = isMultiSelectMode,
+                                isSelected = isSelected,
+                                onSelectToggle = {
+                                    if (isSelected) selectedTrackIds.remove(track.id)
+                                    else selectedTrackIds.add(track.id)
+                                },
+                                onRemove = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        NetworkClient.getApi(context).removeTrackFromPlaylist(playlist.id, track.id).execute()
+                                        withContext(Dispatchers.Main) {
+                                            tracks.remove(track)
                                         }
-                                    )
-                                }
-                            } else Modifier
-                        )
+                                    }
+                                },
+                                modifier = Modifier.clickable(enabled = !isEditing) { onPlayClick(tracks, index) },
+                                dragModifier = if (isEditing && !isMultiSelectMode) {
+                                    Modifier.pointerInput(index, tracks.size) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggingIndex = index
+                                                dragAccumulatedY = 0f
+                                            },
+                                            onDragEnd = {
+                                                draggingIndex = null
+                                                dragAccumulatedY = 0f
+                                            },
+                                            onDragCancel = {
+                                                draggingIndex = null
+                                                dragAccumulatedY = 0f
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragAccumulatedY += dragAmount.y
+
+                                                val currIdx = draggingIndex ?: return@detectDragGesturesAfterLongPress
+                                                val stepPx = 160f
+
+                                                if (dragAccumulatedY > stepPx && currIdx < tracks.size - 1) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    val temp = tracks[currIdx]
+                                                    tracks[currIdx] = tracks[currIdx + 1]
+                                                    tracks[currIdx + 1] = temp
+                                                    draggingIndex = currIdx + 1
+                                                    dragAccumulatedY -= stepPx
+                                                } else if (dragAccumulatedY < -stepPx && currIdx > 0) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    val temp = tracks[currIdx]
+                                                    tracks[currIdx] = tracks[currIdx - 1]
+                                                    tracks[currIdx - 1] = temp
+                                                    draggingIndex = currIdx - 1
+                                                    dragAccumulatedY += stepPx
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else Modifier
+                            )
+                        }
                     }
                 }
 
-                // КНОПКА УДАЛЕНИЯ ПЛЕЙЛИСТА
+                // ПАНЕЛЬ ПАКЕТНОГО УДАЛЕНИЯ ИЛИ УДАЛЕНИЯ ПЛЕЙЛИСТА
                 if (isEditing) {
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                .padding(vertical = 24.dp),
+                                .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Button(
-                                onClick = { showDeleteConfirmDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp)
-                                    .height(56.dp)
-                            ) {
-                                Icon(painterResource(R.drawable.ic_close), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                                Text("Удалить плейлист", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            if (isMultiSelectMode && selectedTrackIds.isNotEmpty()) {
+                                Button(
+                                    onClick = { deleteSelectedTracks() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
+                                        .height(54.dp)
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_close), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                    Text("Удалить выбранные (${selectedTrackIds.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { showDeleteConfirmDialog = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
+                                        .height(54.dp)
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_close), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                    Text("Удалить плейлист", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
                             }
                         }
                     }
@@ -505,7 +690,7 @@ fun PlaylistDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -513,7 +698,7 @@ fun PlaylistDetailScreen(
                 onClick = { if (isEditing) cancelEditing() else onBackClick() },
                 modifier = Modifier
                     .size(44.dp)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
             ) {
                 Icon(
                     painter = painterResource(if (isEditing) R.drawable.ic_close else R.drawable.ic_arrow_back),
@@ -526,7 +711,7 @@ fun PlaylistDetailScreen(
                 Button(
                     onClick = { savePlaylistChanges() },
                     shape = RoundedCornerShape(50),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
                 ) {
                     Text("Сохранить", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
@@ -664,14 +849,22 @@ fun TrackListItem(
     track: Track,
     isEditing: Boolean,
     isBeingDragged: Boolean = false,
+    isMultiSelectMode: Boolean = false,
+    isSelected: Boolean = false,
+    onSelectToggle: () -> Unit = {},
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
     dragModifier: Modifier = Modifier
 ) {
-    val scale by animateFloatAsState(if (isBeingDragged) 1.04f else 1f)
-    val elevation by animateDpAsState(if (isBeingDragged) 8.dp else 0.dp)
+    val scale by animateFloatAsState(
+        targetValue = if (isBeingDragged) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    )
+    val elevation by animateDpAsState(if (isBeingDragged) 12.dp else 0.dp)
     val cardColor = if (isBeingDragged) {
         MaterialTheme.colorScheme.surfaceContainerHigh
+    } else if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
     } else {
         MaterialTheme.colorScheme.surface
     }
@@ -691,7 +884,13 @@ fun TrackListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isEditing) {
+            if (isEditing && isMultiSelectMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onSelectToggle() },
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+            } else if (isEditing) {
                 IconButton(
                     onClick = onRemove,
                     modifier = Modifier
@@ -738,7 +937,7 @@ fun TrackListItem(
                 )
             }
 
-            if (isEditing) {
+            if (isEditing && !isMultiSelectMode) {
                 Icon(
                     painter = painterResource(R.drawable.ic_drag_handle),
                     contentDescription = "Перетащить",
@@ -747,8 +946,8 @@ fun TrackListItem(
                         .size(48.dp)
                         .padding(12.dp)
                 )
-            } else {
-                IconButton(onClick = { /* TODO: Track menu */ }, modifier = Modifier.size(40.dp)) {
+            } else if (!isEditing) {
+                IconButton(onClick = { /* Track menu */ }, modifier = Modifier.size(40.dp)) {
                     Icon(
                         painter = painterResource(R.drawable.ic_more_vert),
                         contentDescription = "Меню",

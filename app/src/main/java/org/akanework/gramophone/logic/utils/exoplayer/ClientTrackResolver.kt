@@ -676,11 +676,12 @@ object ClientTrackResolver {
                     val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return@use
 
                     var bestUrl: String? = null
-                    var highestBitrate = 0
+                    var bestScore = -1
 
                     for (i in 0 until adaptiveFormats.length()) {
                         val fmt = adaptiveFormats.getJSONObject(i)
                         val mimeType = fmt.optString("mimeType", "")
+                        val itag = fmt.optInt("itag", 0)
                         if (mimeType.contains("audio/")) {
                             var streamUrl = fmt.optString("url", "")
                             if (streamUrl.isEmpty() && fmt.has("signatureCipher")) {
@@ -693,10 +694,15 @@ object ClientTrackResolver {
                                     }
                                 }
                             }
-                            val bitrate = fmt.optInt("bitrate", 0)
-                            if (streamUrl.isNotEmpty() && bitrate > highestBitrate) {
-                                highestBitrate = bitrate
-                                bestUrl = streamUrl
+                            if (streamUrl.isNotEmpty()) {
+                                val bitrate = fmt.optInt("bitrate", 0)
+                                val isM4A = mimeType.contains("audio/mp4") || mimeType.contains("audio/m4a") || itag == 140
+                                // M4A AAC (itag 140) receives priority bonus to bypass YouTube SABR throttling on WebM Opus
+                                val formatScore = bitrate + (if (isM4A) 1000000 else 0)
+                                if (formatScore > bestScore) {
+                                    bestScore = formatScore
+                                    bestUrl = streamUrl
+                                }
                             }
                         }
                     }

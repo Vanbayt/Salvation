@@ -368,16 +368,16 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             httpDataSourceFactory
         )
 
-        // --- 2. ДОБАВЛЯЕМ АГРЕССИВНУЮ ФОНОВУЮ ПРЕДЗАГРУЗКУ ТРЕКА (ДО 30 МИНУТ) ---
+        // --- 2. ОПТИМИЗИРОВАННЫЙ БУФЕР ДЛЯ МНОГОПОТОЧНОГО M4A/AAC ИСКЛЮЧАЕТ PAUSES СБОРЩИКА МУСОРА (GC) ---
         val customLoadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 1800000,                      // 30 минут — заставляет качать песни и 30-мин сеты целиком в RAM
-                /* maxBufferMs = */ 3600000,                      // 1 час макс буфер
-                /* bufferForPlaybackMs = */ 3500,               // Старт мгновенный (< 200мс)
-                /* bufferForPlaybackAfterRebufferMs = */ 5000
+                /* minBufferMs = */ 180000,                       // 3 минуты буфера (~3.6 МБ в RAM) — без тормозов GC
+                /* maxBufferMs = */ 600000,                       // 10 минут макс буфер
+                /* bufferForPlaybackMs = */ 2500,                // Мгновенный старт (< 100мс)
+                /* bufferForPlaybackAfterRebufferMs = */ 4000
             )
             .setBackBuffer(
-                /* backBufferDurationMs = */ 300000,            // 5 минут пройденного аудио в памяти для мгновенной отмотки назад
+                /* backBufferDurationMs = */ 120000,             // 2 минуты прошлых байт в RAM для отмотки
                 /* retainBackBufferFromKeyframe = */ true
             )
             .setPrioritizeTimeOverSizeThresholds(true)
