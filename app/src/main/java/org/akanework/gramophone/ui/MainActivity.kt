@@ -687,12 +687,20 @@ class MainActivity : BaseActivity() {
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                    contentDescription = "Play/Pause",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Icon(
+                        painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                        contentDescription = "Play/Pause",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -1128,6 +1136,7 @@ class MainActivity : BaseActivity() {
                 Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
                     CookiePlayButton(
                         isPlaying = isPlaying,
+                        isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING),
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
                             getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }

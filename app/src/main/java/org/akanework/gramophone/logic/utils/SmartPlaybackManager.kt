@@ -7,6 +7,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.Player
 import kotlinx.coroutines.*
@@ -30,6 +33,9 @@ object SmartPlaybackManager {
 
     private val isSkipping = AtomicBoolean(false)
 
+    var isResolving by mutableStateOf(false)
+        internal set
+
     fun init(context: Context, player: Player) {
         appContext = context.applicationContext
         currentPlayer = player
@@ -46,16 +52,19 @@ object SmartPlaybackManager {
                     }
                     Player.STATE_READY -> {
                         PlaybackLogger.log("SMART_MGR", "Player entered STATE_READY. Cancelling timeout timers.")
+                        isResolving = false
                         cancelTimeoutTimer()
                         isSkipping.set(false)
                     }
                     Player.STATE_ENDED, Player.STATE_IDLE -> {
+                        isResolving = false
                         cancelTimeoutTimer()
                     }
                 }
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                isResolving = false
                 PlaybackLogger.log("SMART_MGR", "Hard Player Error: ${error.message}. Triggering instant skip!")
                 onHardFailure("Player Error: ${error.message}")
             }
@@ -68,6 +77,7 @@ object SmartPlaybackManager {
     fun onTrackRequested(trackTitle: String = "") {
         cancelTimeoutTimer()
         isSkipping.set(false)
+        isResolving = true
         PlaybackLogger.log("SMART_MGR", "Track requested: '$trackTitle'. Starting active resolution timer (15s).")
 
         currentTimeoutJob = managerScope.launch {
@@ -84,6 +94,7 @@ object SmartPlaybackManager {
      */
     fun onHardFailure(reason: String, trackTitle: String = "") {
         cancelTimeoutTimer()
+        isResolving = false
         if (isSkipping.compareAndSet(false, true)) {
             PlaybackLogger.log("SMART_HARD_FAIL", "Hard failure triggered: $reason. Instant auto-skipping...")
             mainHandler.post {

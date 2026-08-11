@@ -30,7 +30,11 @@ import androidx.compose.ui.unit.dp
 import org.akanework.gramophone.R
 
 @Composable
-fun CookiePlayButton(isPlaying: Boolean, onClick: () -> Unit) {
+fun CookiePlayButton(
+    isPlaying: Boolean,
+    isLoading: Boolean = false,
+    onClick: () -> Unit
+) {
     val containerColor = MaterialTheme.colorScheme.primaryContainer
     val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
@@ -40,16 +44,16 @@ fun CookiePlayButton(isPlaying: Boolean, onClick: () -> Unit) {
     val teethDepth by transition.animateFloat(
         transitionSpec = { spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow) },
         label = "teeth"
-    ) { playing -> if (playing) 10f else 0f }
+    ) { playing -> if (playing || isLoading) 10f else 0f }
 
     // 2. Бесконечное вращение (изменяем фазу, а не саму Canvas!)
     var rotationPhase by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
+    LaunchedEffect(isPlaying || isLoading) {
+        if (isPlaying || isLoading) {
             while (true) {
                 withFrameMillis { time ->
-                    // Скорость вращения. Полный оборот примерно за 7 секунд
-                    rotationPhase = (time / 20f) % 360f
+                    val speed = if (isLoading) 10f else 20f
+                    rotationPhase = (time / speed) % 360f
                 }
             }
         }
@@ -75,7 +79,6 @@ fun CookiePlayButton(isPlaying: Boolean, onClick: () -> Unit) {
 
             for (i in 0..360) {
                 val rad = Math.toRadians(i.toDouble())
-                // Формула формы: базовый радиус + глубина * синус(кол-во зубьев * угол + фаза вращения)
                 val r = radius + teethDepth * kotlin.math.sin(teethCount * rad + Math.toRadians(rotationPhase.toDouble()))
                 val x = center.x + r.toFloat() * kotlin.math.cos(rad).toFloat()
                 val y = center.y + r.toFloat() * kotlin.math.sin(rad).toFloat()
@@ -86,12 +89,20 @@ fun CookiePlayButton(isPlaying: Boolean, onClick: () -> Unit) {
             drawPath(path, color = containerColor)
         }
 
-        // Иконка (всегда стоит ровно!)
-        Icon(
-            painter = painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-            contentDescription = "Play/Pause",
-            tint = iconColor,
-            modifier = Modifier.size(36.dp)
-        )
+        // Иконка или Лоадер
+        if (isLoading) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(32.dp),
+                color = iconColor,
+                strokeWidth = 3.dp
+            )
+        } else {
+            Icon(
+                painter = painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                contentDescription = "Play/Pause",
+                tint = iconColor,
+                modifier = Modifier.size(36.dp)
+            )
+        }
     }
 }

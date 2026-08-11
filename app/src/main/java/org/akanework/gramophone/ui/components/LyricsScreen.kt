@@ -21,13 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -36,9 +33,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -234,7 +235,7 @@ fun LyricsScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
@@ -280,7 +281,7 @@ fun LyricsScreen(
                             text = trackTitle.ifEmpty { "Загрузка..." },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -289,7 +290,7 @@ fun LyricsScreen(
                             text = artistName.ifEmpty { "Неизвестный исполнитель" },
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -316,7 +317,7 @@ fun LyricsScreen(
                     // Play/Pause Button
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .clickable {
@@ -329,7 +330,7 @@ fun LyricsScreen(
                             painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                             contentDescription = "Play/Pause",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -341,19 +342,19 @@ fun LyricsScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSkipNext()
                         },
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(42.dp)
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_skip_next),
                             contentDescription = "Next",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Main Content Area
             Box(
@@ -374,13 +375,13 @@ fun LyricsScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             CircularProgressIndicator(
-                                strokeWidth = 4.dp,
+                                strokeWidth = 3.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Поиск текста в агрегаторах...",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -398,8 +399,8 @@ fun LyricsScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 28.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             itemsIndexed(displayItems) { index, item ->
                                 val isActive = index == activeItemIndex
@@ -409,7 +410,7 @@ fun LyricsScreen(
                                         val line = item.line
 
                                         val lineScale by animateFloatAsState(
-                                            targetValue = if (isActive) 1.05f else 1.0f,
+                                            targetValue = if (isActive) 1.03f else 1.0f,
                                             animationSpec = spring(
                                                 stiffness = Spring.StiffnessLow,
                                                 dampingRatio = Spring.DampingRatioMediumBouncy
@@ -419,17 +420,18 @@ fun LyricsScreen(
 
                                         val lineBgColor by animateColorAsState(
                                             targetValue = if (isActive) {
-                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f)
                                             } else {
                                                 Color.Transparent
                                             },
-                                            animationSpec = tween(durationMillis = 280),
+                                            animationSpec = tween(durationMillis = 260),
                                             label = "lineBgColor"
                                         )
 
-                                        val fontSize = if (isActive) 30.sp else 20.sp
-                                        val fontWeight = if (isActive) FontWeight.Black else FontWeight.SemiBold
-                                        val lineHeight = if (isActive) 38.sp else 28.sp
+                                        // Adjusted elegant compact font sizes
+                                        val fontSize = if (isActive) 22.sp else 17.sp
+                                        val fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                                        val lineHeight = if (isActive) 30.sp else 24.sp
 
                                         // Compute progress fraction across line duration
                                         val startMs = line.start.toLong()
@@ -442,24 +444,24 @@ fun LyricsScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .scale(lineScale)
-                                                .clip(RoundedCornerShape(18.dp))
+                                                .clip(RoundedCornerShape(16.dp))
                                                 .background(lineBgColor)
                                                 .clickable {
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     onSeekTo(line.start.toLong())
                                                 }
-                                                .padding(vertical = 10.dp, horizontal = 16.dp)
+                                                .padding(vertical = 8.dp, horizontal = 14.dp)
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 if (isActive) {
                                                     val barHeight by animateDpAsState(
-                                                        targetValue = if (isActive) 26.dp else 0.dp,
+                                                        targetValue = if (isActive) 22.dp else 0.dp,
                                                         animationSpec = spring(stiffness = Spring.StiffnessMedium),
                                                         label = "barHeight"
                                                     )
                                                     Box(
                                                         modifier = Modifier
-                                                            .padding(end = 12.dp)
+                                                            .padding(end = 10.dp)
                                                             .width(4.dp)
                                                             .height(barHeight)
                                                             .clip(CircleShape)
@@ -476,19 +478,43 @@ fun LyricsScreen(
                                                         fontWeight = fontWeight,
                                                         lineHeight = lineHeight,
                                                         activeColor = MaterialTheme.colorScheme.primary,
-                                                        inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                                                        inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                                     )
 
                                                     if (isAutoTranslateEnabled && !line.translation.isNullOrBlank()) {
-                                                        Spacer(modifier = Modifier.height(4.dp))
-                                                        Text(
-                                                            text = line.translation!!,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontSize = if (isActive) 16.sp else 14.sp,
-                                                            fontWeight = FontWeight.Medium,
-                                                            color = if (isActive) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                                            lineHeight = if (isActive) 22.sp else 18.sp
-                                                        )
+                                                        Spacer(modifier = Modifier.height(3.dp))
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        ) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                                                modifier = Modifier.padding(top = 1.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = "RU",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.ExtraBold,
+                                                                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
+                                                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+
+                                                            Text(
+                                                                text = line.translation!!,
+                                                                fontStyle = FontStyle.Italic,
+                                                                fontSize = if (isActive) 14.sp else 12.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = if (isActive) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                                                lineHeight = if (isActive) 19.sp else 16.sp,
+                                                                modifier = Modifier.weight(1f, fill = false)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -513,21 +539,21 @@ fun LyricsScreen(
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(vertical = 6.dp)
+                                                .padding(vertical = 4.dp)
                                                 .clickable {
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     onSeekTo(item.startMs)
                                                 },
-                                            shape = RoundedCornerShape(24.dp),
+                                            shape = RoundedCornerShape(20.dp),
                                             color = cardBgColor,
-                                            tonalElevation = if (isActive) 4.dp else 0.dp
+                                            tonalElevation = if (isActive) 3.dp else 0.dp
                                         ) {
                                             Column(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 verticalArrangement = Arrangement.Center,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(vertical = 18.dp, horizontal = 24.dp)
+                                                    .padding(vertical = 14.dp, horizontal = 20.dp)
                                             ) {
                                                 // Expressive 3 Bouncing Rhythm Dots
                                                 ExpressiveRhythmDots(
@@ -538,11 +564,11 @@ fun LyricsScreen(
 
                                                 // Progress indicator properly spaced below dots
                                                 if (isActive && progressFraction in 0f..1f) {
-                                                    Spacer(modifier = Modifier.height(14.dp))
+                                                    Spacer(modifier = Modifier.height(12.dp))
                                                     LinearProgressIndicator(
                                                         progress = { progressFraction },
                                                         modifier = Modifier
-                                                            .fillMaxWidth(0.5f)
+                                                            .fillMaxWidth(0.45f)
                                                             .height(3.dp)
                                                             .clip(CircleShape),
                                                         color = MaterialTheme.colorScheme.primary,
@@ -560,16 +586,16 @@ fun LyricsScreen(
                     validUnsyncedLines.isNotEmpty() -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 28.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             itemsIndexed(validUnsyncedLines) { _, (lineText, _) ->
                                 Text(
                                     text = lineText,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                    fontSize = 22.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    lineHeight = 32.sp,
+                                    lineHeight = 26.sp,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -614,51 +640,62 @@ private fun LiquidKaraokeText(
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressFraction.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 140, easing = LinearEasing),
-        label = "liquidProgress"
+        animationSpec = tween(durationMillis = 120, easing = LinearEasing),
+        label = "karaokeProgress"
     )
 
-    Box(modifier = modifier) {
-        // Base Layer: Inactive dimmed text
-        Text(
-            text = text,
-            fontSize = fontSize,
-            fontWeight = fontWeight,
-            color = inactiveColor,
-            lineHeight = lineHeight
-        )
+    val totalLength = text.length
+    val charProgress = totalLength * animatedProgress
+    val fullSungCount = charProgress.toInt().coerceIn(0, totalLength)
+    val partialCharFraction = charProgress - fullSungCount
 
-        // Overlay Layer: Active brightly lit text smoothly clipped by gradient sweep
-        Text(
-            text = text,
-            fontSize = fontSize,
-            fontWeight = fontWeight,
-            color = activeColor,
-            lineHeight = lineHeight,
-            modifier = Modifier
-                .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
+    val annotatedString = remember(text, fullSungCount, partialCharFraction, activeColor, inactiveColor) {
+        buildAnnotatedString {
+            for (i in 0 until totalLength) {
+                val ch = text[i].toString()
+                when {
+                    i < fullSungCount -> {
+                        withStyle(
+                            SpanStyle(
+                                color = activeColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        ) {
+                            append(ch)
+                        }
+                    }
+                    i == fullSungCount -> {
+                        val currentAlpha = 0.38f + (0.62f * partialCharFraction.coerceIn(0f, 1f))
+                        withStyle(
+                            SpanStyle(
+                                color = activeColor.copy(alpha = currentAlpha),
+                                fontWeight = FontWeight.Bold
+                            )
+                        ) {
+                            append(ch)
+                        }
+                    }
+                    else -> {
+                        withStyle(
+                            SpanStyle(
+                                color = inactiveColor,
+                                fontWeight = FontWeight.Normal
+                            )
+                        ) {
+                            append(ch)
+                        }
+                    }
                 }
-                .drawWithContent {
-                    drawContent()
-                    val currentX = size.width * animatedProgress
-                    val edgeWidth = 36.dp.toPx()
-                    val pStop = (currentX / size.width).coerceIn(0f, 1f)
-                    val eStop = ((currentX + edgeWidth) / size.width).coerceIn(0f, 1f)
-
-                    val brush = Brush.horizontalGradient(
-                        0f to Color.Black,
-                        pStop to Color.Black,
-                        eStop to Color.Transparent,
-                        1f to Color.Transparent
-                    )
-                    drawRect(
-                        brush = brush,
-                        blendMode = BlendMode.DstIn
-                    )
-                }
-        )
+            }
+        }
     }
+
+    Text(
+        text = annotatedString,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+        modifier = modifier
+    )
 }
 
 @Composable
