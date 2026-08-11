@@ -24,6 +24,7 @@ import coil3.request.allowHardware
 
 data class SearchHistoryItem(val query: String)
 data class HeaderItem(val title: String)
+data class TopResultItem(val track: Track? = null, val artist: Artist? = null)
 data class ArtistCarouselItem(val artists: List<Artist>)
 data class AlbumCarouselItem(val albums: List<Album>)
 
@@ -40,7 +41,9 @@ class OnlineSearchAdapter(
 
     private val items = mutableListOf<Any>()
 
-    val currentList: List<Track> get() = items.filterIsInstance<Track>()
+    val currentList: List<Track> get() = items.filterIsInstance<Track>().ifEmpty {
+        items.filterIsInstance<TopResultItem>().mapNotNull { it.track }
+    }
 
     var currentlyPlayingTrackId: String? = null
         set(value) {
@@ -48,8 +51,8 @@ class OnlineSearchAdapter(
             field = value
             if (old != value) {
                 // Ищем позицию старого и нового трека и обновляем ТОЛЬКО ИХ
-                val oldIndex = items.indexOfFirst { it is Track && it.id == old }
-                val newIndex = items.indexOfFirst { it is Track && it.id == value }
+                val oldIndex = items.indexOfFirst { (it is Track && it.id == old) || (it is TopResultItem && it.track?.id == old) }
+                val newIndex = items.indexOfFirst { (it is Track && it.id == value) || (it is TopResultItem && it.track?.id == value) }
                 if (oldIndex != -1) notifyItemChanged(oldIndex)
                 if (newIndex != -1) notifyItemChanged(newIndex)
             }
@@ -63,6 +66,7 @@ class OnlineSearchAdapter(
         private const val TYPE_HEADER = 4
         private const val TYPE_ARTIST_CAROUSEL = 5
         private const val TYPE_ALBUM_CAROUSEL = 6
+        private const val TYPE_TOP_RESULT = 7
     }
 
     fun submitList(newItems: List<Any>) {
@@ -74,6 +78,7 @@ class OnlineSearchAdapter(
     override fun getItemViewType(position: Int): Int {
         return when (items[position]) {
             is HeaderItem -> TYPE_HEADER
+            is TopResultItem -> TYPE_TOP_RESULT
             is ArtistCarouselItem -> TYPE_ARTIST_CAROUSEL
             is AlbumCarouselItem -> TYPE_ALBUM_CAROUSEL
             is Artist -> TYPE_ARTIST
@@ -174,6 +179,10 @@ class OnlineSearchAdapter(
                     AlbumViewHolder(view)
                 }
             }
+            TYPE_TOP_RESULT -> {
+                val view = LayoutInflater.from(parent.context).inflate(R.layout.item_top_result, parent, false)
+                TopResultViewHolder(view)
+            }
             else -> {
                 val view = LayoutInflater.from(parent.context).inflate(R.layout.item_search_result, parent, false)
                 TrackViewHolder(view)
@@ -185,6 +194,10 @@ class OnlineSearchAdapter(
         val item = items[position]
         when {
             holder is HeaderViewHolder && item is HeaderItem -> holder.bind(item)
+            holder is TopResultViewHolder && item is TopResultItem -> {
+                if (item.track != null) holder.bindTrack(item.track)
+                else if (item.artist != null) holder.bindArtist(item.artist)
+            }
             holder is CarouselViewHolder && item is ArtistCarouselItem -> holder.bindArtists(item.artists)
             holder is CarouselViewHolder && item is AlbumCarouselItem -> holder.bindAlbums(item.albums)
             holder is HistoryViewHolder && item is SearchHistoryItem -> holder.bind(item)
@@ -197,6 +210,45 @@ class OnlineSearchAdapter(
     }
 
     override fun getItemCount() = items.size
+
+    inner class TopResultViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val card: View = itemView.findViewById(R.id.card_top_result)
+        private val cover: com.google.android.material.imageview.ShapeableImageView = itemView.findViewById(R.id.iv_cover)
+        private val badge: TextView = itemView.findViewById(R.id.tv_badge)
+        private val title: TextView = itemView.findViewById(R.id.tv_title)
+        private val artist: TextView = itemView.findViewById(R.id.tv_artist)
+        private val btnPlay: com.google.android.material.floatingactionbutton.FloatingActionButton = itemView.findViewById(R.id.btn_play)
+
+        fun bindTrack(track: Track) {
+            badge.text = "ЛУЧШИЙ РЕЗУЛЬТАТ"
+            title.text = track.title
+            artist.text = if (track.artist.isNotEmpty()) track.artist else "Unknown Artist"
+            cover.shapeAppearanceModel = cover.shapeAppearanceModel.toBuilder()
+                .setAllCornerSizes(12 * itemView.resources.displayMetrics.density)
+                .build()
+            cover.load(track.cover) {
+                allowHardware(false)
+            }
+            btnPlay.setImageResource(R.drawable.ic_play_arrow)
+            card.setOnClickListener { onClick(track) }
+            btnPlay.setOnClickListener { onClick(track) }
+        }
+
+        fun bindArtist(a: Artist) {
+            badge.text = "ИСПОЛНИТЕЛЬ"
+            title.text = a.name
+            artist.text = "Исполнитель"
+            cover.shapeAppearanceModel = cover.shapeAppearanceModel.toBuilder()
+                .setAllCornerSizes(36 * itemView.resources.displayMetrics.density)
+                .build()
+            cover.load(a.picture ?: a.cover) {
+                allowHardware(false)
+            }
+            btnPlay.setImageResource(R.drawable.ic_person)
+            card.setOnClickListener { onArtistClick(a, card) }
+            btnPlay.setOnClickListener { onArtistClick(a, card) }
+        }
+    }
 
     inner class CarouselViewHolder(private val recyclerView: RecyclerView) : RecyclerView.ViewHolder(recyclerView) {
         fun bindArtists(artists: List<Artist>) {
@@ -246,7 +298,8 @@ class OnlineSearchAdapter(
             // 🔥 Устанавливаем уникальное имя и передаем View
             itemView.transitionName = "artist_card_${artist.id}"
             name.text = artist.name
-            fixCoverUrl(artist.cover)?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
+            val imgUrl = artist.picture ?: artist.cover
+            fixCoverUrl(imgUrl)?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onArtistClick(artist, itemView) }
         }
     }
@@ -438,14 +491,12 @@ class OnlineSearchAdapter(
             title.text = artist.name
             subtitle.text = "Артист"
 
-            // 🔥 Магия динамического градиента
-            artist.cover?.let { url ->
+            val imgUrl = artist.picture ?: artist.cover
+            imgUrl?.let { url ->
                 cover.load(url) {
                     allowHardware(false)
                     listener(
                         onSuccess = { _, result ->
-                            // В Coil 3.x result.image содержит изображение.
-                            // Мы пытаемся преобразовать его в Bitmap, если это возможно.
                             val bitmap = (result.image as? coil3.BitmapImage)?.bitmap ?: return@listener
 
                             Palette.from(bitmap).generate { palette ->

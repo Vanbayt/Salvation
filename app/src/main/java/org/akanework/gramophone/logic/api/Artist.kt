@@ -10,9 +10,12 @@ data class Artist(
     @SerializedName("name")
     val name: String,
 
-    // Фотография артиста (Yandex Music умеет их отдавать)
+    // Фотография артиста (Yandex Music / Deezer)
     @SerializedName("cover")
     val cover: String? = null,
+
+    @SerializedName("picture")
+    val picture: String? = null,
 
     @SerializedName("bio")
     val bio: String? = null,

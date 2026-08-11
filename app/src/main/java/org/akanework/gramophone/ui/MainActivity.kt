@@ -301,6 +301,7 @@ class MainActivity : BaseActivity() {
                 )
 
                 var extractedColor by remember { mutableStateOf<Color?>(null) }
+                var isLyricsOpenState by remember { mutableStateOf(false) }
 
                 val baseMiniColor = MaterialTheme.colorScheme.surfaceVariant
                 val fullColor = MaterialTheme.colorScheme.surface
@@ -363,6 +364,7 @@ class MainActivity : BaseActivity() {
 
                     BottomSheetScaffold(
                         scaffoldState = scaffoldState,
+                        sheetSwipeEnabled = !isLyricsOpenState,
                         sheetPeekHeight = if (miniPlayerVisible && isGlobalUiVisible) staticPeekHeight else 0.dp,
                         sheetShape = androidx.compose.ui.graphics.RectangleShape,
                         sheetContainerColor = Color.Transparent,
@@ -757,9 +759,61 @@ class MainActivity : BaseActivity() {
     }
 
     @Composable
-    private fun FullPlayerComposeBlock(modifier: Modifier = Modifier, onClose: () -> Unit) {
+    private fun FullPlayerComposeBlock(
+        modifier: Modifier = Modifier,
+        onLyricsStateChange: (Boolean) -> Unit = {},
+        onClose: () -> Unit
+    ) {
         val coroutineScope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current // 🔥 Haptic
+
+        var showLyricsScreen by remember { mutableStateOf(false) }
+
+        LaunchedEffect(showLyricsScreen) {
+            onLyricsStateChange(showLyricsScreen)
+        }
+
+        var currentLyricsResult by remember { mutableStateOf<org.akanework.gramophone.logic.utils.LyricsResult?>(null) }
+        var isLyricsLoading by remember { mutableStateOf(false) }
+        var selectedLyricsSource by remember { mutableStateOf(org.akanework.gramophone.logic.utils.LyricsSource.ALL) }
+
+        fun loadLyrics(source: org.akanework.gramophone.logic.utils.LyricsSource = selectedLyricsSource) {
+            val player = getPlayer() ?: return
+            val mediaItem = player.currentMediaItem ?: return
+            isLyricsLoading = true
+            val title = mediaItem.mediaMetadata.title?.toString()
+            val artist = mediaItem.mediaMetadata.artist?.toString()
+            val durationMs = mediaItem.mediaMetadata.durationMs ?: 0L
+
+            val options = org.akanework.gramophone.logic.utils.LrcUtils.LrcParserOptions(
+                trim = true, multiLine = false,
+                errorText = "Не удалось распарсить текст"
+            )
+
+            CoroutineScope(Dispatchers.Main).launch {
+                val res = org.akanework.gramophone.logic.utils.LyricsRepository.fetchLyrics(
+                    context = this@MainActivity,
+                    file = null,
+                    mimeType = null,
+                    sampleRate = 0,
+                    metadata = null,
+                    artist = artist,
+                    title = title,
+                    durationMs = durationMs,
+                    preferredSource = source,
+                    options = options
+                )
+                currentLyricsResult = res
+                isLyricsLoading = false
+            }
+        }
+
+        LaunchedEffect(trackTitle) {
+            currentLyricsResult = null
+            if (showLyricsScreen) {
+                loadLyrics()
+            }
+        }
 
         val dragOffset = remember { androidx.compose.animation.core.Animatable(0f) }
         var isDragging by remember { mutableStateOf(false) }
@@ -819,12 +873,13 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
-                .statusBarsPadding()
-        ) {
+        Box(modifier = modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .statusBarsPadding()
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1123,10 +1178,22 @@ class MainActivity : BaseActivity() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val targetState = !showLyricsScreen
+                        showLyricsScreen = targetState
+                        if (targetState && currentLyricsResult == null && !isLyricsLoading) {
+                            loadLyrics()
+                        }
+                    },
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(painterResource(R.drawable.ic_article), "Lyrics", modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        painterResource(R.drawable.ic_article),
+                        "Lyrics",
+                        modifier = Modifier.size(24.dp),
+                        tint = if (showLyricsScreen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Box(
@@ -1186,7 +1253,43 @@ class MainActivity : BaseActivity() {
                 }
             }
         }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showLyricsScreen,
+            enter = androidx.compose.animation.fadeIn(tween(300)) +
+                    androidx.compose.animation.slideInVertically(tween(300)) { it },
+            exit = androidx.compose.animation.fadeOut(tween(300)) +
+                    androidx.compose.animation.slideOutVertically(tween(300)) { it }
+        ) {
+            org.akanework.gramophone.ui.components.LyricsScreen(
+                trackTitle = trackTitle,
+                artistName = trackArtist,
+                coverUrl = coverUrl,
+                isPlaying = isPlaying,
+                lyricsResult = currentLyricsResult,
+                isLoading = isLyricsLoading,
+                currentPositionMs = currentPosition.toLong(),
+                selectedSource = selectedLyricsSource,
+                onSourceSelected = { newSource ->
+                    selectedLyricsSource = newSource
+                    loadLyrics(newSource)
+                },
+                onPlayPauseToggle = {
+                    getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                },
+                onSkipNext = {
+                    getPlayer()?.seekToNext()
+                },
+                onSeekTo = { pos ->
+                    getPlayer()?.seekTo(pos)
+                },
+                onDismiss = {
+                    showLyricsScreen = false
+                }
+            )
+        }
     }
+}
     private fun formatTime(ms: Long): String {
         if (ms < 0) return "0:00"
         val seconds = (ms / 1000) % 60
@@ -1218,7 +1321,7 @@ class MainActivity : BaseActivity() {
             frag.enterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 350 }
             frag.returnTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 350 }
 
-            if (sharedView != null && transName != null) {
+            if (sharedView != null && transName != null && !sharedView.transitionName.isNullOrEmpty()) {
                 currentFragment?.exitTransition = MaterialElevationScale(false).apply { duration = 350 }
                 currentFragment?.reenterTransition = MaterialElevationScale(true).apply { duration = 350 }
                 addSharedElement(sharedView, transName)

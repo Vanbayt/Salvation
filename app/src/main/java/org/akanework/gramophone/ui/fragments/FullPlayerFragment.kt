@@ -40,6 +40,17 @@ import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.CookiePlayButton
 import org.akanework.gramophone.ui.components.SquigglySlider
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.akanework.gramophone.logic.utils.LrcUtils
+import org.akanework.gramophone.logic.utils.LyricsRepository
+import org.akanework.gramophone.logic.utils.LyricsResult
+import org.akanework.gramophone.logic.utils.LyricsSource
+import org.akanework.gramophone.ui.components.LyricsScreen
+
 class FullPlayerFragment : BottomSheetDialogFragment() {
 
     private var tvTitle: TextView? = null
@@ -54,6 +65,12 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
     private var btnShuffle: MaterialButton? = null
     private var btnLoop: MaterialButton? = null
     private var btnQueue: MaterialButton? = null
+    private var btnLyrics: MaterialButton? = null
+    private var lyricComposeView: ComposeView? = null
+
+    private var currentLyricsResult by mutableStateOf<LyricsResult?>(null)
+    private var isLyricsLoading by mutableStateOf(false)
+    private var selectedLyricsSource by mutableStateOf(LyricsSource.ALL)
 
     private var tvPosition: TextView? = null
     private var tvDuration: TextView? = null
@@ -138,6 +155,8 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         btnShuffle = view.findViewById(R.id.sheet_random)
         btnLoop = view.findViewById(R.id.sheet_loop)
         btnQueue = view.findViewById(R.id.playlist)
+        btnLyrics = view.findViewById(R.id.lyrics)
+        lyricComposeView = view.findViewById(R.id.lyric_frame)
 
         return view
     }
@@ -205,6 +224,41 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         }
 
         setupClickListeners()
+
+        btnLyrics?.setOnClickListener {
+            val isVis = lyricComposeView?.visibility == View.VISIBLE
+            if (isVis) {
+                lyricComposeView?.visibility = View.GONE
+            } else {
+                lyricComposeView?.visibility = View.VISIBLE
+                loadLyricsForCurrentTrack()
+            }
+        }
+
+        lyricComposeView?.setContent {
+            val mediaItem = controller?.currentMediaItem
+            val title = mediaItem?.mediaMetadata?.title?.toString() ?: ""
+            val artist = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
+
+            LyricsScreen(
+                trackTitle = title,
+                artistName = artist,
+                lyricsResult = currentLyricsResult,
+                isLoading = isLyricsLoading,
+                currentPositionMs = composePosition.floatValue.toLong(),
+                selectedSource = selectedLyricsSource,
+                onSourceSelected = { newSource ->
+                    selectedLyricsSource = newSource
+                    loadLyricsForCurrentTrack(newSource)
+                },
+                onSeekTo = { pos ->
+                    controller?.seekTo(pos)
+                },
+                onDismiss = {
+                    lyricComposeView?.visibility = View.GONE
+                }
+            )
+        }
 
         val activity = requireActivity() as MainActivity
         activity.controllerViewModel.addControllerCallback(viewLifecycleOwner.lifecycle) { player, _ ->
@@ -439,5 +493,34 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
 
     private fun applyPhysicalShuffle(player: MediaController) {
         org.akanework.gramophone.logic.utils.ShuffleUtils.applyPhysicalShuffle(player)
+    }
+
+    private fun loadLyricsForCurrentTrack(source: LyricsSource = selectedLyricsSource) {
+        val mediaItem = controller?.currentMediaItem ?: return
+        isLyricsLoading = true
+        val options = LrcUtils.LrcParserOptions(
+            trim = true, multiLine = false,
+            errorText = getString(R.string.failed_to_parse_lyric)
+        )
+        val title = mediaItem.mediaMetadata.title?.toString()
+        val artist = mediaItem.mediaMetadata.artist?.toString()
+        val durationMs = mediaItem.mediaMetadata.durationMs ?: 0L
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val res = LyricsRepository.fetchLyrics(
+                context = requireContext(),
+                file = null,
+                mimeType = null,
+                sampleRate = 0,
+                metadata = null,
+                artist = artist,
+                title = title,
+                durationMs = durationMs,
+                preferredSource = source,
+                options = options
+            )
+            currentLyricsResult = res
+            isLyricsLoading = false
+        }
     }
 }

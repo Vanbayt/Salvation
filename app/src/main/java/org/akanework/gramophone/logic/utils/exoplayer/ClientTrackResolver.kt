@@ -43,12 +43,23 @@ object ClientTrackResolver {
         val source: String
     )
 
+    private val resolvedCache = android.util.LruCache<Long, Pair<String, Long>>(50)
+
     fun resolveStreamUrl(context: Context, rawUri: Uri): Uri {
         val path = rawUri.path ?: ""
         if (!path.contains("/stream/")) {
             return rawUri
         }
         val trackIdStr = rawUri.lastPathSegment ?: return rawUri
+        val trackIdLong = trackIdStr.toLongOrNull()
+
+        if (trackIdLong != null) {
+            val cached = resolvedCache.get(trackIdLong)
+            if (cached != null && (System.currentTimeMillis() - cached.second) < 3 * 3600 * 1000L) {
+                Log.i(TAG, "⚡ [MEM_CACHE_HIT] Track $trackIdLong resolved instantly from device RAM!")
+                return Uri.parse(cached.first)
+            }
+        }
 
         try {
             // 1. Fetch Track Metadata from Backend
@@ -74,15 +85,7 @@ object ClientTrackResolver {
                         title = info.title,
                         score = 2000
                     )
-                    sendTelemetry(
-                        type = "SUCCESS",
-                        trackId = info.trackId,
-                        candidateId = directVideoId,
-                        streamUrl = directUrl,
-                        duration = info.duration,
-                        source = "Direct YT Match",
-                        elapsedTimeMs = 0
-                    )
+                    resolvedCache.put(info.trackId, Pair(directUrl, System.currentTimeMillis()))
                     return Uri.parse(directUrl)
                 } else {
                     // 🔥 ЕСЛИ КЛИЕНТСКИЙ ИЗВЛЕКАТЕЛЬ НЕ СМОГ ПОЛУЧИТЬ ПРЯМУЮ ССЫЛКУ:
@@ -205,6 +208,7 @@ object ClientTrackResolver {
                 elapsedTimeMs = elapsed
             )
 
+            resolvedCache.put(info.trackId, Pair(winnerUrl, System.currentTimeMillis()))
             Log.i(TAG, "Successfully resolved direct stream for track ${info.trackId} -> $winnerUrl")
             return Uri.parse(winnerUrl)
 

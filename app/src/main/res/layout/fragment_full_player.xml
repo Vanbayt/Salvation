@@ -240,4 +240,15 @@
             app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/lyric_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?attr/colorSurface"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:elevation="10dp"
+        android:keepScreenOn="true"
+        android:visibility="gone" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

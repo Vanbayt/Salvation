@@ -65,6 +65,9 @@ class OnlineSearchFragment : BaseFragment(true) {
     private lateinit var searchInput: EditText
     private lateinit var btnClear: ImageButton
     private lateinit var progressBar: LinearProgressIndicator
+    private lateinit var tabLayoutSearch: com.google.android.material.tabs.TabLayout
+    private var lastSearchResponse: SearchResponse? = null
+    private var lastSearchQuery: String = ""
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -81,6 +84,22 @@ class OnlineSearchFragment : BaseFragment(true) {
         progressBar = xmlView.findViewById(R.id.progress_bar)
         resultsRecycler = xmlView.findViewById(R.id.recycler_view)
         tvSectionTitle = xmlView.findViewById(R.id.tv_section_title)
+
+        tabLayoutSearch = xmlView.findViewById(R.id.tab_layout_search)
+        if (tabLayoutSearch.tabCount == 0) {
+            tabLayoutSearch.addTab(tabLayoutSearch.newTab().setText("Все"))
+            tabLayoutSearch.addTab(tabLayoutSearch.newTab().setText("Треки"))
+            tabLayoutSearch.addTab(tabLayoutSearch.newTab().setText("Исполнители"))
+            tabLayoutSearch.addTab(tabLayoutSearch.newTab().setText("Альбомы"))
+        }
+
+        tabLayoutSearch.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
+                applyFilter(tab?.position ?: 0)
+            }
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+        })
 
         prefs = requireContext().getSharedPreferences("salvation_search", Context.MODE_PRIVATE)
 
@@ -104,19 +123,23 @@ class OnlineSearchFragment : BaseFragment(true) {
             onArtistClick = { artist, cardView ->
                 org.akanework.gramophone.logic.HistoryManager.saveToHistory(requireContext(), artist)
                 val artistFragment = ArtistFragment.newInstance(artist.id.toString())
+                val tName = if (!cardView.transitionName.isNullOrEmpty()) cardView.transitionName else "artist_card_${artist.id}"
+                cardView.transitionName = tName
                 (requireActivity() as org.akanework.gramophone.ui.MainActivity).startFragment(
                     frag = artistFragment,
                     sharedView = cardView,
-                    transName = "artist_card_${artist.id}"
+                    transName = tName
                 )
             },
             onAlbumClick = { album, cardView ->
                 org.akanework.gramophone.logic.HistoryManager.saveToHistory(requireContext(), album)
                 val albumFragment = AlbumFragment.newInstance(album.id)
+                val tName = if (!cardView.transitionName.isNullOrEmpty()) cardView.transitionName else "album_card_${album.id}"
+                cardView.transitionName = tName
                 (requireActivity() as org.akanework.gramophone.ui.MainActivity).startFragment(
                     frag = albumFragment,
                     sharedView = cardView,
-                    transName = "album_card_${album.id}"
+                    transName = tName
                 )
             },
             onHistoryClick = { query ->
@@ -246,12 +269,23 @@ class OnlineSearchFragment : BaseFragment(true) {
         return wrapper
     }
 
+    private fun normalizeString(s: String): String {
+        return s.lowercase()
+            .replace("'", "")
+            .replace("`", "")
+            .replace("’", "")
+            .replace("\"", "")
+            .replace("-", "")
+            .replace(" ", "")
+            .trim()
+    }
+
     private fun performSearch(query: String) {
         if (query.isEmpty()) return
 
         progressBar.visibility = View.VISIBLE
         resultsRecycler?.visibility = View.GONE
-        tvSectionTitle.text = "Результаты поиска"
+        tvSectionTitle.visibility = View.GONE
 
         searchAdapter?.submitList(emptyList())
 
@@ -263,52 +297,127 @@ class OnlineSearchFragment : BaseFragment(true) {
                     progressBar.visibility = View.GONE
                     resultsRecycler?.visibility = View.VISIBLE
 
-                    if (response.isSuccessful) {
-                        val body = response.body()
-                        val mergedList = mutableListOf<Any>()
+                    if (response.isSuccessful && response.body() != null) {
+                        lastSearchResponse = response.body()
+                        lastSearchQuery = query
 
-                        if (!body?.artists.isNullOrEmpty()) {
-                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Исполнители"))
-                            mergedList.add(org.akanework.gramophone.ui.adapters.ArtistCarouselItem(body!!.artists!!))
-                        }
-                        if (!body?.albums.isNullOrEmpty()) {
-                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Альбомы"))
-                            mergedList.add(org.akanework.gramophone.ui.adapters.AlbumCarouselItem(body!!.albums!!))
-                        }
-                        if (!body?.tracks.isNullOrEmpty()) {
-                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Треки"))
-                            mergedList.addAll(body!!.tracks!!)
-                        }
+                        tabLayoutSearch.visibility = View.VISIBLE
+                        tabLayoutSearch.getTabAt(0)?.select()
+                        applyFilter(0)
 
-                        if (mergedList.isEmpty()) {
-                            tvSectionTitle.text = "Ничего не найдено"
-                        } else {
-                            searchAdapter?.submitList(mergedList)
-                            val animation = android.view.animation.AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_animation_slide_up)
-                            resultsRecycler?.layoutAnimation = animation
-                            resultsRecycler?.scheduleLayoutAnimation()
+                        val animation = android.view.animation.AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_animation_slide_up)
+                        resultsRecycler?.layoutAnimation = animation
+                        resultsRecycler?.scheduleLayoutAnimation()
 
-                            saveToHistory(query)
-                        }
+                        saveToHistory(query)
                     }
                 }
 
                 override fun onFailure(call: retrofit2.Call<SearchResponse>, t: Throwable) {
                     if (!isAdded) return
                     progressBar.visibility = View.GONE
+                    tabLayoutSearch.visibility = View.GONE
+                    tvSectionTitle.visibility = View.VISIBLE
                     tvSectionTitle.text = "Ошибка сети"
                     Toast.makeText(context, "Проверьте подключение", Toast.LENGTH_SHORT).show()
                 }
             })
     }
 
+    private fun applyFilter(position: Int) {
+        val body = lastSearchResponse ?: return
+        val query = lastSearchQuery
+        val tracks = body.tracks ?: emptyList()
+        val artists = body.artists ?: emptyList()
+        val albums = body.albums ?: emptyList()
+
+        val mergedList = mutableListOf<Any>()
+
+        when (position) {
+            1 -> { // Треки
+                if (tracks.isNotEmpty()) {
+                    mergedList.addAll(tracks)
+                }
+            }
+            2 -> { // Исполнители
+                if (artists.isNotEmpty()) {
+                    mergedList.addAll(artists)
+                }
+            }
+            3 -> { // Альбомы
+                if (albums.isNotEmpty()) {
+                    mergedList.addAll(albums)
+                }
+            }
+            else -> { // Все (Default)
+                val normQuery = normalizeString(query)
+                val isArtistSearch = artists.isNotEmpty() && run {
+                    val normArtist = normalizeString(artists[0].name)
+                    normArtist == normQuery || normQuery.contains(normArtist) || normArtist.contains(normQuery)
+                }
+
+                if (isArtistSearch) {
+                    // 1. Исполнитель на вершине
+                    val topArtist = artists[0]
+                    mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Лучший результат"))
+                    mergedList.add(org.akanework.gramophone.ui.adapters.TopResultItem(artist = topArtist))
+
+                    if (tracks.isNotEmpty()) {
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Треки"))
+                        mergedList.addAll(tracks.take(5))
+                    }
+                    if (albums.isNotEmpty()) {
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Альбомы"))
+                        mergedList.add(org.akanework.gramophone.ui.adapters.AlbumCarouselItem(albums))
+                    }
+                    if (artists.size > 1) {
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Другие исполнители"))
+                        mergedList.add(org.akanework.gramophone.ui.adapters.ArtistCarouselItem(artists.drop(1)))
+                    }
+                } else {
+                    // 2. Трек на вершине
+                    if (tracks.isNotEmpty()) {
+                        val topTrack = tracks[0]
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Лучший результат"))
+                        mergedList.add(org.akanework.gramophone.ui.adapters.TopResultItem(track = topTrack))
+
+                        val remainingTopTracks = tracks.drop(1).take(4)
+                        if (remainingTopTracks.isNotEmpty()) {
+                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Треки"))
+                            mergedList.addAll(remainingTopTracks)
+                        }
+                    }
+                    if (artists.isNotEmpty()) {
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Исполнители"))
+                        mergedList.add(org.akanework.gramophone.ui.adapters.ArtistCarouselItem(artists))
+                    }
+                    if (albums.isNotEmpty()) {
+                        mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Альбомы"))
+                        mergedList.add(org.akanework.gramophone.ui.adapters.AlbumCarouselItem(albums))
+                    }
+                    if (tracks.size > 5) {
+                        val restTracks = tracks.drop(5)
+                        if (restTracks.isNotEmpty()) {
+                            mergedList.add(org.akanework.gramophone.ui.adapters.HeaderItem("Ещё треки"))
+                            mergedList.addAll(restTracks)
+                        }
+                    }
+                }
+            }
+        }
+
+        searchAdapter?.submitList(mergedList)
+    }
+
     private fun showHistory() {
         progressBar.visibility = View.GONE
+        tabLayoutSearch.visibility = View.GONE
         resultsRecycler?.visibility = View.VISIBLE
 
         val historyList = getHistory().map { SearchHistoryItem(it) }
 
         if (historyList.isEmpty()) {
+            tvSectionTitle.visibility = View.VISIBLE
             tvSectionTitle.text = "Введите запрос"
             searchAdapter?.submitList(emptyList())
         } else {

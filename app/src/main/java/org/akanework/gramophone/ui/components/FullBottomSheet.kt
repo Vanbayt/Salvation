@@ -101,6 +101,14 @@ import uk.akane.libphonograph.items.albumId
 import uk.akane.libphonograph.items.artistId
 import uk.akane.libphonograph.manipulator.ItemManipulator
 import kotlin.math.min
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import org.akanework.gramophone.logic.utils.LyricsRepository
+import org.akanework.gramophone.logic.utils.LyricsResult
+import org.akanework.gramophone.logic.utils.LyricsSource
+import org.akanework.gramophone.logic.utils.LrcUtils
 
 @SuppressLint("NotifyDataSetChanged")
 class FullBottomSheet
@@ -161,7 +169,7 @@ class FullBottomSheet
                     val targetMs = seekBar.progress.toLong()
                     pendingSeekPositionMs = targetMs
                     instance?.seekTo(targetMs)
-                    bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
+                    updateLyricPositionFromPlaybackPos()
                 }
                 isUserTracking = false
                 progressDrawable.animate =
@@ -178,7 +186,7 @@ class FullBottomSheet
                     val targetMs = slider.value.toLong()
                     pendingSeekPositionMs = targetMs
                     instance?.seekTo(targetMs)
-                    bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
+                    updateLyricPositionFromPlaybackPos()
                 }
                 isUserTracking = false
             }
@@ -209,7 +217,11 @@ class FullBottomSheet
     private val bottomSheetFullSeekBar: SeekBar
     private val bottomSheetFullSlider: Slider
     private val bottomSheetFullCoverFrame: MaterialCardView
-    val bottomSheetFullLyricView: LyricsView
+    val bottomSheetFullLyricView: ComposeView
+    private var currentLyricsResult by mutableStateOf<LyricsResult?>(null)
+    private var isLyricsLoading by mutableStateOf(false)
+    private var currentPlaybackPosMs by mutableStateOf(0L)
+    private var selectedLyricsSource by mutableStateOf(LyricsSource.ALL)
     private val progressDrawable: SquigglyProgress
     private var fullPlayerFinalColor: Int = -1
     private var colorPrimaryFinalColor: Int = -1
@@ -242,6 +254,30 @@ class FullBottomSheet
         bottomSheetPlaylistButton = findViewById(R.id.playlist)
         bottomSheetLyricButton = findViewById(R.id.lyrics)
         bottomSheetFullLyricView = findViewById(R.id.lyric_frame)
+        bottomSheetFullLyricView.setContent {
+            val mediaItem = instance?.currentMediaItem
+            val title = mediaItem?.mediaMetadata?.title?.toString() ?: ""
+            val artist = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
+
+            LyricsScreen(
+                trackTitle = title,
+                artistName = artist,
+                lyricsResult = currentLyricsResult,
+                isLoading = isLyricsLoading,
+                currentPositionMs = currentPlaybackPosMs,
+                selectedSource = selectedLyricsSource,
+                onSourceSelected = { newSource ->
+                    selectedLyricsSource = newSource
+                    loadLyricsForCurrentTrack(newSource)
+                },
+                onSeekTo = { pos ->
+                    instance?.seekTo(pos)
+                },
+                onDismiss = {
+                    bottomSheetFullLyricView.fadOutAnimation(LYRIC_FADE_TRANSITION_SEC)
+                }
+            )
+        }
         bottomSheetFullQualityDetails = findViewById(R.id.quality_details)
         fullPlayerFinalColor = MaterialColors.getColor(
             this,
@@ -290,7 +326,15 @@ class FullBottomSheet
 
                 GramophonePlaybackService.SERVICE_GET_LYRICS -> {
                     val parsedLyrics = instance?.getLyrics()
-                    bottomSheetFullLyricView.updateLyrics(parsedLyrics)
+                    if (parsedLyrics != null) {
+                        currentLyricsResult = LyricsResult(
+                            lyrics = parsedLyrics,
+                            sourceName = "Служба плеера",
+                            isSynced = parsedLyrics is org.akanework.gramophone.logic.utils.SemanticLyrics.SyncedLyrics
+                        )
+                    } else {
+                        loadLyricsForCurrentTrack()
+                    }
                 }
 
                 GramophonePlaybackService.SERVICE_GET_AUDIO_FORMAT -> {
@@ -466,7 +510,11 @@ class FullBottomSheet
 
         bottomSheetLyricButton.setOnClickListener {
             ViewCompat.performHapticFeedback(it, HapticFeedbackConstantsCompat.CONTEXT_CLICK)
+            bottomSheetFullLyricView.bringToFront()
             bottomSheetFullLyricView.fadInAnimation(LYRIC_FADE_TRANSITION_SEC)
+            if (currentLyricsResult == null && !isLyricsLoading) {
+                loadLyricsForCurrentTrack()
+            }
         }
 
         bottomSheetShuffleButton.setOnClickListener {
@@ -994,9 +1042,6 @@ class FullBottomSheet
                 setBackgroundColor(
                     animation.animatedValue as Int
                 )
-                bottomSheetFullLyricView.setBackgroundColor(
-                    animation.animatedValue as Int
-                )
             }
             duration = BACKGROUND_COLOR_TRANSITION_SEC
         }
@@ -1072,17 +1117,6 @@ class FullBottomSheet
             bottomSheetFullQualityDetails.setTextColor(
                 colorOnSurfaceVariant
             )
-            bottomSheetFullLyricView.updateTextColor(
-                androidx.core.graphics.ColorUtils.compositeColors(
-                    androidx.core.graphics.ColorUtils.setAlphaComponent(colorPrimary, 77),
-                    fullPlayerFinalColor
-                ),
-                colorPrimary,
-                androidx.core.graphics.ColorUtils.compositeColors(
-                    androidx.core.graphics.ColorUtils.setAlphaComponent(colorPrimary, 200),
-                    fullPlayerFinalColor
-                ),
-            )
 
             bottomSheetTimerButton.iconTint =
                 ColorStateList.valueOf(colorOnSurface)
@@ -1138,6 +1172,7 @@ class FullBottomSheet
                 skipAnimation = firstTime
             )
             updateDuration()
+            loadLyricsForCurrentTrack()
         } else {
             lastDisposable?.dispose()
             lastDisposable = null
@@ -1174,7 +1209,7 @@ class FullBottomSheet
                     min(instance?.currentPosition?.toFloat() ?: 0f, bottomSheetFullSlider.valueTo)
                 bottomSheetFullPosition.text = position
             }
-            bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
+            updateLyricPositionFromPlaybackPos()
         }
     }
 
@@ -1342,7 +1377,7 @@ class FullBottomSheet
                 bottomSheetFullPosition.text =
                     CalculationUtils.convertDurationToTimeStamp(currentPos)
             }
-            bottomSheetFullLyricView.updateLyricPositionFromPlaybackPos()
+            updateLyricPositionFromPlaybackPos()
             if (runnableRunning) {
                 val isPlaying = instance?.isPlaying == true || (instance?.playWhenReady == true && instance?.playbackState != Player.STATE_ENDED && instance?.playbackState != Player.STATE_IDLE)
                 val interval = if (isPlaying) SLIDER_UPDATE_INTERVAL else 500L
@@ -1351,4 +1386,40 @@ class FullBottomSheet
         }
     }
 
+    private fun updateLyricPositionFromPlaybackPos() {
+        currentPlaybackPosMs = instance?.currentPosition ?: 0L
+    }
+
+    private fun loadLyricsForCurrentTrack(source: LyricsSource = selectedLyricsSource) {
+        val mediaItem = instance?.currentMediaItem ?: return
+        isLyricsLoading = true
+        val trim = prefs.getBoolean("trim_lyrics", true)
+        val multiLine = prefs.getBoolean("lyric_multiline", false)
+        val options = LrcUtils.LrcParserOptions(
+            trim = trim, multiLine = multiLine,
+            errorText = context.getString(R.string.failed_to_parse_lyric)
+        )
+        val title = mediaItem.mediaMetadata.title?.toString()
+        val artist = mediaItem.mediaMetadata.artist?.toString()
+        val durationMs = mediaItem.mediaMetadata.durationMs ?: 0L
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val res = LyricsRepository.fetchLyrics(
+                context = context,
+                file = null,
+                mimeType = null,
+                sampleRate = 0,
+                metadata = null,
+                artist = artist,
+                title = title,
+                durationMs = durationMs,
+                preferredSource = source,
+                options = options
+            )
+            currentLyricsResult = res
+            isLyricsLoading = false
+        }
+    }
+
 }
+

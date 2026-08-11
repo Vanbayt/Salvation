@@ -410,9 +410,17 @@ private class AuthenticatedDataSource(
         val newHeaders = specToUse.httpRequestHeaders.toMutableMap()
         val token = org.akanework.gramophone.logic.api.AuthManager.getToken(context)
 
-        // 1. Подставляем токен авторизации
-        if (token != null) {
-            newHeaders["Authorization"] = "Bearer $token"
+        // 1. Подставляем токен авторизации ТОЛЬКО для нашего сервера 185.196.41.31
+        val targetHost = targetUri.host ?: ""
+        val isOurBackend = targetHost == "185.196.41.31"
+
+        if (isOurBackend) {
+            if (token != null) {
+                newHeaders["Authorization"] = "Bearer $token"
+            }
+        } else {
+            newHeaders.remove("Authorization")
+            newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
         }
 
         // 2. Формируем заголовок Range для перемотки по байтам

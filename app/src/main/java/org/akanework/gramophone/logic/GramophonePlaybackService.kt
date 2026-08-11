@@ -117,6 +117,8 @@ import org.akanework.gramophone.logic.utils.MonoAudioProcessor
 import org.akanework.gramophone.logic.utils.ReplayGainAudioProcessor
 import org.akanework.gramophone.logic.utils.ReplayGainUtil
 import org.akanework.gramophone.logic.utils.SemanticLyrics
+import org.akanework.gramophone.logic.utils.LyricsRepository
+import org.akanework.gramophone.logic.utils.LyricsSource
 import org.akanework.gramophone.logic.utils.exoplayer.EndedWorkaroundPlayer
 import org.akanework.gramophone.logic.utils.exoplayer.GramophoneExtractorsFactory
 import org.akanework.gramophone.logic.utils.exoplayer.GramophoneMediaSourceFactory
@@ -393,6 +395,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                     GramophoneExtractorsFactory().also {
                         it.setConstantBitrateSeekingEnabled(true)
                         it.setConstantBitrateSeekingAlwaysEnabled(true)
+                        it.setMatroskaExtractorFlags(androidx.media3.extractor.mkv.MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
                         it.setAdtsExtractorFlags(
                             androidx.media3.extractor.ts.AdtsExtractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING or
                             androidx.media3.extractor.ts.AdtsExtractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING_ALWAYS
@@ -432,6 +435,23 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                 .setPlaybackLooper(internalPlaybackThread.looper)
                 .build()
         )
+
+        player.exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateStr = when (playbackState) {
+                    androidx.media3.common.Player.STATE_BUFFERING -> "BUFFERING"
+                    androidx.media3.common.Player.STATE_READY -> "READY"
+                    androidx.media3.common.Player.STATE_ENDED -> "ENDED"
+                    androidx.media3.common.Player.STATE_IDLE -> "IDLE"
+                    else -> "UNKNOWN"
+                }
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXO_STATE", "State: $stateStr | Pos: ${player.currentPosition}ms")
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXO_ERROR", "Error [${error.errorCodeName}]: ${error.message} | Cause: ${error.cause?.message}")
+            }
+        })
 
         player.exoPlayer.addAnalyticsListener(EventLogger())
         player.exoPlayer.addAnalyticsListener(afFormatTracker)
@@ -1018,6 +1038,24 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                             options).firstOrNull()
                     }
                 }
+            }
+            if (lrc == null && mediaItem != null) {
+                val title = mediaItem.mediaMetadata.title?.toString()
+                val artist = mediaItem.mediaMetadata.artist?.toString()
+                val durationMs = mediaItem.mediaMetadata.durationMs ?: 0L
+                val result = LyricsRepository.fetchLyrics(
+                    context = this@GramophonePlaybackService,
+                    file = mediaItem.getFile(),
+                    mimeType = format?.sampleMimeType,
+                    sampleRate = format?.sampleRate?.takeIf { it != Format.NO_VALUE } ?: 0,
+                    metadata = format?.metadata,
+                    artist = artist,
+                    title = title,
+                    durationMs = durationMs,
+                    preferredSource = LyricsSource.ALL,
+                    options = options
+                )
+                lrc = result?.lyrics
             }
             withContext(Dispatchers.Main) {
                 mediaSession?.let {
