@@ -76,37 +76,103 @@ object LyricsRepository {
         val titlesToTry = listOfNotNull(cleanTitle, rawTitle).distinct()
         val artistsToTry = listOfNotNull(cleanArtist, rawArtist).distinct()
 
+        var result: LyricsResult? = null
+
         // 1. Try LRCLIB
         if (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.LRCLIB) {
             for (t in titlesToTry) {
                 for (a in artistsToTry) {
                     val lrclibResult = fetchFromLrclib(a, t, durationMs, options)
-                    if (lrclibResult != null) return@withContext lrclibResult
+                    if (lrclibResult != null) {
+                        result = lrclibResult
+                        break
+                    }
                 }
+                if (result != null) break
             }
         }
 
         // 2. Try NetEase Music
-        if (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.NETEASE) {
+        if (result == null && (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.NETEASE)) {
             for (t in titlesToTry) {
                 for (a in artistsToTry) {
                     val neteaseResult = fetchFromNetease(a, t, options)
-                    if (neteaseResult != null) return@withContext neteaseResult
+                    if (neteaseResult != null) {
+                        result = neteaseResult
+                        break
+                    }
                 }
+                if (result != null) break
             }
         }
 
         // 3. Try Kugou Music
-        if (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.KUGOU) {
+        if (result == null && (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.KUGOU)) {
             for (t in titlesToTry) {
                 for (a in artistsToTry) {
                     val kugouResult = fetchFromKugou(a, t, durationMs, options)
-                    if (kugouResult != null) return@withContext kugouResult
+                    if (kugouResult != null) {
+                        result = kugouResult
+                        break
+                    }
                 }
+                if (result != null) break
             }
         }
 
-        return@withContext null
+        if (result?.lyrics is SemanticLyrics.SyncedLyrics) {
+            translateLyricsToRussianIfNeeded(result.lyrics as SemanticLyrics.SyncedLyrics)
+        }
+
+        return@withContext result
+    }
+
+    private fun translateLyricsToRussianIfNeeded(syncedLyrics: SemanticLyrics.SyncedLyrics) {
+        try {
+            val linesToTranslate = syncedLyrics.text.filter { it.text.isNotBlank() && it.translation.isNullOrBlank() }
+            if (linesToTranslate.isEmpty()) return
+
+            val batchText = StringBuilder()
+            linesToTranslate.forEach { line ->
+                batchText.append(line.text.replace("\n", " ").trim()).append("\n")
+            }
+
+            val encoded = URLEncoder.encode(batchText.toString(), "UTF-8")
+            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=$encoded"
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val jsonStr = response.body?.string() ?: return
+                val jsonArray = JSONArray(jsonStr)
+                val sentencesArray = jsonArray.optJSONArray(0) ?: return
+
+                val translatedTextBuilder = StringBuilder()
+                for (i in 0 until sentencesArray.length()) {
+                    val sentence = sentencesArray.optJSONArray(i) ?: continue
+                    val transSegment = sentence.optString(0, "")
+                    translatedTextBuilder.append(transSegment)
+                }
+
+                val translatedLines = translatedTextBuilder.toString().split("\n")
+                var transIdx = 0
+                linesToTranslate.forEach { line ->
+                    if (transIdx < translatedLines.size) {
+                        val trans = translatedLines[transIdx].trim()
+                        if (trans.isNotEmpty() && trans.lowercase() != line.text.trim().lowercase()) {
+                            line.translation = trans
+                        }
+                        transIdx++
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun fetchFromLrclib(

@@ -372,17 +372,23 @@ class GramophoneMediaSourceFactory(
 // КЛАССЫ-ОБЕРТКИ ДЛЯ АВТОРИЗАЦИИ И ТАЙМ-АУТОВ
 // =========================================================================
 
+private val sharedOkHttpClient: okhttp3.OkHttpClient by lazy {
+    okhttp3.OkHttpClient.Builder()
+        .connectionPool(okhttp3.ConnectionPool(10, 10, java.util.concurrent.TimeUnit.MINUTES))
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+}
+
 private class AuthenticatedDataSourceFactory(
     private val context: android.content.Context
 ) : DataSource.Factory {
 
-    // Создаем идеальный HTTP клиент с тайм-аутами 60 секунд!
     private val defaultDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
         context,
-        androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(60000)
-            .setReadTimeoutMs(60000)
-            .setAllowCrossProtocolRedirects(true)
+        androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(sharedOkHttpClient)
     )
 
     override fun createDataSource(): DataSource {
@@ -421,6 +427,8 @@ private class AuthenticatedDataSource(
         } else {
             newHeaders.remove("Authorization")
             newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            newHeaders["Referer"] = "https://music.youtube.com/"
+            newHeaders["Origin"] = "https://music.youtube.com"
         }
 
         // 2. Формируем заголовок Range для перемотки по байтам

@@ -21,10 +21,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,13 +36,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.preference.PreferenceManager
@@ -411,7 +411,7 @@ fun LyricsScreen(
                                         val lineScale by animateFloatAsState(
                                             targetValue = if (isActive) 1.05f else 1.0f,
                                             animationSpec = spring(
-                                                stiffness = Spring.StiffnessMediumLow,
+                                                stiffness = Spring.StiffnessLow,
                                                 dampingRatio = Spring.DampingRatioMediumBouncy
                                             ),
                                             label = "lineScale"
@@ -431,6 +431,13 @@ fun LyricsScreen(
                                         val fontWeight = if (isActive) FontWeight.Black else FontWeight.SemiBold
                                         val lineHeight = if (isActive) 38.sp else 28.sp
 
+                                        // Compute progress fraction across line duration
+                                        val startMs = line.start.toLong()
+                                        val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3000L
+                                        val totalDuration = (endMs - startMs).coerceAtLeast(100L)
+                                        val elapsed = (currentPositionMs - startMs).coerceAtLeast(0L)
+                                        val lineProgressFraction = if (isActive) (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -445,31 +452,31 @@ fun LyricsScreen(
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 if (isActive) {
+                                                    val barHeight by animateDpAsState(
+                                                        targetValue = if (isActive) 26.dp else 0.dp,
+                                                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                        label = "barHeight"
+                                                    )
                                                     Box(
                                                         modifier = Modifier
                                                             .padding(end = 12.dp)
                                                             .width(4.dp)
-                                                            .height(26.dp)
+                                                            .height(barHeight)
                                                             .clip(CircleShape)
                                                             .background(MaterialTheme.colorScheme.primary)
                                                     )
                                                 }
 
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    val annotatedText = buildKaraokeAnnotatedString(
-                                                        line = line,
-                                                        currentPositionMs = currentPositionMs,
+                                                    LiquidKaraokeText(
+                                                        text = line.text.ifEmpty { "♪" },
+                                                        progressFraction = lineProgressFraction,
                                                         isActive = isActive,
-                                                        activeColor = MaterialTheme.colorScheme.primary,
-                                                        inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                                                    )
-
-                                                    Text(
-                                                        text = annotatedText,
                                                         fontSize = fontSize,
                                                         fontWeight = fontWeight,
-                                                        textAlign = TextAlign.Start,
-                                                        lineHeight = lineHeight
+                                                        lineHeight = lineHeight,
+                                                        activeColor = MaterialTheme.colorScheme.primary,
+                                                        inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
                                                     )
 
                                                     if (isAutoTranslateEnabled && !line.translation.isNullOrBlank()) {
@@ -582,82 +589,75 @@ fun LyricsScreen(
 }
 
 @Composable
-private fun buildKaraokeAnnotatedString(
-    line: SemanticLyrics.LyricLine,
-    currentPositionMs: Long,
+private fun LiquidKaraokeText(
+    text: String,
+    progressFraction: Float,
     isActive: Boolean,
+    fontSize: TextUnit,
+    fontWeight: FontWeight,
+    lineHeight: TextUnit,
     activeColor: Color,
-    inactiveColor: Color
-): AnnotatedString {
-    val text = line.text.ifEmpty { "♪" }
+    inactiveColor: Color,
+    modifier: Modifier = Modifier
+) {
     if (!isActive) {
-        return buildAnnotatedString {
-            withStyle(SpanStyle(color = inactiveColor)) {
-                append(text)
-            }
-        }
+        Text(
+            text = text,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            color = inactiveColor,
+            lineHeight = lineHeight,
+            modifier = modifier
+        )
+        return
     }
 
-    val words = line.words
-    if (!words.isNullOrEmpty()) {
-        return buildAnnotatedString {
-            words.forEach { word ->
-                val charStart = word.charRange.first.coerceIn(0, text.length)
-                val charEnd = (word.charRange.last + 1).coerceIn(charStart, text.length)
+    val animatedProgress by animateFloatAsState(
+        targetValue = progressFraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 140, easing = LinearEasing),
+        label = "liquidProgress"
+    )
 
-                val isWordSung = currentPositionMs.toULong() >= word.begin
-                val isWordActive = isWordSung && (word.endInclusive == null || currentPositionMs.toULong() <= word.endInclusive!!)
+    Box(modifier = modifier) {
+        // Base Layer: Inactive dimmed text
+        Text(
+            text = text,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            color = inactiveColor,
+            lineHeight = lineHeight
+        )
 
-                val style = when {
-                    isWordActive -> SpanStyle(
-                        color = activeColor,
-                        fontWeight = FontWeight.Black
+        // Overlay Layer: Active brightly lit text smoothly clipped by gradient sweep
+        Text(
+            text = text,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            color = activeColor,
+            lineHeight = lineHeight,
+            modifier = Modifier
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                .drawWithContent {
+                    drawContent()
+                    val currentX = size.width * animatedProgress
+                    val edgeWidth = 36.dp.toPx()
+                    val pStop = (currentX / size.width).coerceIn(0f, 1f)
+                    val eStop = ((currentX + edgeWidth) / size.width).coerceIn(0f, 1f)
+
+                    val brush = Brush.horizontalGradient(
+                        0f to Color.Black,
+                        pStop to Color.Black,
+                        eStop to Color.Transparent,
+                        1f to Color.Transparent
                     )
-                    isWordSung -> SpanStyle(
-                        color = activeColor.copy(alpha = 0.90f),
-                        fontWeight = FontWeight.Bold
-                    )
-                    else -> SpanStyle(
-                        color = activeColor.copy(alpha = 0.35f),
-                        fontWeight = FontWeight.SemiBold
+                    drawRect(
+                        brush = brush,
+                        blendMode = BlendMode.DstIn
                     )
                 }
-
-                if (charStart < charEnd) {
-                    withStyle(style) {
-                        append(text.substring(charStart, charEnd))
-                    }
-                }
-            }
-            val lastEnd = words.lastOrNull()?.let { (it.charRange.last + 1).coerceIn(0, text.length) } ?: 0
-            if (lastEnd < text.length) {
-                withStyle(SpanStyle(color = activeColor.copy(alpha = 0.35f))) {
-                    append(text.substring(lastEnd))
-                }
-            }
-        }
-    }
-
-    // Smooth character sweep fallback across line duration
-    val startMs = line.start.toLong()
-    val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3000L
-    val duration = (endMs - startMs).coerceAtLeast(100L)
-    val elapsed = (currentPositionMs - startMs).coerceAtLeast(0L)
-    val progressFraction = (elapsed.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-
-    val sungCharCount = (text.length * progressFraction).toInt().coerceIn(0, text.length)
-
-    return buildAnnotatedString {
-        if (sungCharCount > 0) {
-            withStyle(SpanStyle(color = activeColor, fontWeight = FontWeight.Black)) {
-                append(text.substring(0, sungCharCount))
-            }
-        }
-        if (sungCharCount < text.length) {
-            withStyle(SpanStyle(color = activeColor.copy(alpha = 0.35f), fontWeight = FontWeight.SemiBold)) {
-                append(text.substring(sungCharCount))
-            }
-        }
+        )
     }
 }
 
