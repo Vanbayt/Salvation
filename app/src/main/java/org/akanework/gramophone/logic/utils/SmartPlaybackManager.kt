@@ -44,6 +44,24 @@ object SmartPlaybackManager {
         PlaybackLogger.init(appContext!!)
 
         player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    isResolving = false
+                    cancelTimeoutTimer()
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                if (newPosition.positionMs > 0) {
+                    isResolving = false
+                    cancelTimeoutTimer()
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {

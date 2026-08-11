@@ -687,7 +687,8 @@ class MainActivity : BaseActivity() {
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) {
+                val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
+                if (isLoading) {
                     androidx.compose.material3.CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -1136,7 +1137,7 @@ class MainActivity : BaseActivity() {
                 Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
                     CookiePlayButton(
                         isPlaying = isPlaying,
-                        isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING),
+                        isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying,
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
                             getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
