@@ -624,10 +624,9 @@ object ClientTrackResolver {
 
     private fun extractPlayerStreamUrl(videoId: String, targetDurationSec: Int = 0): String? {
         val profiles = listOf(
-            Pair("ANDROID_TESTSUITE", "1.9.0"),
-            Pair("ANDROID_MUSIC", "5.45.52"),
-            Pair("WEB_CREATOR", "1.20210730.0.0"),
-            Pair("IOS", "19.29.1")
+            Pair("WEB_REMIX", "1.20240101.01.00"),
+            Pair("ANDROID_VR", "1.54.26"),
+            Pair("TVHTML5", "7.20240101.01.00")
         )
 
         for ((cName, cVer) in profiles) {
