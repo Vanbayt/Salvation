@@ -94,10 +94,14 @@ object SmartPlaybackManager {
 
     private fun startStallTimeoutTimer() {
         cancelTimeoutTimer()
+        val player = currentPlayer ?: return
+        val isMidTrack = player.currentPosition > 500L
+        val timeoutMs = if (isMidTrack) 25000L else 12000L
+
         currentTimeoutJob = managerScope.launch {
-            delay(STALL_BUFFERING_TIMEOUT_MS)
+            delay(timeoutMs)
             if (!isSkipping.get() && currentPlayer?.playbackState == Player.STATE_BUFFERING) {
-                PlaybackLogger.log("SMART_STALL_TIMEOUT", "Buffer stalled for > 8s. Triggering auto-skip!")
+                PlaybackLogger.log("SMART_STALL_TIMEOUT", "Buffer stalled for > ${timeoutMs / 1000}s (MidTrack: $isMidTrack). Triggering auto-skip!")
                 triggerAutoSkip("", "Буфер застрял при воспроизведении")
             }
         }
