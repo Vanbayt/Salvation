@@ -128,13 +128,16 @@ fun LyricsScreen(
         list
     }
 
-    val activeItemIndex = remember(displayItems, currentPositionMs) {
+    // Add 150ms lead offset to match human visual reaction & audio buffer latency
+    val adjustedPositionMs = currentPositionMs + 150L
+
+    val activeItemIndex = remember(displayItems, adjustedPositionMs) {
         if (displayItems.isEmpty()) -1
         else {
             val idx = displayItems.indexOfLast { item ->
                 when (item) {
-                    is LyricsDisplayItem.NormalLine -> currentPositionMs >= item.line.start.toLong()
-                    is LyricsDisplayItem.InstrumentalInterlude -> currentPositionMs >= item.startMs
+                    is LyricsDisplayItem.NormalLine -> adjustedPositionMs >= item.line.start.toLong()
+                    is LyricsDisplayItem.InstrumentalInterlude -> adjustedPositionMs >= item.startMs
                 }
             }
             if (idx >= 0) idx else 0
@@ -437,7 +440,7 @@ fun LyricsScreen(
                                         val startMs = line.start.toLong()
                                         val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3000L
                                         val totalDuration = (endMs - startMs).coerceAtLeast(100L)
-                                        val elapsed = (currentPositionMs - startMs).coerceAtLeast(0L)
+                                        val elapsed = (adjustedPositionMs - startMs).coerceAtLeast(0L)
                                         val lineProgressFraction = if (isActive) (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
 
                                         Box(
@@ -614,14 +617,8 @@ private fun LiquidKaraokeText(
         return
     }
 
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressFraction.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 120, easing = LinearEasing),
-        label = "karaokeProgress"
-    )
-
     val totalLength = text.length
-    val charProgress = totalLength * animatedProgress
+    val charProgress = totalLength * progressFraction.coerceIn(0f, 1f)
     val fullSungCount = charProgress.toInt().coerceIn(0, totalLength)
     val partialCharFraction = charProgress - fullSungCount
 

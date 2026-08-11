@@ -438,18 +438,7 @@ private class AuthenticatedDataSource(
             }
         }
 
-        // 2. Формируем заголовок Range для перемотки по байтам
-        if (specToUse.position > 0 || specToUse.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
-            val rangeHeader = buildString {
-                append("bytes=")
-                append(specToUse.position)
-                append("-")
-                if (specToUse.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
-                    append(specToUse.position + specToUse.length - 1)
-                }
-            }
-            newHeaders["Range"] = rangeHeader
-        }
+        // 2. Allow OkHttpDataSource to manage Range headers natively from DataSpec position/length
 
         // 3. Собираем новый запрос с сохранением позиции и заголовками
         val newSpec = specToUse.buildUpon()

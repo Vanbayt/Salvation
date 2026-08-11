@@ -105,11 +105,15 @@ class PlaylistAdapter(
     }
 
     override fun onClick(item: Playlist, position: Int) {
-        mainActivity.startFragment(GeneralSubFragment()) {
-            putString("Class", item.javaClass.name) // TODO kinda stupid
-            putString("Id", item.id?.toString())
-            putInt("Item", R.id.playlist)
-        }
+        val apiPlaylist = org.akanework.gramophone.logic.api.Playlist(
+            id = item.id?.toString()?.toIntOrNull() ?: 0,
+            title = item.title ?: "Плейлист",
+            description = null,
+            coverUrl = item.path?.absolutePath,
+            isPublic = false
+        )
+        val fragment = org.akanework.gramophone.ui.fragments.ComposeContainerFragment.newInstance(apiPlaylist)
+        mainActivity.startFragment(fragment)
     }
 
     override fun onMenu(item: Playlist, popupMenu: PopupMenu) {
