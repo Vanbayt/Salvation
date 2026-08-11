@@ -16,8 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -28,9 +27,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Material 3 Expressive Cookie Play Button.
- * Features organic morphing shape waves, dynamic sweep gradient arcs during loading,
- * and snappy spring transitions when state changes.
+ * Clean Material 3 Expressive Cookie Play Button.
+ * Features soft 8-lobe organic cookie shape, elegant rounded progress arc loader,
+ * and snappy M3 spring physics transitions.
  */
 @Composable
 fun CookiePlayButton(
@@ -39,50 +38,42 @@ fun CookiePlayButton(
     onClick: () -> Unit
 ) {
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val primaryColor = MaterialTheme.colorScheme.primary
 
-    // 1. M3 Expressive Spring Transition for Teeth Morphing
-    val transition = updateTransition(targetState = Pair(isPlaying, isLoading), label = "m3_expressive_transition")
+    // 1. Teeth depth animation with M3 spring physics
+    val teethDepth by animateFloatAsState(
+        targetValue = if (isPlaying && !isLoading) 6f else if (isLoading) 8f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "teethDepth"
+    )
 
-    val baseTeethDepth by transition.animateFloat(
-        transitionSpec = { spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow) },
-        label = "teeth_depth"
-    ) { state ->
-        when {
-            state.second -> 14f // isLoading: deeper morphing teeth
-            state.first -> 10f  // isPlaying: active wavy cookie
-            else -> 0f          // idle: smooth circle
-        }
-    }
-
-    // 2. Continuous rotation & wave phase for fluid motion
+    // 2. Rotation phase for cookie shape and loading arc
     var rotationPhase by remember { mutableFloatStateOf(0f) }
-    var pulsePhase by remember { mutableFloatStateOf(0f) }
+    var arcStartAngle by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(isPlaying || isLoading) {
         if (isPlaying || isLoading) {
             while (true) {
                 withFrameMillis { time ->
-                    val speed = if (isLoading) 6f else 20f
-                    rotationPhase = (time / speed) % 360f
-                    pulsePhase = (time / 15f) % 360f
+                    rotationPhase = (time / 25f) % 360f
+                    arcStartAngle = (time / 4f) % 360f
                 }
             }
         }
     }
 
-    // 3. Icon Spring Scale (Snappy Overshoot on Play/Pause start)
-    val iconScale by animateFloatAsState(
-        targetValue = if (isLoading) 0.85f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "icon_scale"
+    // 3. Spring pulse scale during loading / click
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isLoading) 0.94f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "buttonScale"
     )
 
     Box(
         modifier = Modifier
             .size(88.dp)
+            .scale(buttonScale)
             .clip(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -91,24 +82,16 @@ fun CookiePlayButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Отрисовка Expressive Cookie Shape Canvas
+        // Отрисовка чистой формы "Печеньки"
         Canvas(modifier = Modifier.matchParentSize()) {
             val center = Offset(size.width / 2, size.height / 2)
-            val radius = size.width / 2 - 12f
+            val radius = size.width / 2 - 10f
             val path = Path()
-
-            // Dynamic pulse variation during loading
-            val dynamicTeethDepth = if (isLoading) {
-                baseTeethDepth + 4f * sin(Math.toRadians(pulsePhase.toDouble())).toFloat()
-            } else {
-                baseTeethDepth
-            }
-
-            val teethCount = if (isLoading) 12 else 10
+            val teethCount = 8 // Мягкие 8 лепестков вместо острых зубьев
 
             for (i in 0..360) {
                 val rad = Math.toRadians(i.toDouble())
-                val r = radius + dynamicTeethDepth * sin(teethCount * rad + Math.toRadians(rotationPhase.toDouble()))
+                val r = radius + teethDepth * sin(teethCount * rad + Math.toRadians(rotationPhase.toDouble()))
                 val x = center.x + r.toFloat() * cos(rad).toFloat()
                 val y = center.y + r.toFloat() * sin(rad).toFloat()
 
@@ -116,53 +99,30 @@ fun CookiePlayButton(
             }
             path.close()
 
-            // Fill base shape
+            // Заливка чистым контейнером без проволочных рамок
             drawPath(path, color = primaryContainer)
 
-            // Draw M3 Expressive liquid sweep gradient glow ring when loading
+            // Во время загрузки отрисовываем элегантный аккуратный индикатор M3 Expressive
             if (isLoading) {
-                val sweepBrush = Brush.sweepGradient(
-                    colors = listOf(
-                        primaryColor.copy(alpha = 0.05f),
-                        primaryColor,
-                        tertiaryColor,
-                        primaryColor.copy(alpha = 0.05f)
-                    ),
-                    center = center
-                )
+                val arcSize = 44.dp.toPx()
+                val arcOffset = Offset((size.width - arcSize) / 2, (size.height - arcSize) / 2)
 
-                drawPath(
-                    path = path,
-                    brush = sweepBrush,
-                    style = Stroke(width = 6f, cap = StrokeCap.Round)
+                drawArc(
+                    color = iconColor,
+                    startAngle = arcStartAngle,
+                    sweepAngle = 280f,
+                    useCenter = false,
+                    topLeft = arcOffset,
+                    size = Size(arcSize, arcSize),
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                 )
-
-                // Orbiting liquid particles inside the cookie
-                val orbitRadius = radius * 0.45f
-                val orbitAngle1 = Math.toRadians(rotationPhase.toDouble() * 2.0)
-                val orbitAngle2 = orbitAngle1 + Math.PI
-
-                val dot1 = Offset(
-                    center.x + orbitRadius * cos(orbitAngle1).toFloat(),
-                    center.y + orbitRadius * sin(orbitAngle1).toFloat()
-                )
-                val dot2 = Offset(
-                    center.x + orbitRadius * cos(orbitAngle2).toFloat(),
-                    center.y + orbitRadius * sin(orbitAngle2).toFloat()
-                )
-
-                drawCircle(color = primaryColor, radius = 5f, center = dot1)
-                drawCircle(color = tertiaryColor, radius = 4f, center = dot2)
             }
         }
 
-        // Center Play / Pause Icon with Expressive Spring Scale
-        Box(
-            modifier = Modifier.scale(iconScale),
-            contentAlignment = Alignment.Center
-        ) {
+        // Иконка Воспроизведения / Паузы (отображается при остановке и воспроизведении)
+        if (!isLoading) {
             Icon(
-                painter = painterResource(id = if (isPlaying && !isLoading) R.drawable.ic_pause else R.drawable.ic_play),
+                painter = painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                 contentDescription = "Play/Pause",
                 tint = iconColor,
                 modifier = Modifier.size(36.dp)

@@ -482,39 +482,15 @@ fun LyricsScreen(
                                                     )
 
                                                     if (isAutoTranslateEnabled && !line.translation.isNullOrBlank()) {
-                                                        Spacer(modifier = Modifier.height(3.dp))
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                        ) {
-                                                            Surface(
-                                                                shape = RoundedCornerShape(4.dp),
-                                                                color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                                                modifier = Modifier.padding(top = 1.dp)
-                                                            ) {
-                                                                Text(
-                                                                    text = "RU",
-                                                                    style = MaterialTheme.typography.labelSmall,
-                                                                    fontSize = 9.sp,
-                                                                    fontWeight = FontWeight.ExtraBold,
-                                                                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-                                                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                                )
-                                                            }
-
-                                                            Text(
-                                                                text = line.translation!!,
-                                                                fontStyle = FontStyle.Italic,
-                                                                fontSize = if (isActive) 14.sp else 12.sp,
-                                                                fontWeight = FontWeight.Medium,
-                                                                color = if (isActive) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                                                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                                                                lineHeight = if (isActive) 19.sp else 16.sp,
-                                                                modifier = Modifier.weight(1f, fill = false)
-                                                            )
-                                                        }
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = line.translation!!,
+                                                            fontSize = if (isActive) 15.sp else 13.sp,
+                                                            fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
+                                                            color = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                                            lineHeight = if (isActive) 21.sp else 18.sp
+                                                        )
                                                     }
                                                 }
                                             }
