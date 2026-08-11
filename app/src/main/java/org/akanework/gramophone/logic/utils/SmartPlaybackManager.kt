@@ -83,6 +83,33 @@ object SmartPlaybackManager {
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isResolving = false
+                val currentItem = currentPlayer?.currentMediaItem
+                val currentUri = currentItem?.localConfiguration?.uri
+                val mediaId = currentItem?.mediaId ?: ""
+
+                val isDirectYoutube = currentUri != null && (currentUri.host?.contains("googlevideo.com") == true || currentUri.host?.contains("youtube.com") == true)
+
+                if (isDirectYoutube && mediaId.isNotEmpty()) {
+                    PlaybackLogger.log("SMART_FALLBACK", "Level 1 Direct Stream failed [${error.errorCodeName}]. Falling back to Level 2 Server Proxy for track $mediaId!")
+                    mainHandler.post {
+                        try {
+                            val serverUri = android.net.Uri.parse("http://185.196.41.31/stream/$mediaId")
+                            val newItem = currentItem.buildUpon().setUri(serverUri).build()
+                            val curIdx = currentPlayer?.currentMediaItemIndex ?: -1
+                            if (curIdx >= 0) {
+                                currentPlayer?.replaceMediaItem(curIdx, newItem)
+                                currentPlayer?.prepare()
+                                currentPlayer?.play()
+                                return@post
+                            }
+                        } catch (e: Exception) {
+                            PlaybackLogger.log("SMART_FALLBACK_ERR", "Failed Level 2 fallback: ${e.message}")
+                        }
+                        onHardFailure("Player Error: ${error.message}")
+                    }
+                    return
+                }
+
                 PlaybackLogger.log("SMART_MGR", "Hard Player Error: ${error.message}. Triggering instant skip!")
                 onHardFailure("Player Error: ${error.message}")
             }

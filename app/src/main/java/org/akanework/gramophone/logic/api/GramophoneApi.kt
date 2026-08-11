@@ -93,7 +93,7 @@ interface GramophoneApi {
     @DELETE("/api/v1/playlists/{playlist_id}/tracks/{track_id}")
     fun removeTrackFromPlaylist(
         @Path("playlist_id") playlistId: Int,
-        @Path("track_id") trackId: Int
+        @Path("track_id") trackId: Any
     ): Call<Void>
 
     @PUT("/api/v1/playlists/{id}/reorder")
@@ -149,12 +149,12 @@ data class PlaylistCreateRequest(
 
 @Keep
 data class PlaylistTrackAddRequest(
-    @SerializedName("track_id") val trackId: Int
+    @SerializedName("track_id") val trackId: Any
 )
 
 @Keep
 data class TrackReorderItem(
-    @SerializedName("track_id") val trackId: Int,
+    @SerializedName("track_id") val trackId: Any,
     @SerializedName("position") val position: Int
 )
 

@@ -426,9 +426,16 @@ private class AuthenticatedDataSource(
             }
         } else {
             newHeaders.remove("Authorization")
-            newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-            newHeaders["Referer"] = "https://music.youtube.com/"
-            newHeaders["Origin"] = "https://music.youtube.com"
+            val isGoogleVideo = targetHost.contains("googlevideo.com")
+            if (isGoogleVideo) {
+                newHeaders.remove("Referer")
+                newHeaders.remove("Origin")
+                // Do not override User-Agent for googlevideo.com so client profile signature matches
+            } else {
+                newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+                newHeaders["Referer"] = "https://music.youtube.com/"
+                newHeaders["Origin"] = "https://music.youtube.com"
+            }
         }
 
         // 2. Формируем заголовок Range для перемотки по байтам
