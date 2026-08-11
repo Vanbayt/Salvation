@@ -82,8 +82,35 @@ object SmartPlaybackManager {
                 }
             }
 
+            private val fallbackAttempted = java.util.Collections.synchronizedSet(HashSet<String>())
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isResolving = false
+                val currentItem = currentPlayer?.currentMediaItem
+                val mediaId = currentItem?.mediaId ?: ""
+
+                if (mediaId.isNotEmpty() && !fallbackAttempted.contains(mediaId)) {
+                    fallbackAttempted.add(mediaId)
+                    PlaybackLogger.log("SMART_FALLBACK", "Player error [${error.errorCodeName}: ${error.message}]. Attempting Level 2 Server Proxy Fallback for track $mediaId!")
+                    mainHandler.post {
+                        try {
+                            val serverUri = android.net.Uri.parse("http://185.196.41.31/stream/$mediaId")
+                            val newItem = currentItem!!.buildUpon().setUri(serverUri).build()
+                            val curIdx = currentPlayer?.currentMediaItemIndex ?: -1
+                            if (curIdx >= 0) {
+                                currentPlayer?.replaceMediaItem(curIdx, newItem)
+                                currentPlayer?.prepare()
+                                currentPlayer?.play()
+                                return@post
+                            }
+                        } catch (e: Exception) {
+                            PlaybackLogger.log("SMART_FALLBACK_ERR", "Failed Level 2 fallback: ${e.message}")
+                        }
+                        onHardFailure("Player Error: ${error.message}")
+                    }
+                    return
+                }
+
                 PlaybackLogger.log("SMART_MGR", "Hard Player Error: ${error.message}. Triggering instant skip!")
                 onHardFailure("Player Error: ${error.message}")
             }
@@ -126,13 +153,43 @@ object SmartPlaybackManager {
         cancelTimeoutTimer()
         val player = currentPlayer ?: return
         val isMidTrack = player.currentPosition > 500L
-        val timeoutMs = if (isMidTrack) 15000L else 12000L
+        val timeoutMs = if (isMidTrack) 3000L else 12000L
 
         currentTimeoutJob = managerScope.launch {
             delay(timeoutMs)
             if (!isSkipping.get() && currentPlayer?.playbackState == Player.STATE_BUFFERING) {
-                PlaybackLogger.log("SMART_STALL_TIMEOUT", "Buffer stalled for > ${timeoutMs / 1000}s (MidTrack: $isMidTrack). Triggering auto-skip!")
-                triggerAutoSkip("", "Буфер застрял при воспроизведении")
+                val currentItem = currentPlayer?.currentMediaItem
+                val mediaId = currentItem?.mediaId ?: ""
+                val currentPos = currentPlayer?.currentPosition ?: 0L
+
+                if (isMidTrack && mediaId.isNotEmpty() && !fallbackAttempted.contains(mediaId)) {
+                    fallbackAttempted.add(mediaId)
+                    PlaybackLogger.log("SMART_STALL_FALLBACK", "Buffer stalled for 3s mid-track at ${currentPos}ms. Switching to Level 2 Server Proxy for track $mediaId!")
+                    mainHandler.post {
+                        try {
+                            val serverUri = android.net.Uri.parse("http://185.196.41.31/stream/$mediaId")
+                            val newItem = currentItem!!.buildUpon().setUri(serverUri).build()
+                            val curIdx = currentPlayer?.currentMediaItemIndex ?: -1
+                            if (curIdx >= 0) {
+                                currentPlayer?.replaceMediaItem(curIdx, newItem)
+                                currentPlayer?.seekTo(currentPos)
+                                currentPlayer?.prepare()
+                                currentPlayer?.play()
+                                return@post
+                            }
+                        } catch (e: Exception) {
+                            PlaybackLogger.log("SMART_STALL_FALLBACK_ERR", "Failed Level 2 stall fallback: ${e.message}")
+                        }
+                    }
+                    return@launch
+                }
+
+                if (isMidTrack) delay(8000L)
+
+                if (!isSkipping.get() && currentPlayer?.playbackState == Player.STATE_BUFFERING) {
+                    PlaybackLogger.log("SMART_STALL_TIMEOUT", "Buffer stalled for > 10s (MidTrack: $isMidTrack). Triggering auto-skip!")
+                    triggerAutoSkip("", "Буфер застрял при воспроизведении")
+                }
             }
         }
     }

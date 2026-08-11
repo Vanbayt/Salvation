@@ -626,9 +626,9 @@ object ClientTrackResolver {
         data class ProfileSpec(val name: String, val version: String, val userAgent: String, val screen: String? = null)
 
         val profiles = listOf(
-            ProfileSpec("ANDROID", "19.05.36", "com.google.android.youtube/19.05.36 (Linux; U; Android 14; en_US)", "WATCH"),
-            ProfileSpec("IOS", "19.29.1", "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X; en_US)"),
-            ProfileSpec("WEB_REMIX", "1.20240101.01.00", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+            ProfileSpec("WEB_REMIX", "1.20240101.01.00", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"),
+            ProfileSpec("ANDROID_VR", "1.54.26", "com.google.android.youtube/1.54.26 (Linux; U; Android 14; en_US)"),
+            ProfileSpec("TVHTML5", "7.20240101.01.00", "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version")
         )
 
         for (prof in profiles) {
