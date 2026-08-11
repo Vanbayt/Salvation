@@ -623,22 +623,27 @@ object ClientTrackResolver {
     }
 
     private fun extractPlayerStreamUrl(videoId: String, targetDurationSec: Int = 0): String? {
+        data class ProfileSpec(val name: String, val version: String, val userAgent: String, val screen: String? = null)
+
         val profiles = listOf(
-            Pair("WEB_REMIX", "1.20240101.01.00"),
-            Pair("ANDROID_VR", "1.54.26"),
-            Pair("TVHTML5", "7.20240101.01.00")
+            ProfileSpec("ANDROID", "19.05.36", "com.google.android.youtube/19.05.36 (Linux; U; Android 14; en_US)", "WATCH"),
+            ProfileSpec("IOS", "19.29.1", "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X; en_US)"),
+            ProfileSpec("WEB_REMIX", "1.20240101.01.00", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
         )
 
-        for ((cName, cVer) in profiles) {
+        for (prof in profiles) {
             try {
                 val url = "https://www.youtube.com/youtubei/v1/player"
                 val reqBodyJson = JSONObject().apply {
                     put("context", JSONObject().apply {
                         put("client", JSONObject().apply {
-                            put("clientName", cName)
-                            put("clientVersion", cVer)
+                            put("clientName", prof.name)
+                            put("clientVersion", prof.version)
                             put("hl", "en")
                             put("gl", "US")
+                            if (prof.screen != null) {
+                                put("clientScreen", prof.screen)
+                            }
                             if (lastVisitorData.isNotEmpty()) {
                                 put("visitorData", lastVisitorData)
                             }
@@ -649,7 +654,7 @@ object ClientTrackResolver {
 
                 val req = Request.Builder()
                     .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .header("User-Agent", prof.userAgent)
                     .post(reqBodyJson.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
@@ -708,12 +713,12 @@ object ClientTrackResolver {
                     }
 
                     if (!bestUrl.isNullOrEmpty()) {
-                        Log.i(TAG, "Successfully extracted direct audio URL using profile $cName for VideoID $videoId")
+                        Log.i(TAG, "Successfully extracted direct audio URL using profile ${prof.name} for VideoID $videoId")
                         return bestUrl
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed profile $cName for VideoID $videoId: ${e.message}")
+                Log.w(TAG, "Failed profile ${prof.name} for VideoID $videoId: ${e.message}")
             }
         }
         return null
