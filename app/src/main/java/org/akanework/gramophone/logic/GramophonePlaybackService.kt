@@ -460,6 +460,28 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
         org.akanework.gramophone.logic.utils.SmartPlaybackManager.init(this, player.exoPlayer)
 
+        player.exoPlayer.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onBandwidthEstimate(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                totalLoadTimeMs: Int,
+                totalBytesLoaded: Long,
+                bitrateEstimate: Long
+            ) {
+                val kbps = bitrateEstimate / 1000
+                val totalKb = totalBytesLoaded / 1024
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("BANDWIDTH", "Estimate: ${kbps} kbps | Loaded: ${totalKb} KB in ${totalLoadTimeMs}ms")
+            }
+
+            override fun onAudioUnderrun(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                bufferSize: Int,
+                bufferSizeMs: Long,
+                elapsedSinceLastFeedMs: Long
+            ) {
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("AUDIO_UNDERRUN", "AudioTrack Underrun! BufferSize: ${bufferSize}b (${bufferSizeMs}ms) | ElapsedSinceFeed: ${elapsedSinceLastFeedMs}ms")
+            }
+        })
+
         player.exoPlayer.addAnalyticsListener(EventLogger())
         player.exoPlayer.addAnalyticsListener(afFormatTracker)
         player.exoPlayer.addAnalyticsListener(this)
