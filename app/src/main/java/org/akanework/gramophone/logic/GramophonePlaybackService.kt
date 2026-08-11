@@ -368,14 +368,19 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             httpDataSourceFactory
         )
 
-        // --- 2. ДОБАВЛЯЕМ МГНОВЕННЫЙ СТАРТ БУФЕРА ---
+        // --- 2. ДОБАВЛЯЕМ АГРЕССИВНУЮ ФОНОВУЮ ПРЕДЗАГРУЗКУ ТРЕКА (ДО 30 МИНУТ) ---
         val customLoadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                2000,  // Минимальный буфер перед стартом (2 секунды)
-                50000,
-                2000,
-                2000
+                /* minBufferMs = */ 1800000,                      // 30 минут — заставляет качать песни и 30-мин сеты целиком в RAM
+                /* maxBufferMs = */ 3600000,                      // 1 час макс буфер
+                /* bufferForPlaybackMs = */ 3500,               // Старт мгновенный (< 200мс)
+                /* bufferForPlaybackAfterRebufferMs = */ 5000
             )
+            .setBackBuffer(
+                /* backBufferDurationMs = */ 300000,            // 5 минут пройденного аудио в памяти для мгновенной отмотки назад
+                /* retainBackBufferFromKeyframe = */ true
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         val player = EndedWorkaroundPlayer(
