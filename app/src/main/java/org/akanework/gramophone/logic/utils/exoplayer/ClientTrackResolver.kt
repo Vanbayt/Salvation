@@ -584,10 +584,10 @@ object ClientTrackResolver {
         val targetDur = info.duration.toDouble()
         if (targetDur > 0 && c.duration > 0) {
             val diff = Math.abs(targetDur - c.duration)
-            if (diff > 45 || (c.duration < 0.5 * targetDur && diff > 20)) {
-                return -2000 // Hard rejection for duration mismatch > 45s
+            if (c.duration < 0.3 * targetDur || c.duration > 3.0 * targetDur) {
+                return -2000 // Hard rejection only if candidate duration is absurdly off (< 1/3 or > 3x)
             } else if (diff > 5) {
-                score -= (diff * 20).toInt()
+                score -= (diff * 10).toInt() // Soft scaled penalty
             } else if (diff <= 3) {
                 score += 200
             }
