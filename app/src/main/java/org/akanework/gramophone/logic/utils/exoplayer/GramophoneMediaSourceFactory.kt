@@ -374,6 +374,7 @@ class GramophoneMediaSourceFactory(
 
 private val sharedOkHttpClient: okhttp3.OkHttpClient by lazy {
     okhttp3.OkHttpClient.Builder()
+        .protocols(listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1))
         .connectionPool(okhttp3.ConnectionPool(10, 10, java.util.concurrent.TimeUnit.MINUTES))
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)

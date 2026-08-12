@@ -45,6 +45,11 @@ object ClientTrackResolver {
 
     private val resolvedCache = android.util.LruCache<Long, Pair<String, Long>>(50)
 
+    fun invalidateCache(trackId: Long) {
+        resolvedCache.remove(trackId)
+        Log.i(TAG, "🧹 [CACHE_INVALIDATED] Cleared cached stream URL for track $trackId")
+    }
+
     fun resolveStreamUrl(context: Context, rawUri: Uri): Uri {
         val path = rawUri.path ?: ""
         if (!path.contains("/stream/")) {
@@ -55,9 +60,12 @@ object ClientTrackResolver {
 
         if (trackIdLong != null) {
             val cached = resolvedCache.get(trackIdLong)
-            if (cached != null && (System.currentTimeMillis() - cached.second) < 3 * 3600 * 1000L) {
+            if (cached != null && (System.currentTimeMillis() - cached.second) < 15 * 60 * 1000L) {
                 Log.i(TAG, "⚡ [MEM_CACHE_HIT] Track $trackIdLong resolved instantly from device RAM!")
                 return Uri.parse(cached.first)
+            } else if (cached != null) {
+                resolvedCache.remove(trackIdLong)
+                Log.i(TAG, "⌛ [MEM_CACHE_EXPIRED] Cached URL for track $trackIdLong expired after 15m. Refreshing!")
             }
         }
 

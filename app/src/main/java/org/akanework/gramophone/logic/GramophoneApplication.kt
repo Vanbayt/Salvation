@@ -421,6 +421,17 @@ class GramophoneApplication : Application(), SingletonImageLoader.Factory,
         exitProcess(10)
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            try {
+                coil3.SingletonImageLoader.get(this).memoryCache?.clear()
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to clear coil memory cache onTrimMemory", e)
+            }
+        }
+    }
+
     private fun isAlpsBoostFwkPresent(): Boolean {
         try {
             Class.forName("com.mediatek.boostfwk.BoostFwkManagerImpl")

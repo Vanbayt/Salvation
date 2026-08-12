@@ -164,9 +164,11 @@ class MainActivity : BaseActivity() {
     // 🔥 Ссылка на пейджер
     private lateinit var mainPager: ViewPager2
 
+    private var isForeground = false
     private val progressHandler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
         override fun run() {
+            if (!isForeground) return
             val player = getPlayer()
             if (player != null) {
                 val isPlaying = player.isPlaying || (player.playWhenReady && player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE)
@@ -1502,6 +1504,7 @@ class MainActivity : BaseActivity() {
 
     override fun onStart() {
         super.onStart()
+        isForeground = true
         getPlayer()?.let { player -> updatePlayerUI(player) }
         progressHandler.removeCallbacks(progressRunnable)
         progressHandler.post(progressRunnable)
@@ -1509,17 +1512,33 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        isForeground = true
         getPlayer()?.let { player -> updatePlayerUI(player) }
         progressHandler.removeCallbacks(progressRunnable)
         progressHandler.post(progressRunnable)
     }
 
-    override fun onStop() {
-        super.onStop()
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
         progressHandler.removeCallbacks(progressRunnable)
     }
 
+    override fun onStop() {
+        super.onStop()
+        isForeground = false
+        progressHandler.removeCallbacks(progressRunnable)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            imageLoader.memoryCache?.clear()
+        }
+    }
+
     override fun onDestroy() {
+        isForeground = false
         if (needsMissingOnDestroyCallWorkarounds() && (getPlayer()?.playWhenReady != true || getPlayer()?.mediaItemCount == 0)) {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.cancel(DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID)

@@ -89,6 +89,11 @@ object SmartPlaybackManager {
                 val currentItem = currentPlayer?.currentMediaItem
                 val mediaId = currentItem?.mediaId ?: ""
 
+                val mediaIdLong = mediaId.toLongOrNull()
+                if (mediaIdLong != null) {
+                    org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.invalidateCache(mediaIdLong)
+                }
+
                 if (mediaId.isNotEmpty() && !fallbackAttempted.contains(mediaId)) {
                     fallbackAttempted.add(mediaId)
                     PlaybackLogger.log("SMART_FALLBACK", "Player error [${error.errorCodeName}: ${error.message}]. Attempting Level 2 Server Proxy Fallback for track $mediaId!")

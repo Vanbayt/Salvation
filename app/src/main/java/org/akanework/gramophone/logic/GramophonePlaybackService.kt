@@ -243,11 +243,28 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         }
 
     private val seekReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val to =
-                intent.extras?.getLong("seekTo", C.INDEX_UNSET.toLong()) ?: C.INDEX_UNSET.toLong()
-            if (to != C.INDEX_UNSET.toLong())
-                controller?.seekTo(to)
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val to = intent?.extras?.getLong("seekTo", C.INDEX_UNSET.toLong()) ?: C.INDEX_UNSET.toLong()
+            if (to != C.INDEX_UNSET.toLong()) {
+                mediaSession?.player?.seekTo(to)
+            }
+        }
+    }
+
+    private val powerSaveReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED == intent?.action) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                val isPowerSave = powerManager?.isPowerSaveMode == true
+                Log.d(TAG, "Power save mode changed: $isPowerSave")
+                if (isPowerSave) {
+                    try {
+                        rgAp.setOffloadEnabled(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to toggle offload on power save", e)
+                    }
+                }
+            }
         }
     }
 
@@ -601,6 +618,13 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             @SuppressLint("WrongConstant") // why is this needed?
             ContextCompat.RECEIVER_EXPORTED
         )
+        ContextCompat.registerReceiver(
+            this,
+            powerSaveReceiver,
+            IntentFilter(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+            @SuppressLint("WrongConstant")
+            ContextCompat.RECEIVER_EXPORTED
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O /* before 8, only sbc was supported */) {
             proxy = BtCodecInfo.getCodec(this) {
                 Log.d(TAG, "first bluetooth codec config $btInfo")
@@ -704,6 +728,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         instanceForWidgetAndLyricsOnly = null
         unregisterReceiver(seekReceiver)
         unregisterReceiver(btReceiver)
+        try { unregisterReceiver(powerSaveReceiver) } catch (_: Exception) {}
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         lastPlayedManager.save()
         scope.cancel()

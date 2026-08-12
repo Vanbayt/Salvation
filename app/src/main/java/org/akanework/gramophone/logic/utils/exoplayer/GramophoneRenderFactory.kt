@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioOffloadSupportProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
@@ -98,12 +99,14 @@ class GramophoneRenderFactory(
         enableAudioTrackPlaybackParams: Boolean
     ): AudioSink {
         val builder = DefaultAudioSink.Builder(context)
-        if (pcmEncodingRestrictionLifted || !enableFloatOutput) {
-            builder.setPcmEncodingRestrictionLifted(pcmEncodingRestrictionLifted)
-        } else {
-            @Suppress("deprecation")
-            builder.setEnableFloatOutput(true)
-        }
+        builder.setPcmEncodingRestrictionLifted(true)
+        @Suppress("deprecation")
+        builder.setEnableFloatOutput(true)
+        builder.setAudioTrackBufferSizeProvider(
+            DefaultAudioTrackBufferSizeProvider.Builder()
+                .setPcmBufferMultiplicationFactor(4)
+                .build()
+        )
         builder.setAudioProcessorChain(object : AudioProcessorChain {
             override fun getAudioProcessors(inputFormat: Format): Array<out AudioProcessor> {
                 rgAp.setRootFormat(inputFormat)
