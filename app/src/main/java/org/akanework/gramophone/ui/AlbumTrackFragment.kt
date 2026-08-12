@@ -18,6 +18,8 @@ import org.akanework.gramophone.ui.adapters.OnlineSearchAdapter
 class AlbumTracksFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: OnlineSearchAdapter
+    private var playerController: androidx.media3.session.MediaController? = null
+    private var playerListener: androidx.media3.common.Player.Listener? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val density = requireContext().resources.displayMetrics.density
@@ -97,16 +99,30 @@ class AlbumTracksFragment : Fragment() {
         // 🔥 ПОДКЛЮЧАЕМ СЛУШАТЕЛЬ ПЛЕЕРА ДЛЯ ПОДСВЕТКИ ТРЕКА
         val mainActivity = activity as? org.akanework.gramophone.ui.MainActivity
         mainActivity?.controllerViewModel?.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
+            playerListener?.let { playerController?.removeListener(it) }
+            playerController = controller
             adapter.currentlyPlayingTrackId = controller.currentMediaItem?.mediaId
-            controller.addListener(object : androidx.media3.common.Player.Listener {
+            val listener = object : androidx.media3.common.Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     adapter.currentlyPlayingTrackId = mediaItem?.mediaId
                 }
-            })
+            }
+            playerListener = listener
+            controller.addListener(listener)
         }
 
         viewModel.album.observe(viewLifecycleOwner) { album ->
             adapter.submitList(album.tracks ?: emptyList())
         }
+    }
+
+    override fun onDestroyView() {
+        playerListener?.let { playerController?.removeListener(it) }
+        playerListener = null
+        playerController = null
+        if (::recyclerView.isInitialized) {
+            recyclerView.adapter = null
+        }
+        super.onDestroyView()
     }
 }

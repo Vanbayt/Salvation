@@ -67,15 +67,17 @@ class DiscographyFragment : Fragment() {
         }
     }
 
+    private var tabLayoutMediator: TabLayoutMediator? = null
+
     private fun setupViewPager() {
         viewPager.adapter = DiscographyPagerAdapter(this)
         viewPager.offscreenPageLimit = 2 // Держим в памяти соседние вкладки для плавности
 
         val tabTitles = arrayOf("АЛЬБОМЫ", "СИНГЛЫ И EP", "СБОРНИКИ")
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+        tabLayoutMediator = TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = tabTitles[position]
-        }.attach()
+        }.apply { attach() }
     }
 
     private fun loadDiscography(id: String) {
@@ -103,9 +105,12 @@ class DiscographyFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        tabLayoutMediator?.detach()
+        tabLayoutMediator = null
+        if (::viewPager.isInitialized) {
+            viewPager.adapter = null
+        }
         super.onDestroyView()
-        // Очищаем ссылки на View, чтобы избежать утечек памяти при переключении фрагментов
-        viewPager.adapter = null
     }
 
     companion object {

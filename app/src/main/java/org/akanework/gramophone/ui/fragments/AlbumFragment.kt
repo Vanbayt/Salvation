@@ -64,6 +64,9 @@ class AlbumFragment : Fragment() {
     private lateinit var btnPlay: MaterialButton
     private lateinit var btnLike: MaterialButton
 
+    private var tabLayoutMediator: TabLayoutMediator? = null
+    private var likeCall: retrofit2.Call<Map<String, String>>? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         albumId = arguments?.getString("ALBUM_ID")
@@ -170,9 +173,9 @@ class AlbumFragment : Fragment() {
         viewPager.adapter = AlbumPagerAdapter(this)
         viewPager.offscreenPageLimit = 2
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+        tabLayoutMediator = TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = if (position == 0) "ТРЕКИ" else "ИНФО"
-        }.attach()
+        }.apply { attach() }
 
         viewModel.album.observe(viewLifecycleOwner) { album ->
             tvTitle.text = album.title ?: "Неизвестный альбом"
@@ -248,8 +251,9 @@ class AlbumFragment : Fragment() {
             val currentAlbumId = albumId ?: return@setOnClickListener
             btnLike.isEnabled = false
 
-            NetworkClient.getApi(requireContext()).toggleAlbumLike(currentAlbumId)
-                .enqueue(object : retrofit2.Callback<Map<String, String>> {
+            likeCall?.cancel()
+            likeCall = NetworkClient.getApi(requireContext()).toggleAlbumLike(currentAlbumId).apply {
+                enqueue(object : retrofit2.Callback<Map<String, String>> {
                     override fun onResponse(call: retrofit2.Call<Map<String, String>>, response: retrofit2.Response<Map<String, String>>) {
                         btnLike.isEnabled = true
                         if (response.isSuccessful) {
@@ -271,11 +275,23 @@ class AlbumFragment : Fragment() {
                         Toast.makeText(context, "Ошибка сети", Toast.LENGTH_SHORT).show()
                     }
                 })
+            }
         }
 
         if (viewModel.album.value == null) {
             albumId?.let { id -> loadAlbumData(id) }
         }
+    }
+
+    override fun onDestroyView() {
+        likeCall?.cancel()
+        likeCall = null
+        tabLayoutMediator?.detach()
+        tabLayoutMediator = null
+        if (::viewPager.isInitialized) {
+            viewPager.adapter = null
+        }
+        super.onDestroyView()
     }
 
     private fun loadAlbumData(id: String) {

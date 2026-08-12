@@ -33,6 +33,7 @@ import retrofit2.Response
 class FavoritesFragment : BaseFragment(null) {
 
     private var mediaController: MediaController? = null
+    private var playerListener: Player.Listener? = null
     private lateinit var btnPlayAll: MaterialButton // Кнопка Play/Pause
 
     private lateinit var progressBar: ProgressBar
@@ -66,17 +67,20 @@ class FavoritesFragment : BaseFragment(null) {
             controllerFuture.addListener({
                 try {
                     val controller = controllerFuture.get()
+                    playerListener?.let { mediaController?.removeListener(it) }
                     mediaController = controller
 
                     // Устанавливаем иконку при запуске фрагмента
                     updatePlayPauseButton(controller.isPlaying)
 
                     // Слушаем изменения статуса воспроизведения
-                    controller.addListener(object : Player.Listener {
+                    val listener = object : Player.Listener {
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
                             updatePlayPauseButton(isPlaying)
                         }
-                    })
+                    }
+                    playerListener = listener
+                    controller.addListener(listener)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -242,5 +246,15 @@ class FavoritesFragment : BaseFragment(null) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    override fun onDestroyView() {
+        playerListener?.let { mediaController?.removeListener(it) }
+        playerListener = null
+        mediaController = null
+        if (::recyclerView.isInitialized) {
+            recyclerView.adapter = null
+        }
+        super.onDestroyView()
     }
 }

@@ -43,7 +43,9 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.akanework.gramophone.logic.ui.MyRecyclerView
 import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.utils.Flags
@@ -355,5 +357,10 @@ class PlaylistAdapter(
                 }
             }
         }
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: MyRecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        ioScope.cancel()
     }
 }

@@ -124,13 +124,14 @@ object SmartPlaybackManager {
         cancelTimeoutTimer()
         isSkipping.set(false)
         isResolving = true
-        PlaybackLogger.log("SMART_MGR", "Track requested: '$trackTitle'. Starting active resolution timer (15s).")
+        val targetMediaId = currentPlayer?.currentMediaItem?.mediaId ?: ""
+        PlaybackLogger.log("SMART_MGR", "Track requested: '$trackTitle' ($targetMediaId). Starting active resolution timer (15s).")
 
         currentTimeoutJob = managerScope.launch {
             delay(ACTIVE_SEARCH_TIMEOUT_MS)
             if (!isSkipping.get() && currentPlayer?.playbackState != Player.STATE_READY) {
-                PlaybackLogger.log("SMART_TIMEOUT", "Active search/resolution timed out after 15s for '$trackTitle'. Skipping!")
-                triggerAutoSkip(trackTitle, "Таймаут поиска трека")
+                PlaybackLogger.log("SMART_TIMEOUT", "Active search/resolution timed out after 15s for '$trackTitle' ($targetMediaId). Skipping!")
+                triggerAutoSkip(targetMediaId, trackTitle, "Таймаут поиска трека")
             }
         }
     }
@@ -141,10 +142,11 @@ object SmartPlaybackManager {
     fun onHardFailure(reason: String, trackTitle: String = "") {
         cancelTimeoutTimer()
         isResolving = false
+        val targetMediaId = currentPlayer?.currentMediaItem?.mediaId ?: ""
         if (isSkipping.compareAndSet(false, true)) {
-            PlaybackLogger.log("SMART_HARD_FAIL", "Hard failure triggered: $reason. Instant auto-skipping...")
+            PlaybackLogger.log("SMART_HARD_FAIL", "Hard failure triggered for '$trackTitle' ($targetMediaId): $reason. Instant auto-skipping...")
             mainHandler.post {
-                triggerAutoSkip(trackTitle, reason)
+                triggerAutoSkip(targetMediaId, trackTitle, reason)
             }
         }
     }
@@ -154,6 +156,7 @@ object SmartPlaybackManager {
         val player = currentPlayer ?: return
         val isMidTrack = player.currentPosition > 500L
         val timeoutMs = if (isMidTrack) 3000L else 12000L
+        val targetMediaId = player.currentMediaItem?.mediaId ?: ""
 
         currentTimeoutJob = managerScope.launch {
             delay(timeoutMs)
@@ -188,7 +191,7 @@ object SmartPlaybackManager {
 
                 if (!isSkipping.get() && currentPlayer?.playbackState == Player.STATE_BUFFERING) {
                     PlaybackLogger.log("SMART_STALL_TIMEOUT", "Buffer stalled for > 10s (MidTrack: $isMidTrack). Triggering auto-skip!")
-                    triggerAutoSkip("", "Буфер застрял при воспроизведении")
+                    triggerAutoSkip(targetMediaId, "", "Буфер застрял при воспроизведении")
                 }
             }
         }
@@ -199,8 +202,15 @@ object SmartPlaybackManager {
         currentTimeoutJob = null
     }
 
-    private fun triggerAutoSkip(trackTitle: String, reason: String) {
+    private fun triggerAutoSkip(targetMediaId: String = "", trackTitle: String = "", reason: String = "") {
         val player = currentPlayer ?: return
+        val currentMediaId = player.currentMediaItem?.mediaId ?: ""
+
+        if (targetMediaId.isNotEmpty() && currentMediaId.isNotEmpty() && targetMediaId != currentMediaId) {
+            PlaybackLogger.log("SMART_AUTOSKIP_CANCEL", "Ignored obsolete auto-skip for '$trackTitle' ($targetMediaId) because active player track is '$currentMediaId'")
+            return
+        }
+
         val ctx = appContext
 
         val titleDisplay = if (trackTitle.isNotEmpty()) "'$trackTitle'" else "Текущий трек"

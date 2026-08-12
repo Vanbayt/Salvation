@@ -62,6 +62,8 @@ class ArtistFragment : Fragment() {
     private lateinit var layoutAlbumsHeader: View
 
     private lateinit var trackAdapter: OnlineSearchAdapter
+    private var playerController: androidx.media3.session.MediaController? = null
+    private var playerListener: androidx.media3.common.Player.Listener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -298,12 +300,16 @@ class ArtistFragment : Fragment() {
 
             val mainActivity = activity as? org.akanework.gramophone.ui.MainActivity
             mainActivity?.controllerViewModel?.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
+                playerListener?.let { playerController?.removeListener(it) }
+                playerController = controller
                 trackAdapter.currentlyPlayingTrackId = controller.currentMediaItem?.mediaId
-                controller.addListener(object : androidx.media3.common.Player.Listener {
+                val listener = object : androidx.media3.common.Player.Listener {
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         trackAdapter.currentlyPlayingTrackId = mediaItem?.mediaId
                     }
-                })
+                }
+                playerListener = listener
+                controller.addListener(listener)
             }
         }
 
@@ -376,6 +382,19 @@ class ArtistFragment : Fragment() {
         val insertIndex = if (player.mediaItemCount > 0) player.currentMediaItemIndex + 1 else 0
         player.addMediaItem(insertIndex, mediaItem)
         Toast.makeText(context, "Добавлено в очередь", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onDestroyView() {
+        playerListener?.let { playerController?.removeListener(it) }
+        playerListener = null
+        playerController = null
+        if (::rvTracks.isInitialized) {
+            rvTracks.adapter = null
+        }
+        if (::rvAlbums.isInitialized) {
+            rvAlbums.adapter = null
+        }
+        super.onDestroyView()
     }
 
     companion object {

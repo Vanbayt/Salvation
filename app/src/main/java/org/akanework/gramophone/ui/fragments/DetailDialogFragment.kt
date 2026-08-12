@@ -11,6 +11,7 @@ import coil3.request.crossfade
 import coil3.request.error
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -88,13 +89,15 @@ class DetailDialogFragment : BaseFragment(false) {
         mimeTypeTextView.text = mediaItem.localConfiguration?.mimeType ?: "(null)"
         pathTextView.text = mediaItem.getFile()?.path
             ?: mediaItem.requestMetadata.mediaUri?.toString() ?: "(null)"
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             val bitrate = mediaItem.getBitrate() // disk access
             withContext(Dispatchers.Main) {
-                bitRateTextView.text = if (bitrate != null) {
-                    getString(R.string.bitrate_format, bitrate / 1000)
-                } else {
-                    getString(R.string.bitrate_unknown)
+                if (isAdded) {
+                    bitRateTextView.text = if (bitrate != null) {
+                        getString(R.string.bitrate_format, bitrate / 1000)
+                    } else {
+                        getString(R.string.bitrate_unknown)
+                    }
                 }
             }
         }

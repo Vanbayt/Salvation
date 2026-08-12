@@ -496,7 +496,7 @@ object ClientTrackResolver {
         val targetArtist = info.artist.lowercase().trim()
         var score = 100
 
-        val primaryArtistClean = cleanNormalize(info.artist.split(";")[0].split(",")[0])
+        val primaryArtistClean = cleanNormalize(info.artist.split(";")[0])
         val cUploaderClean = cleanNormalize(c.uploader)
         val cTitleClean = cleanNormalize(c.title)
         val tTitleClean = cleanNormalize(info.title)
@@ -507,12 +507,16 @@ object ClientTrackResolver {
         val titleMatches = (cTitleClean == tTitleClean) ||
                 (targetCore.isNotEmpty() && candCore.isNotEmpty() && targetCore == candCore)
 
+        val primaryNoSpace = primaryArtistClean.replace(" ", "")
+        val uploaderNoSpace = cUploaderClean.replace(" ", "")
+
         val artistMatches = primaryArtistClean.isNotEmpty() && (
             cUploaderClean == primaryArtistClean ||
             cUploaderClean == "$primaryArtistClean topic" ||
             cUploaderClean == "$primaryArtistClean vevo" ||
             cUploaderClean == "$primaryArtistClean official" ||
             cUploaderClean == "$primaryArtistClean official channel" ||
+            (uploaderNoSpace.isNotEmpty() && primaryNoSpace.isNotEmpty() && (uploaderNoSpace == primaryNoSpace || uploaderNoSpace == "${primaryNoSpace}vevo" || uploaderNoSpace == "${primaryNoSpace}topic" || uploaderNoSpace == "${primaryNoSpace}official")) ||
             (cUploaderClean.startsWith("$primaryArtistClean ") && (cUploaderClean.contains("topic") || cUploaderClean.contains("vevo") || cUploaderClean.contains("official"))) ||
             (cUploaderClean.isEmpty() && (cTitleClean.startsWith("$primaryArtistClean ") || cTitleClean.endsWith(" $primaryArtistClean") || cTitleClean == primaryArtistClean))
         )
@@ -572,10 +576,10 @@ object ClientTrackResolver {
         val targetDur = info.duration.toDouble()
         if (targetDur > 0 && c.duration > 0) {
             val diff = Math.abs(targetDur - c.duration)
-            if (diff > 15 || (c.duration < 0.6 * targetDur && diff > 10)) {
-                return -2000 // Hard rejection for duration mismatch > 15s
+            if (diff > 45 || (c.duration < 0.5 * targetDur && diff > 20)) {
+                return -2000 // Hard rejection for duration mismatch > 45s
             } else if (diff > 5) {
-                score -= (diff * 30).toInt()
+                score -= (diff * 20).toInt()
             } else if (diff <= 3) {
                 score += 200
             }

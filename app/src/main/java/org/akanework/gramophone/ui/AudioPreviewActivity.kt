@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import kotlinx.coroutines.cancel
 import android.provider.MediaStore
 import android.provider.Settings
 import android.system.ErrnoException
@@ -493,9 +494,15 @@ class AudioPreviewActivity : BaseActivity(), View.OnClickListener {
     }
 
     override fun onDestroy() {
+        runnableRunning = false
+        handler.removeCallbacksAndMessages(null)
+        scope.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
         if (d.isShowing)
             d.dismiss()
+        if (::player.isInitialized) {
+            player.release()
+        }
         super.onDestroy()
     }
 

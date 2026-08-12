@@ -58,6 +58,8 @@ class OnlineSearchFragment : BaseFragment(true) {
 
     private var searchAdapter: OnlineSearchAdapter? = null
     private var resultsRecycler: RecyclerView? = null
+    private var playerController: androidx.media3.session.MediaController? = null
+    private var playerListener: androidx.media3.common.Player.Listener? = null
 
     private var searchJob: Job? = null
     private lateinit var prefs: SharedPreferences
@@ -155,12 +157,16 @@ class OnlineSearchFragment : BaseFragment(true) {
         // ПОДКЛЮЧАЕМ ПОДСВЕТКУ ИГРАЮЩЕГО ТРЕКА В ПОИСКЕ
         val mainActivity = activity as? org.akanework.gramophone.ui.MainActivity
         mainActivity?.controllerViewModel?.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
+            playerListener?.let { playerController?.removeListener(it) }
+            playerController = controller
             searchAdapter?.currentlyPlayingTrackId = controller.currentMediaItem?.mediaId
-            controller.addListener(object : androidx.media3.common.Player.Listener {
+            val listener = object : androidx.media3.common.Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     searchAdapter?.currentlyPlayingTrackId = mediaItem?.mediaId
                 }
-            })
+            }
+            playerListener = listener
+            controller.addListener(listener)
         }
 
         showHistory()
@@ -539,6 +545,9 @@ class OnlineSearchFragment : BaseFragment(true) {
     }
 
     override fun onDestroyView() {
+        playerListener?.let { playerController?.removeListener(it) }
+        playerListener = null
+        playerController = null
         searchJob?.cancel()
         resultsRecycler?.adapter = null
         searchAdapter = null

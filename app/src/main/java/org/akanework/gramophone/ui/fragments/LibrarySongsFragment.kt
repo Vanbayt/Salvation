@@ -64,6 +64,9 @@ import retrofit2.Response
 
 class LibrarySongsFragment : BaseFragment(true) {
 
+    private var playerController: androidx.media3.session.MediaController? = null
+    private var playerListener: androidx.media3.common.Player.Listener? = null
+
     private val PAGE_LIMIT = 50
     private val PRELOAD_THRESHOLD = 5
 
@@ -233,12 +236,16 @@ class LibrarySongsFragment : BaseFragment(true) {
 
         val mainActivity = activity as? org.akanework.gramophone.ui.MainActivity
         mainActivity?.controllerViewModel?.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
+            playerListener?.let { playerController?.removeListener(it) }
+            playerController = controller
             adapter?.currentlyPlayingTrackId = controller.currentMediaItem?.mediaId
-            controller.addListener(object : androidx.media3.common.Player.Listener {
+            val listener = object : androidx.media3.common.Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     adapter?.currentlyPlayingTrackId = mediaItem?.mediaId
                 }
-            })
+            }
+            playerListener = listener
+            controller.addListener(listener)
         }
     }
 
@@ -526,6 +533,9 @@ class LibrarySongsFragment : BaseFragment(true) {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        playerListener?.let { playerController?.removeListener(it) }
+        playerListener = null
+        playerController = null
         currentCall?.cancel()
         rvTracks?.adapter = null
         rvTracks = null

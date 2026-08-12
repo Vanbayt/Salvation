@@ -407,11 +407,22 @@ class OnlineSearchAdapter(
                 }
             } else {
                 // Если трек не играет - убиваем анимацию и возвращаем масштаб 1.0
-                pulseAnimator?.cancel()
-                pulseAnimator = null
-                itemView.scaleX = 1.0f
-                itemView.scaleY = 1.0f
+                clearAnimation()
             }
+        }
+
+        fun clearAnimation() {
+            pulseAnimator?.cancel()
+            pulseAnimator = null
+            itemView.scaleX = 1.0f
+            itemView.scaleY = 1.0f
+        }
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is TrackViewHolder) {
+            holder.clearAnimation()
         }
     }
 

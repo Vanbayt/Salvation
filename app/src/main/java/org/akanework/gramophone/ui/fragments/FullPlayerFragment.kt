@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -506,9 +507,10 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         val artist = mediaItem.mediaMetadata.artist?.toString()
         val durationMs = mediaItem.mediaMetadata.durationMs ?: 0L
 
-        CoroutineScope(Dispatchers.Main).launch {
+        val safeContext = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
             val res = LyricsRepository.fetchLyrics(
-                context = requireContext(),
+                context = safeContext,
                 file = null,
                 mimeType = null,
                 sampleRate = 0,

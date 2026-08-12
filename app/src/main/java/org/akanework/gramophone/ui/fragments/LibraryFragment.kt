@@ -151,23 +151,29 @@ class LibraryFragment : BaseFragment(true) {
         })
     }
 
+    private var tabLayoutMediator: TabLayoutMediator? = null
+
     private fun setupViewPager() {
         val pagerAdapter = LibraryPagerAdapter(this)
         viewPager.adapter = pagerAdapter
 
         val tabTitles = arrayOf("ТРЕКИ", "АЛЬБОМЫ", "ПЛЕЙЛИСТЫ", "АРТИСТЫ")
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+        tabLayoutMediator = TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = tabTitles[position]
-        }.attach()
+        }.apply { attach() }
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
-        viewPager.adapter = null
+        tabLayoutMediator?.detach()
+        tabLayoutMediator = null
+        if (::viewPager.isInitialized) {
+            viewPager.adapter = null
+        }
         btnSearch = null
         btnSettings = null
         tvTitle = null
         etSearch = null
+        super.onDestroyView()
     }
 }
