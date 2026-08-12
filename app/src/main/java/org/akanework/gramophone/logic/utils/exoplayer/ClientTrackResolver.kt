@@ -125,15 +125,13 @@ object ClientTrackResolver {
             if (info.isrc.isNotEmpty()) {
                 queries.add(info.isrc)
             }
-            if (primaryArtist.isNotEmpty() && cleanTitle.isNotEmpty()) {
-                queries.add("$primaryArtist $cleanTitle")
-            }
             if (primaryArtist.isNotEmpty()) {
-                val fullTitleClean = info.title.replace(";", " ").trim()
-                queries.add("$primaryArtist $fullTitleClean")
+                queries.add("$primaryArtist ${info.title} Official Audio")
+                queries.add("$primaryArtist ${info.title}")
             } else {
-                queries.add(info.title)
+                queries.add("${info.artist} ${info.title}")
             }
+            queries.add(info.title)
 
             val scoredCandidates = mutableListOf<Pair<CandidateV2, Int>>()
             val seenCandidateIds = mutableSetOf<String>()
@@ -446,6 +444,7 @@ object ClientTrackResolver {
                             }
 
                             if (flex != null) {
+                                val uploaderSb = StringBuilder()
                                 for (fIdx in 1 until flex.length()) {
                                     val flexObj = flex.optJSONObject(fIdx)
                                     val textObj = flexObj?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")?.optJSONObject("text")
@@ -457,19 +456,19 @@ object ClientTrackResolver {
                                             if (t.contains(":")) {
                                                 val d = parseDurationSec(t)
                                                 if (d > 0) candDur = d
-                                            } else if (t.isNotEmpty() && t != " • " && t != "Song" && t != "Video") {
-                                                if (uploader.isEmpty()) {
-                                                    uploader = t
-                                                }
+                                            } else if (t.isNotEmpty() && t != " • ") {
+                                                uploaderSb.append(t).append(" ")
                                             }
                                         }
                                     }
                                 }
+                                uploader = uploaderSb.toString().trim()
                             }
 
                             val itemStr = item.toString()
                             val uploaderLower = uploader.lowercase().trim()
-                            if (itemStr.contains("- Topic") || itemStr.contains("MUSIC_VIDEO_TYPE_ATV") || uploaderLower == targetArtistLower || uploaderLower == "$targetArtistLower topic") {
+                            val targetArtistLower = info.artist.split(";")[0].split(",")[0].trim().lowercase()
+                            if (itemStr.contains("- Topic") || itemStr.contains("MUSIC_VIDEO_TYPE_") || uploaderLower.contains(targetArtistLower) || targetArtistLower.contains(uploaderLower)) {
                                 isOfficial = true
                             }
 
@@ -533,6 +532,8 @@ object ClientTrackResolver {
             cUploaderClean == "$primaryArtistClean vevo" ||
             cUploaderClean == "$primaryArtistClean official" ||
             cUploaderClean == "$primaryArtistClean official channel" ||
+            cUploaderClean.contains(primaryArtistClean) ||
+            primaryArtistClean.contains(cUploaderClean) ||
             (uploaderNoSpace.isNotEmpty() && primaryNoSpace.isNotEmpty() && (uploaderNoSpace == primaryNoSpace || uploaderNoSpace == "${primaryNoSpace}vevo" || uploaderNoSpace == "${primaryNoSpace}topic" || uploaderNoSpace == "${primaryNoSpace}official")) ||
             (cUploaderClean.startsWith("$primaryArtistClean ") && (cUploaderClean.contains("topic") || cUploaderClean.contains("vevo") || cUploaderClean.contains("official"))) ||
             (cUploaderClean.isEmpty() && (cTitleClean.startsWith("$primaryArtistClean ") || cTitleClean.endsWith(" $primaryArtistClean") || cTitleClean == primaryArtistClean))
