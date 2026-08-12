@@ -107,6 +107,9 @@ object ClientTrackResolver {
             }
 
             // 2. Send START Telemetry
+            val primaryArtist = info.artist.split(";")[0].split(",")[0].trim()
+            val cleanTitle = info.title.split("(")[0].split("-")[0].trim()
+
             sendTelemetry(
                 type = "START",
                 trackId = info.trackId,
@@ -114,7 +117,7 @@ object ClientTrackResolver {
                 isrc = info.isrc,
                 artist = info.artist,
                 title = info.title,
-                query = "${info.artist} ${info.title}"
+                query = "$primaryArtist $cleanTitle"
             )
 
             // 3. Search YTM Songs from Client IP
@@ -122,9 +125,15 @@ object ClientTrackResolver {
             if (info.isrc.isNotEmpty()) {
                 queries.add(info.isrc)
             }
-            queries.add("${info.artist} ${info.title} Official Audio")
-            queries.add("${info.artist} ${info.title}")
-            queries.add(info.title)
+            if (primaryArtist.isNotEmpty() && cleanTitle.isNotEmpty()) {
+                queries.add("$primaryArtist $cleanTitle")
+            }
+            if (primaryArtist.isNotEmpty()) {
+                val fullTitleClean = info.title.replace(";", " ").trim()
+                queries.add("$primaryArtist $fullTitleClean")
+            } else {
+                queries.add(info.title)
+            }
 
             val scoredCandidates = mutableListOf<Pair<CandidateV2, Int>>()
             val seenCandidateIds = mutableSetOf<String>()
