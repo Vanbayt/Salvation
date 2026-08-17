@@ -559,7 +559,7 @@ fun TrackContextMenu(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var isLiked by remember { mutableStateOf(LikeCache.likedTracks.contains(track.id)) }
+    var isLiked by remember { mutableStateOf(LikeCache.isLiked(track.id)) }
 
     DropdownMenu(
         expanded = expanded, // 🔥 2. Используем переменную вместо `true`
@@ -581,14 +581,14 @@ fun TrackContextMenu(
             onClick = {
                 val newState = !isLiked
                 isLiked = newState
-                if (newState) LikeCache.likedTracks.add(track.id) else LikeCache.likedTracks.remove(track.id)
+                if (newState) LikeCache.add(track.id) else LikeCache.remove(track.id)
 
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
                         val api = NetworkClient.getApi(context)
                         if (newState) api.likeTrack(track.id).execute() else api.unlikeTrack(track.id).execute()
                     } catch (e: Exception) {
-                        if (!newState) LikeCache.likedTracks.add(track.id) else LikeCache.likedTracks.remove(track.id)
+                        if (!newState) LikeCache.add(track.id) else LikeCache.remove(track.id)
                     }
                 }
                 onDismiss()

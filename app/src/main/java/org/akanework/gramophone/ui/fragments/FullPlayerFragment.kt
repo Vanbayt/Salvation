@@ -335,13 +335,16 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
 
         btnFavorite?.setOnClickListener {
             val currentPlayer = controller ?: return@setOnClickListener
-            val currentTrackId = currentPlayer.currentMediaItem?.mediaId ?: return@setOnClickListener
-            val isCurrentlyLiked = LikeCache.likedTracks.contains(currentTrackId)
+            val currentItem = currentPlayer.currentMediaItem
+            val currentTrackId = currentItem?.mediaId ?: return@setOnClickListener
+            val trackTitle = currentItem.mediaMetadata.title?.toString()
+            val trackArtist = currentItem.mediaMetadata.artist?.toString()
+            val isCurrentlyLiked = LikeCache.isLiked(currentTrackId, title = trackTitle, artist = trackArtist)
             val newFavStatus = !isCurrentlyLiked
 
             fun updateMemory(liked: Boolean) {
-                if (liked) LikeCache.likedTracks.add(currentTrackId)
-                else LikeCache.likedTracks.remove(currentTrackId)
+                if (liked) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist)
+                else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
                 btnFavorite?.isChecked = liked
                 applyFavoriteColor(liked)
             }
@@ -382,7 +385,7 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         tvArtist?.isSelected = true
 
         val trackId = currentItem?.mediaId ?: ""
-        val isLiked = LikeCache.likedTracks.contains(trackId)
+        val isLiked = LikeCache.isLiked(trackId, title = metadata.title?.toString(), artist = metadata.artist?.toString())
 
         btnFavorite?.isChecked = isLiked
         applyFavoriteColor(isLiked)

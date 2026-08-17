@@ -47,6 +47,15 @@ class AfFormatTracker(
     companion object {
         private const val LOG_EVENTS = true
         private const val TAG = "AfFormatTracker"
+        private val audioTrackField by lazy {
+            try {
+                DefaultAudioSink::class.java.getDeclaredField("audioTrack").apply {
+                    isAccessible = true
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 
     // only access sink or track on PlaybackThread
@@ -77,12 +86,12 @@ class AfFormatTracker(
         buildFormat(audioTrack, lastPeriodUid)
     }
 
-    // TODO why do we have to reflect on app code, there must be a better solution
     private fun DefaultAudioSink.getAudioTrack(): AudioTrack? {
-        val cls = javaClass
-        val field = cls.getDeclaredField("audioTrack")
-        field.isAccessible = true
-        return field.get(this) as AudioTrack?
+        return try {
+            audioTrackField?.get(this) as? AudioTrack
+        } catch (e: Exception) {
+            null
+        }
     }
 
     fun setAudioSink(sink: DefaultAudioSink) {

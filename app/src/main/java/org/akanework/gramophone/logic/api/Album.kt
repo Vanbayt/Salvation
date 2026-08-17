@@ -31,6 +31,12 @@ data class Album(
     val recordType: String? = "album",
 
     // 🔥 ДОБАВЛЯЕМ В КЛАСС Album
+    @SerializedName("artist_id")
+    val artistId: String? = null,
+
+    @SerializedName("album_id")
+    val albumId: String? = null,
+
     @SerializedName("is_liked")
     var isLiked: Boolean = false
 ) : Serializable

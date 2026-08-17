@@ -57,7 +57,7 @@ class AlbumTracksFragment : Fragment() {
                     val mediaItems = tracks.map { track ->
                         val extrasBundle = Bundle().apply {
                             putFloat("replay_gain", track.replayGain)
-                            putString("ARTIST_ID", track.artistId ?: currentAlbum?.artistName)
+                            putString("ARTIST_ID", track.artistId ?: currentAlbum?.artistId)
                             putString("ALBUM_ID", track.albumId ?: currentAlbum?.id)
                             putString("PLAYING_FROM", "Альбом: ${currentAlbum?.title ?: "Неизвестно"}")
                         }

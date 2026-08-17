@@ -85,3 +85,13 @@
 # Сохраняем модели данных, которые парсятся из JSON
 -keepclassmembers class org.akanework.gramophone.logic.api.LoginResponse { *; }
 -keepclassmembers class org.akanework.gramophone.logic.api.Track { *; }
+-keep class org.akanework.gramophone.logic.api.** { *; }
+
+# Сохраняем все UI-фрагменты, Compose-компоненты и адаптеры
+-keep class org.akanework.gramophone.ui.** { *; }
+-keep class org.akanework.gramophone.ui.fragments.** { *; }
+-keep class org.akanework.gramophone.ui.components.** { *; }
+-keep class org.akanework.gramophone.ui.adapters.** { *; }
+
+-dontwarn android.media.**
+-dontwarn org.nift4.**

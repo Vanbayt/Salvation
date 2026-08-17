@@ -15,8 +15,10 @@ import coil3.load
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.imageview.ShapeableImageView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
 import org.akanework.gramophone.ui.MainActivity
 import android.util.Log
@@ -81,42 +83,130 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
                 }
             }
 
-            // 3. БЕСШОВНАЯ НАВИГАЦИЯ (Ищем ID в кармане плеера)
+            // 3. БЕСШОВНАЯ НАВИГАЦИЯ (Ищем ID в кармане плеера или резолвим по имени)
             val extras = metadata.extras
             val artistId = extras?.getString("ARTIST_ID")
             val albumId = extras?.getString("ALBUM_ID")
+            val artistName = metadata.artist?.toString()?.trim() ?: ""
+            val trackTitle = metadata.title?.toString()?.trim() ?: ""
+            val albumTitle = metadata.albumTitle?.toString()?.trim() ?: ""
 
-            Log.d("SALVATION_DEBUG", "Открыли меню для [${metadata.title}], ArtistID из Extras: $artistId")
+            Log.d("SALVATION_DEBUG", "Открыли меню для [${metadata.title}], ArtistID: $artistId, AlbumID: $albumId, Artist: $artistName, Album: $albumTitle")
 
-            view.findViewById<View>(R.id.menu_action_artist).setOnClickListener {
-                if (artistId != null) {
-                    // 1. Сворачиваем текущее маленькое меню
+            val btnArtist = view.findViewById<View>(R.id.menu_action_artist)
+            val btnAlbum = view.findViewById<View>(R.id.menu_action_album)
+
+            btnArtist.setOnClickListener {
+                val primaryArtist = if (artistName.isNotEmpty()) {
+                    artistName.split(",", ";", " feat. ", " ft. ", " Feat. ", " Ft. ", " & ")[0].trim()
+                } else ""
+
+                // 1. Проверяем локальный кэш
+                val cachedId = artistIdCache[primaryArtist.lowercase()]
+                if (!cachedId.isNullOrEmpty()) {
                     dismiss()
+                    activity.collapsePlayer()
+                    activity.startFragment(ArtistFragment.newInstance(cachedId))
+                    return@setOnClickListener
+                }
 
-                    // 2. Находим большой плеер в MainActivity по твоему тегу и закрываем его
-                    val fullPlayer = activity.supportFragmentManager.findFragmentByTag("FULL_PLAYER") as? BottomSheetDialogFragment
-                    fullPlayer?.dismiss()
-
-                    // 3. Открываем страницу артиста
+                // 2. Если в extras есть валидный artistId (только цифры)
+                if (!artistId.isNullOrEmpty() && artistId.all { it.isDigit() }) {
+                    dismiss()
+                    activity.collapsePlayer()
                     activity.startFragment(ArtistFragment.newInstance(artistId))
+                    return@setOnClickListener
+                }
+
+                // 3. Мгновенный поиск через ультра-быстрый API (/api/v1/search/artist)
+                if (primaryArtist.isNotEmpty() && primaryArtist != "Неизвестный артист" && primaryArtist != "Unknown" && primaryArtist != "Неизвестно") {
+                    btnArtist.isEnabled = false
+
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(requireContext())
+                            val resp = api.searchArtistFast(primaryArtist).execute()
+                            val artistLookup = resp.body()
+
+                            withContext(Dispatchers.Main) {
+                                btnArtist.isEnabled = true
+                                if (artistLookup != null && artistLookup.id.isNotEmpty()) {
+                                    artistIdCache[primaryArtist.lowercase()] = artistLookup.id
+                                    dismiss()
+                                    activity.collapsePlayer()
+                                    activity.startFragment(ArtistFragment.newInstance(artistLookup.id))
+                                } else {
+                                    Toast.makeText(context, "Артист '$primaryArtist' не найден", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                btnArtist.isEnabled = true
+                                Toast.makeText(context, "Ошибка поиска: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 } else {
-                    Toast.makeText(context, "ID артиста недоступен", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Исполнитель неизвестен", Toast.LENGTH_SHORT).show()
                 }
             }
 
-            view.findViewById<View>(R.id.menu_action_album).setOnClickListener {
-                if (albumId != null) {
-                    // 1. Сворачиваем текущее маленькое меню
+            btnAlbum.setOnClickListener {
+                val currentTrackId = controller.currentMediaItem?.mediaId
+
+                // 1. Если в extras есть валидный albumId (только цифры)
+                if (!albumId.isNullOrEmpty() && albumId.all { it.isDigit() }) {
                     dismiss()
-
-                    // 2. Находим большой плеер в MainActivity по твоему тегу и закрываем его
-                    val fullPlayer = activity.supportFragmentManager.findFragmentByTag("FULL_PLAYER") as? BottomSheetDialogFragment
-                    fullPlayer?.dismiss()
-
-                    // 3. Открываем страницу альбома
+                    activity.collapsePlayer()
                     activity.startFragment(AlbumFragment.newInstance(albumId))
+                    return@setOnClickListener
+                }
+
+                // 2. Резолвим через API по track_id или тексту
+                val query = if (albumTitle.isNotEmpty() && albumTitle != "Single" && albumTitle != "Unknown" && albumTitle != "Неизвестно") {
+                    "$artistName $albumTitle"
                 } else {
-                    Toast.makeText(context, "ID альбома недоступен", Toast.LENGTH_SHORT).show()
+                    "$artistName $trackTitle"
+                }
+
+                val cacheKey = currentTrackId ?: query.lowercase()
+                val cachedAlbumId = albumIdCache[cacheKey]
+                if (!cachedAlbumId.isNullOrEmpty()) {
+                    dismiss()
+                    activity.collapsePlayer()
+                    activity.startFragment(AlbumFragment.newInstance(cachedAlbumId))
+                    return@setOnClickListener
+                }
+
+                if (artistName.isNotEmpty() || !currentTrackId.isNullOrEmpty()) {
+                    btnAlbum.isEnabled = false
+
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(requireContext())
+                            val resp = api.searchAlbumFast(query = query.ifEmpty { null }, trackId = currentTrackId).execute()
+                            val albumLookup = resp.body()
+
+                            withContext(Dispatchers.Main) {
+                                btnAlbum.isEnabled = true
+                                if (albumLookup != null && albumLookup.id.isNotEmpty()) {
+                                    albumIdCache[cacheKey] = albumLookup.id
+                                    dismiss()
+                                    activity.collapsePlayer()
+                                    activity.startFragment(AlbumFragment.newInstance(albumLookup.id))
+                                } else {
+                                    Toast.makeText(context, "Альбом не найден", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                btnAlbum.isEnabled = true
+                                Toast.makeText(context, "Ошибка поиска: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } else {
+                    Toast.makeText(context, "Альбом неизвестен", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -138,28 +228,11 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
                 }
             }
 
-            // 5. ТАЙМЕР СНА
+            // 5. ТАЙМЕР СНА (Material 3 Expressive)
             view.findViewById<View>(R.id.menu_action_sleep).setOnClickListener {
-                val options = arrayOf("15 минут", "30 минут", "45 минут", "60 минут", "Отключить")
-                val times = arrayOf(15, 30, 45, 60, 0)
-                val appContext = activity.applicationContext
-
-                MaterialAlertDialogBuilder(activity)
-                    .setTitle("Таймер сна")
-                    .setItems(options) { dialog, which ->
-                        val minutes = times[which]
-                        if (minutes > 0) {
-                            activity.lifecycleScope.launch {
-                                Toast.makeText(appContext, "Музыка остановится через $minutes мин.", Toast.LENGTH_SHORT).show()
-                                delay(minutes * 60 * 1000L)
-                                controller.pause()
-                            }
-                        } else {
-                            Toast.makeText(appContext, "Таймер отключен", Toast.LENGTH_SHORT).show()
-                        }
-                        dismiss()
-                    }
-                    .show()
+                dismiss()
+                val sleepTimerSheet = SleepTimerBottomSheet.newInstance()
+                sleepTimerSheet.show(activity.supportFragmentManager, "SLEEP_TIMER_SHEET")
             }
 
             // 6. ЖАЛОБА НА ТРЕК
@@ -205,5 +278,10 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
         }
 
         override fun getItemCount() = items.size
+    }
+
+    companion object {
+        private val artistIdCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+        private val albumIdCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     }
 }

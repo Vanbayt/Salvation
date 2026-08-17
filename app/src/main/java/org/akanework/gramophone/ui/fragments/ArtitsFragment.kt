@@ -263,9 +263,10 @@ class ArtistFragment : Fragment() {
                     if (player != null) {
                         val startIndex = tracks.indexOfFirst { it.id == clickedTrack.id }.coerceAtLeast(0)
                         val mediaItems = tracks.map { track ->
+                            val fallbackArtistId = if (track.artist.contains(artist.name, ignoreCase = true) || artist.name.contains(track.artist, ignoreCase = true)) artist.id else null
                             val extrasBundle = Bundle().apply {
                                 putFloat("replay_gain", track.replayGain)
-                                putString("ARTIST_ID", track.artistId ?: artist.id)
+                                putString("ARTIST_ID", track.artistId ?: fallbackArtistId)
                                 putString("ALBUM_ID", track.albumId)
                                 putString("PLAYING_FROM", "Артист: ${artist.name}")
                             }
@@ -358,9 +359,12 @@ class ArtistFragment : Fragment() {
         val streamUrl = "http://185.196.41.31/stream/${track.id}"
         val finalCoverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
 
+        val currentArtistName = currentArtist?.name
+        val fallbackArtistId = if (currentArtistName != null && (track.artist.contains(currentArtistName, ignoreCase = true) || currentArtistName.contains(track.artist, ignoreCase = true))) artistId else null
+
         val extrasBundle = Bundle().apply {
             putFloat("replay_gain", track.replayGain)
-            putString("ARTIST_ID", track.artistId)
+            putString("ARTIST_ID", track.artistId ?: fallbackArtistId)
             putString("ALBUM_ID", track.albumId)
             putString("PLAYING_FROM", "Очередь (Артист)")
         }

@@ -65,6 +65,7 @@ import androidx.media3.common.util.Util.isBitmapFactorySupportedMimeType
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import org.akanework.gramophone.BuildConfig
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.source.LoadEventInfo
@@ -243,11 +244,11 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         }
 
     private val seekReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val to = intent?.extras?.getLong("seekTo", C.INDEX_UNSET.toLong()) ?: C.INDEX_UNSET.toLong()
-            if (to != C.INDEX_UNSET.toLong()) {
-                mediaSession?.player?.seekTo(to)
-            }
+        override fun onReceive(context: Context, intent: Intent) {
+            val to =
+                intent.extras?.getLong("seekTo", C.INDEX_UNSET.toLong()) ?: C.INDEX_UNSET.toLong()
+            if (to != C.INDEX_UNSET.toLong())
+                controller?.seekTo(to)
         }
     }
 
@@ -375,29 +376,35 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         prefs.registerOnSharedPreferenceChangeListener(this)
         onSharedPreferenceChanged(prefs, null) // read initial values
 
-        // --- 1. ДОБАВЛЯЕМ АГРЕССИВНЫЕ ТАЙМАУТЫ ДЛЯ СЕТИ ---
-        val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(45000)
-            .setReadTimeoutMs(45000)
+        // --- 1. HIGH-PERFORMANCE OKHTTP DATA SOURCE FACTORY (PREVENTS SOCKET DROPS & STUTTERS) ---
+        val streamingOkHttpClient = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES))
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+
+        val httpDataSourceFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(streamingOkHttpClient)
 
         val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
             this,
             httpDataSourceFactory
         )
 
-        // --- 2. ОПТИМИЗИРОВАННЫЙ БУФЕР ДЛЯ МНОГОПОТОЧНОГО M4A/AAC ИСКЛЮЧАЕТ PAUSES СБОРЩИКА МУСОРА (GC) ---
+        // --- 2. FULL-TRACK PRE-FETCHING BUFFER CONTROL (PREVENTS 4G MODEM WAKEUPS) ---
         val customLoadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 180000,                       // 3 минуты буфера (~3.6 МБ в RAM) — без тормозов GC
-                /* maxBufferMs = */ 600000,                       // 10 минут макс буфер
-                /* bufferForPlaybackMs = */ 2500,                // Мгновенный старт (< 100мс)
-                /* bufferForPlaybackAfterRebufferMs = */ 4000
+                /* minBufferMs = */ 60000,                       // 60с мин буфер для активного трека
+                /* maxBufferMs = */ 300000,                      // 300с макс буфер (полный выкач трека за 1 подход)
+                /* bufferForPlaybackMs = */ 1000,                 // Мгновенный старт (1.0с)
+                /* bufferForPlaybackAfterRebufferMs = */ 2000     // Быстрый перезапуск после паузы (2.0с)
             )
             .setBackBuffer(
-                /* backBufferDurationMs = */ 120000,             // 2 минуты прошлых байт в RAM для отмотки
+                /* backBufferDurationMs = */ 15000,              // 15 секунд прошлых байт в RAM (экономия памяти)
                 /* retainBackBufferFromKeyframe = */ true
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setPrioritizeTimeOverSizeThresholds(true)           // Полное предкэширование в SimpleCache для отключения 4G-радио
             .build()
 
         val player = EndedWorkaroundPlayer(
@@ -411,7 +418,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                     .setPcmEncodingRestrictionLifted(true)
                     .setEnableDecoderFallback(true)
                     .setEnableAudioTrackPlaybackParams(true)
-                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF),
                 GramophoneMediaSourceFactory(this,
                     dataSourceFactory,
                     GramophoneExtractorsFactory().also {
@@ -445,8 +452,8 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                             .setAudioOffloadPreferences(
                                 TrackSelectionParameters.AudioOffloadPreferences.Builder()
                                     .apply {
-                                        val config = prefs.getStringStrict("offload", "0")?.toIntOrNull()
-                                        if (config != null && config > 0 && Flags.OFFLOAD) {
+                                        val config = prefs.getStringStrict("offload", "1")?.toIntOrNull() ?: 1
+                                        if (config > 0 && Flags.OFFLOAD) {
                                             rgAp.setOffloadEnabled(true)
                                             setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
                                             setIsGaplessSupportRequired(config == 2)
@@ -477,29 +484,9 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
         org.akanework.gramophone.logic.utils.SmartPlaybackManager.init(this, player.exoPlayer)
 
-        player.exoPlayer.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-            override fun onBandwidthEstimate(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                totalLoadTimeMs: Int,
-                totalBytesLoaded: Long,
-                bitrateEstimate: Long
-            ) {
-                val kbps = bitrateEstimate / 1000
-                val totalKb = totalBytesLoaded / 1024
-                org.akanework.gramophone.logic.utils.PlaybackLogger.log("BANDWIDTH", "Estimate: ${kbps} kbps | Loaded: ${totalKb} KB in ${totalLoadTimeMs}ms")
-            }
-
-            override fun onAudioUnderrun(
-                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                bufferSize: Int,
-                bufferSizeMs: Long,
-                elapsedSinceLastFeedMs: Long
-            ) {
-                org.akanework.gramophone.logic.utils.PlaybackLogger.log("AUDIO_UNDERRUN", "AudioTrack Underrun! BufferSize: ${bufferSize}b (${bufferSizeMs}ms) | ElapsedSinceFeed: ${elapsedSinceLastFeedMs}ms")
-            }
-        })
-
-        player.exoPlayer.addAnalyticsListener(EventLogger())
+        if (BuildConfig.DEBUG) {
+            player.exoPlayer.addAnalyticsListener(EventLogger())
+        }
         player.exoPlayer.addAnalyticsListener(afFormatTracker)
         player.exoPlayer.addAnalyticsListener(this)
 
@@ -1221,7 +1208,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
     }
 
     override fun onPlayerError(error: PlaybackException) {
-        // TODO
+        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXO_SERVICE_ERR", "PlaybackException [${error.errorCodeName}]: ${error.message} | Cause: ${error.cause?.message}")
     }
 
     override fun onDeviceInfoChanged(deviceInfo: DeviceInfo) {
@@ -1235,6 +1222,16 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        val reasonStr = when (reason) {
+            Player.MEDIA_ITEM_TRANSITION_REASON_AUTO -> "AUTO"
+            Player.MEDIA_ITEM_TRANSITION_REASON_SEEK -> "SEEK"
+            Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> "REPEAT"
+            Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED -> "PLAYLIST_CHANGED"
+            else -> "UNKNOWN ($reason)"
+        }
+        val trackTitle = mediaItem?.mediaMetadata?.title ?: mediaItem?.mediaId ?: "Unknown Item"
+        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXO_TRANSITION", "Transition to '$trackTitle' | Reason: $reasonStr")
+
         // --- МАГИЯ REPLAYGAIN ---
         val gainDb = mediaItem?.mediaMetadata?.extras?.getFloat("replay_gain") ?: 0f
         val volumeMultiplier = 10f.pow(gainDb / 20f).coerceIn(0f, 1f)

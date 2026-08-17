@@ -45,4 +45,7 @@ data class Track(
 
     @SerializedName("album_id")
     val albumId: String? = null,
+
+    @SerializedName("source_id")
+    val sourceId: String? = null,
 ) : Serializable

@@ -51,9 +51,9 @@ class GramophoneMediaSourceFactory(
     private var liveMaxSpeed: Float
 
     init {
-        // === ИСПРАВЛЕНИЕ ТАЙМ-АУТОВ ===
-        // Мы полностью заменяем dataSourceFactory на нашу, прокачанную!
-        this.dataSourceFactory = AuthenticatedDataSourceFactory(context)
+        // === ДИСКОВЫЙ КЭШ (500 МБ LRU) + СТЕК АВТОРИЗАЦИИ И ТАЙМ-АУТОВ ===
+        val upstreamFactory = AuthenticatedDataSourceFactory(context)
+        this.dataSourceFactory = MediaCacheManager.createCacheDataSourceFactory(context, upstreamFactory)
 
         delegateFactoryLoader.setDataSourceFactory(this.dataSourceFactory)
 
@@ -374,8 +374,9 @@ class GramophoneMediaSourceFactory(
 
 private val sharedOkHttpClient: okhttp3.OkHttpClient by lazy {
     okhttp3.OkHttpClient.Builder()
-        .protocols(listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1))
-        .connectionPool(okhttp3.ConnectionPool(10, 10, java.util.concurrent.TimeUnit.MINUTES))
+        .cookieJar(ClientTrackResolver.cookieJar)
+        .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+        .connectionPool(okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES))
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -402,13 +403,26 @@ private class AuthenticatedDataSource(
     private val upstream: DataSource
 ) : DataSource {
 
+    private companion object {
+        private const val CHUNK_SIZE_BYTES = 512 * 1024L // 512 KB HTTP Range Chunks (Guaranteed within Google CDN burst limits)
+    }
+
+    private var isChunkedMode = false
+    private var originalDataSpec: DataSpec? = null
+    private var activeSpecToUse: DataSpec? = null
+    private var currentStreamPosition = 0L
+    private var totalLengthRequested = 0L
+    private var totalBytesReadInStream = 0L
+    private var knownTotalLength = 0L
+
     override fun addTransferListener(transferListener: TransferListener) {
         upstream.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        val startTime = System.currentTimeMillis()
         val targetUri = ClientTrackResolver.resolveStreamUrl(context, dataSpec.uri)
-        val specToUse = if (targetUri != dataSpec.uri) {
+        var specToUse = if (targetUri != dataSpec.uri) {
             dataSpec.buildUpon().setUri(targetUri).build()
         } else {
             dataSpec
@@ -429,9 +443,7 @@ private class AuthenticatedDataSource(
             newHeaders.remove("Authorization")
             val isGoogleVideo = targetHost.contains("googlevideo.com")
             if (isGoogleVideo) {
-                newHeaders.remove("Referer")
-                newHeaders.remove("Origin")
-                // Do not override User-Agent for googlevideo.com so client profile signature matches
+                newHeaders["User-Agent"] = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
             } else {
                 newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
                 newHeaders["Referer"] = "https://music.youtube.com/"
@@ -439,39 +451,343 @@ private class AuthenticatedDataSource(
             }
         }
 
-        // 2. Allow OkHttpDataSource to manage Range headers natively from DataSpec position/length
+        // 2. Continuous streaming mode (disable rapid 512KB connection churning to prevent Google CDN 403)
+        isChunkedMode = false
+        originalDataSpec = dataSpec
+        currentStreamPosition = dataSpec.position
+        totalLengthRequested = dataSpec.length
 
         // 3. Собираем новый запрос с сохранением позиции и заголовками
-        val newSpec = specToUse.buildUpon()
+        val baseSpec = specToUse.buildUpon()
             .setHttpRequestHeaders(newHeaders)
             .build()
+        activeSpecToUse = baseSpec
+        val newSpec = baseSpec
 
-        val bytesRemaining = upstream.open(newSpec)
+        val trackIdStr = dataSpec.uri.lastPathSegment ?: ""
+        val trackIdLong = trackIdStr.toLongOrNull()
 
-        // 4. ДИНАМИЧЕСКАЯ ОБРАБОТКА X-Content-Duration
-        try {
-            val trackId = dataSpec.uri.lastPathSegment ?: ""
-            val respHeaders = upstream.responseHeaders
-            val durationHeader = respHeaders.entries
-                .find { it.key.equals("X-Content-Duration", ignoreCase = true) }
-                ?.value?.firstOrNull()
-            if (!durationHeader.isNullOrEmpty()) {
-                val durationSec = durationHeader.toLongOrNull() ?: 0L
-                if (durationSec > 0L) {
-                    org.akanework.gramophone.logic.GramophonePlaybackService.updateTrackDuration(
-                        trackId,
-                        durationSec * 1000L
+        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+            "STREAM_OPEN",
+            "Opening stream for track '$trackIdStr' | Host: $targetHost | Position: ${dataSpec.position} | Length: ${dataSpec.length} | Chunked: $isChunkedMode"
+        )
+
+        var attempt = 0
+        val maxRetries = 2
+        var lastException: Exception? = null
+
+        while (attempt <= maxRetries) {
+            attempt++
+            try {
+                val bytesRemaining = upstream.open(newSpec)
+                val elapsed = System.currentTimeMillis() - startTime
+
+                // 🔍 ДЕТАЛЬНАЯ ДИАГНОСТИКА YOUTUBE CDN
+                try {
+                    val queryStr = targetUri.query ?: ""
+                    val hasRatebypass = queryStr.contains("ratebypass=yes")
+                    val cver = targetUri.getQueryParameter("cver") ?: "none"
+                    val rn = targetUri.getQueryParameter("rn") ?: "none"
+                    val expire = targetUri.getQueryParameter("expire")?.toLongOrNull() ?: 0L
+                    val nowSec = System.currentTimeMillis() / 1000L
+                    val expireDiffSec = expire - nowSec
+
+                    val respHeaders = upstream.responseHeaders
+                    val serverHeader = respHeaders.entries.find { it.key.equals("Server", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
+                    val googStat = respHeaders.entries.find { it.key.equals("X-Goog-Stat", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
+                    val googBackoff = respHeaders.entries.find { it.key.equals("X-Goog-Backoff", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
+                    val contentType = respHeaders.entries.find { it.key.equals("Content-Type", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
+
+                    val crHeader = respHeaders.entries.find { it.key.equals("Content-Range", ignoreCase = true) }?.value?.firstOrNull() ?: ""
+                    if (crHeader.isNotEmpty()) {
+                        val m = Regex("/(\\d+)").find(crHeader)
+                        if (m != null && m.groupValues.size > 1) {
+                            knownTotalLength = m.groupValues[1].toLongOrNull() ?: 0L
+                        }
+                    }
+
+                    val diagMsg = "Host: $targetHost | HasRatebypass: $hasRatebypass | Cver: $cver | Rn: $rn | ExpireSecLeft: ${expireDiffSec}s | OpenTime: ${elapsed}ms | TotalLen: ${knownTotalLength}b | Server: $serverHeader | ContentType: $contentType | GoogStat: $googStat | Backoff: $googBackoff"
+                    org.akanework.gramophone.logic.utils.PlaybackLogger.log("STREAM_CDN_DIAG", diagMsg)
+                    if (trackIdLong != null) {
+                        ClientTrackResolver.sendTelemetryDirect("STREAM_CDN_DIAG", trackIdLong, message = diagMsg)
+                    }
+                } catch (_: Exception) {}
+
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                    "STREAM_SUCCESS",
+                    "Stream opened in ${elapsed}ms for track '$trackIdStr' (Attempt $attempt) | Bytes remaining: $bytesRemaining"
+                )
+
+                // 🔥 ДИНАМИЧЕСКОЕ ПРОДЛЕНИЕ ТАЙМ-АУТА И СБРОС СЧЕТЧИКА СБОЕВ
+                org.akanework.gramophone.logic.utils.SmartPlaybackManager.extendTimeoutOnStreamOpened()
+                org.akanework.gramophone.logic.utils.SmartPlaybackManager.resetConsecutiveFailures()
+
+                // 4. ДИНАМИЧЕСКАЯ ОБРАБОТКА X-Content-Duration
+                try {
+                    val respHeaders = upstream.responseHeaders
+                    val durationHeader = respHeaders.entries
+                        .find { it.key.equals("X-Content-Duration", ignoreCase = true) }
+                        ?.value?.firstOrNull()
+                    if (!durationHeader.isNullOrEmpty()) {
+                        val durationSec = durationHeader.toLongOrNull() ?: 0L
+                        if (durationSec > 0L) {
+                            org.akanework.gramophone.logic.GramophonePlaybackService.updateTrackDuration(
+                                trackIdStr,
+                                durationSec * 1000L
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                return if (isChunkedMode) {
+                    if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) totalLengthRequested else androidx.media3.common.C.LENGTH_UNSET.toLong()
+                } else {
+                    bytesRemaining
+                }
+            } catch (e: Exception) {
+                lastException = e
+                val elapsed = System.currentTimeMillis() - startTime
+
+                // 🔥 INSTANT FALLBACK TO DIRECT CLIENT STREAM IF SERVER FAILED
+                if (targetHost == "185.196.41.31" && trackIdLong != null) {
+                    val directUrl = ClientTrackResolver.getDirectStreamUrl(trackIdLong)
+                    if (!directUrl.isNullOrEmpty()) {
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                            "STREAM_FAILOVER_DIRECT",
+                            "Server stream failed on 185.196.41.31 (${e.javaClass.simpleName}: ${e.message}). Instant failover to direct client stream on phone!"
+                        )
+                        isChunkedMode = true
+                        val chunkLen = if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong() && totalLengthRequested < CHUNK_SIZE_BYTES) totalLengthRequested else CHUNK_SIZE_BYTES
+                        val directSpec = baseSpec.buildUpon()
+                            .setUri(Uri.parse(directUrl))
+                            .setHttpRequestHeaders(emptyMap())
+                            .setPosition(currentStreamPosition)
+                            .setLength(chunkLen)
+                            .build()
+                        try {
+                            try {
+                                upstream.close()
+                            } catch (_: Exception) {}
+                            activeSpecToUse = directSpec
+                            originalDataSpec = directSpec.buildUpon().setLength(androidx.media3.common.C.LENGTH_UNSET.toLong()).build()
+                            val freshBytes = upstream.open(directSpec)
+                            org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                                "STREAM_FAILOVER_DIRECT_SUCCESS",
+                                "Direct client stream connected in failover! Playing directly from phone IP"
+                            )
+                            org.akanework.gramophone.logic.utils.SmartPlaybackManager.extendTimeoutOnStreamOpened()
+                            org.akanework.gramophone.logic.utils.SmartPlaybackManager.resetConsecutiveFailures()
+                            return freshBytes
+                        } catch (directEx: Exception) {
+                            org.akanework.gramophone.logic.utils.PlaybackLogger.log("STREAM_FAILOVER_DIRECT_ERR", "Direct fallback failed: ${directEx.message}")
+                        }
+                    }
+                }
+
+                if (attempt <= maxRetries && (e is java.io.IOException || e is androidx.media3.datasource.HttpDataSource.HttpDataSourceException)) {
+                    org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                        "STREAM_RETRY",
+                        "Retrying stream open (Attempt $attempt/$maxRetries) with fresh URL resolution after error: ${e.javaClass.simpleName} - ${e.message}"
                     )
+                    // 🔥 ALWAYS close upstream safely before opening a new spec to prevent IllegalStateException
+                    try {
+                        upstream.close()
+                    } catch (_: Exception) {}
+
+                    val effectiveTrackId = ClientTrackResolver.findTrackIdForUri(dataSpec.uri) ?: trackIdStr
+                    val freshUri = ClientTrackResolver.resolveStreamUrl(context, dataSpec.uri, forceRefresh = true)
+                    val freshHost = freshUri.host ?: ""
+                    val freshHeaders = specToUse.httpRequestHeaders.toMutableMap()
+                    if (freshHost.contains("googlevideo.com")) {
+                        freshHeaders["User-Agent"] = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
+                    } else {
+                        freshHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+                        freshHeaders["Referer"] = "https://music.youtube.com/"
+                        freshHeaders["Origin"] = "https://music.youtube.com"
+                    }
+                    val retrySpec = specToUse.buildUpon()
+                        .setUri(freshUri)
+                        .setHttpRequestHeaders(freshHeaders)
+                        .setPosition(currentStreamPosition)
+                        .setLength(if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) totalLengthRequested else androidx.media3.common.C.LENGTH_UNSET.toLong())
+                        .build()
+                    activeSpecToUse = retrySpec
+
+                    try {
+                        val freshBytes = upstream.open(retrySpec)
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                            "STREAM_RETRY_SUCCESS",
+                            "Retry $attempt succeeded! Stream opened for track '$effectiveTrackId' on host '$freshHost'"
+                        )
+                        org.akanework.gramophone.logic.utils.SmartPlaybackManager.extendTimeoutOnStreamOpened()
+                        org.akanework.gramophone.logic.utils.SmartPlaybackManager.resetConsecutiveFailures()
+                        return freshBytes
+                    } catch (retryEx: Exception) {
+                        lastException = retryEx
+                    }
+                } else {
+                    org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                        "STREAM_ERR",
+                        "Stream open FAILED in ${elapsed}ms for track '$trackIdStr' on host '$targetHost': ${e.javaClass.simpleName} - ${e.message}"
+                    )
+                    if (trackIdLong != null) {
+                        ClientTrackResolver.invalidateCache(trackIdLong)
+                    }
+                    throw e
                 }
             }
-        } catch (_: Exception) {
         }
-
-        return bytesRemaining
+        throw lastException ?: java.io.IOException("Stream open failed after retries")
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        return upstream.read(buffer, offset, length)
+        val t0 = System.currentTimeMillis()
+        try {
+            var bytes = upstream.read(buffer, offset, length)
+
+            // 🔥 512KB HTTP RANGE CHUNKING FOR GOOGLEVIDEO.COM (PREVENTS CDN THROTTLING)
+            if (bytes == androidx.media3.common.C.RESULT_END_OF_INPUT && isChunkedMode) {
+                val spec = activeSpecToUse
+                val origSpec = originalDataSpec
+                if (spec != null && origSpec != null) {
+                    val endPosition = if (knownTotalLength > 0L) {
+                        knownTotalLength
+                    } else if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
+                        origSpec.position + totalLengthRequested
+                    } else {
+                        Long.MAX_VALUE
+                    }
+
+                    if (currentStreamPosition < endPosition) {
+                        try {
+                            upstream.close()
+                        } catch (_: Exception) {}
+
+                        val remainingTotal = endPosition - currentStreamPosition
+                        val nextChunkLength = kotlin.math.min(CHUNK_SIZE_BYTES, remainingTotal)
+
+                        if (nextChunkLength > 0L) {
+                            val nextChunkSpec = spec.buildUpon()
+                                .setPosition(currentStreamPosition)
+                                .setLength(nextChunkLength)
+                                .build()
+
+                            org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                                "STREAM_CHUNK_NEXT",
+                                "Opening next chunk at position $currentStreamPosition (Length: $nextChunkLength, Remaining: $remainingTotal)"
+                            )
+
+                            try {
+                                upstream.open(nextChunkSpec)
+                                bytes = upstream.read(buffer, offset, length)
+                            } catch (chunkEx: Exception) {
+                                if (knownTotalLength > 0L && currentStreamPosition >= (knownTotalLength - 32768L)) {
+                                    org.akanework.gramophone.logic.utils.PlaybackLogger.log("STREAM_EOF", "Chunk at EOF reached, returning RESULT_END_OF_INPUT: ${chunkEx.message}")
+                                    return androidx.media3.common.C.RESULT_END_OF_INPUT
+                                } else {
+                                    // 🔥 SEAMLESS PROACTIVE FAILOVER:
+                                    // When Google Video CDN limits direct streaming at offset >= 1MB (HTTP 403),
+                                    // seamlessly switch upstream to server proxy /stream/{trackId} at currentStreamPosition.
+                                    val origUri = originalDataSpec?.uri ?: spec.uri
+                                    val trackIdStr = ClientTrackResolver.findTrackIdForUri(origUri) ?: (origUri.lastPathSegment ?: "")
+                                    val currentHost = upstream.uri?.host ?: ""
+                                    if (trackIdStr.isNotEmpty() && trackIdStr.toLongOrNull() != null && !currentHost.contains("185.196.41.31")) {
+                                        val serverProxyUrl = "http://185.196.41.31/stream/$trackIdStr"
+                                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                                            "STREAM_CHUNK_FAILOVER",
+                                            "Direct chunk 403 at offset $currentStreamPosition. Seamlessly switching to server proxy '$serverProxyUrl'..."
+                                        )
+                                        try {
+                                            upstream.close()
+                                        } catch (_: Exception) {}
+
+                                        val proxyHeaders = mutableMapOf<String, String>()
+                                        proxyHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+
+                                        val proxySpec = (originalDataSpec ?: activeSpecToUse ?: spec).buildUpon()
+                                            .setUri(Uri.parse(serverProxyUrl))
+                                            .setHttpRequestHeaders(proxyHeaders)
+                                            .setPosition(currentStreamPosition)
+                                            .setLength(androidx.media3.common.C.LENGTH_UNSET.toLong())
+                                            .build()
+
+                                        activeSpecToUse = proxySpec
+                                        isChunkedMode = false // Server proxy streams continuously to EOF!
+
+                                        upstream.open(proxySpec)
+                                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                                            "STREAM_CHUNK_FAILOVER_SUCCESS",
+                                            "Server proxy failover connected! Streaming continuous audio from offset $currentStreamPosition to EOF"
+                                        )
+                                        bytes = upstream.read(buffer, offset, length)
+                                    } else {
+                                        throw chunkEx
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bytes > 0) {
+                totalBytesReadInStream += bytes
+                currentStreamPosition += bytes
+            }
+            val readTime = System.currentTimeMillis() - t0
+            if (readTime > 1000L) {
+                val host = upstream.uri?.host ?: ""
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                    "STREAM_READ_BLOCK",
+                    "Read delayed: ${readTime}ms for $bytes bytes on host '$host' (Total bytes read: $totalBytesReadInStream)"
+                )
+            }
+            return bytes
+        } catch (e: Exception) {
+            val readTime = System.currentTimeMillis() - t0
+            val host = upstream.uri?.host ?: ""
+            org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                "STREAM_READ_EXCEPTION",
+                "Read exception after ${readTime}ms on host '$host': ${e.javaClass.simpleName} - ${e.message} at offset $currentStreamPosition"
+            )
+
+            // 🔥 AUTO-RECONNECT ON CDN DISCONNECT (1.8MB / unexpected end of stream)
+            if (e is androidx.media3.datasource.HttpDataSource.HttpDataSourceException || e is java.io.IOException) {
+                if (currentStreamPosition > 0L && (knownTotalLength <= 0L || currentStreamPosition < knownTotalLength - 32768L)) {
+                    org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                        "STREAM_AUTO_RECONNECT",
+                        "Auto-reconnecting continuous stream from offset $currentStreamPosition..."
+                    )
+                    try {
+                        upstream.close()
+                    } catch (_: Exception) {}
+
+                    val base = activeSpecToUse ?: originalDataSpec
+                    if (base != null) {
+                        val resumeSpec = base.buildUpon()
+                            .setPosition(currentStreamPosition)
+                            .setLength(androidx.media3.common.C.LENGTH_UNSET.toLong())
+                            .build()
+                        try {
+                            val freshBytesRemaining = upstream.open(resumeSpec)
+                            val resumedBytes = upstream.read(buffer, offset, length)
+                            if (resumedBytes > 0) {
+                                totalBytesReadInStream += resumedBytes
+                                currentStreamPosition += resumedBytes
+                            }
+                            org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                                "STREAM_AUTO_RECONNECT_SUCCESS",
+                                "Auto-reconnect succeeded at offset $currentStreamPosition | Remaining: $freshBytesRemaining"
+                            )
+                            return resumedBytes
+                        } catch (resEx: Exception) {
+                            org.akanework.gramophone.logic.utils.PlaybackLogger.log("STREAM_RECONNECT_ERR", "Auto-reconnect failed: ${resEx.message}")
+                        }
+                    }
+                }
+            }
+            throw e
+        }
     }
 
     override fun getUri(): Uri? {
@@ -483,6 +799,72 @@ private class AuthenticatedDataSource(
     }
 
     override fun close() {
+        isChunkedMode = false
+        originalDataSpec = null
+        activeSpecToUse = null
         upstream.close()
+    }
+}
+
+// =========================================================================
+// КЛАСС ДЛЯ УПРАВЛЕНИЯ ДИСКОВЫМ КЭШЕМ И ОФЛАЙН-ЗАГРУЗКАМИ
+// =========================================================================
+/*
+ * TODO: ИНТЕГРАЦИЯ С ОФЛАЙН-ЗАГРУЗКАМИ (SPOTIFY-STYLE OFFLINE DOWNLOADS):
+ * 
+ * Текущая реализация `MediaCacheManager` предоставляет потоковый LRU-кэш на 500 МБ для защиты от
+ * плохого 4G и мгновенного воспроизведения. При реализации полноценного офлайн-режима
+ * (скачивания треков/альбомов на постоянной основе) необходимо внести следующие изменения:
+ *
+ * 1. РАЗДЕЛЕНИЕ ХРАНИЛИЩА (или Защита Загрузок от LRU-вытеснения):
+ *    - Вариант А: Создать отдельный экземпляр `SimpleCache` (или директорию `context.filesDir/salvation_downloads`)
+ *      без `LeastRecentlyUsedCacheEvictor` (или с `NoOpCacheEvictor`), предназначенный ТОЛЬКО для постоянных офлайн-загрузок.
+ *    - Вариант Б: Использовать единый `SimpleCache`, но реализовать кастомный `CacheKeyFactory` / `CacheEvictor`,
+ *      который проверяет флаг `is_downloaded` из локальной базы данных (Room/SQLite) и НЕ удаляет закэшированные
+ *      spans, помеченные как "Офлайн".
+ *
+ * 2. ПОДКЛЮЧЕНИЕ `DownloadManager` ИЗ MEDIA3:
+ *    - Использовать `androidx.media3.exoplayer.offline.DownloadManager` и `ProgressiveDownloader` для
+ *      фонового скачивания выбранных пользователем плейлистов/альбомов в кэш-директорию.
+ *    - При нажатии кнопки "Скачать" передавать `MediaItem` в `DownloadManager`.
+ *
+ * 3. ВОСПРОИЗВЕДЕНИЕ В ОФЛАЙНЕ (Без сети):
+ *    - При открытии раздела "Скачанные" или в офлайн-режиме `SmartPlaybackManager` должен брать локальный `Uri`
+ *      из базы данных / `CacheDataSource` напрямую через `FileDataSource.Factory()`, полностью минуя
+ *      сетевые вызовы `ClientTrackResolver` и обращения к бэкенду.
+ */
+object MediaCacheManager {
+    private const val TAG = "MediaCacheManager"
+    private const val MAX_CACHE_SIZE_BYTES = 500 * 1024 * 1024L // 500 МБ
+    private const val CACHE_DIR_NAME = "salvation_media_cache"
+
+    @Volatile
+    private var simpleCache: androidx.media3.datasource.cache.SimpleCache? = null
+
+    @Synchronized
+    fun getCache(context: android.content.Context): androidx.media3.datasource.cache.SimpleCache {
+        if (simpleCache == null) {
+            val appCtx = context.applicationContext
+            val cacheDir = java.io.File(appCtx.cacheDir, CACHE_DIR_NAME)
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+            val evictor = androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(MAX_CACHE_SIZE_BYTES)
+            val databaseProvider = androidx.media3.database.StandaloneDatabaseProvider(appCtx)
+            simpleCache = androidx.media3.datasource.cache.SimpleCache(cacheDir, evictor, databaseProvider)
+            org.akanework.gramophone.logic.utils.PlaybackLogger.log(TAG, "SimpleCache initialized at ${cacheDir.absolutePath} (Max 500 MB)")
+        }
+        return simpleCache!!
+    }
+
+    fun createCacheDataSourceFactory(
+        context: android.content.Context,
+        upstreamFactory: DataSource.Factory
+    ): DataSource.Factory {
+        val cache = getCache(context)
+        return androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(upstreamFactory)
+            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 }

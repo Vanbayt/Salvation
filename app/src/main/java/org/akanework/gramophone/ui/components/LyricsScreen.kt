@@ -35,7 +35,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +84,37 @@ fun LyricsScreen(
     val defaultPrefs = remember(context) { PreferenceManager.getDefaultSharedPreferences(context) }
     val isAutoTranslateEnabled = remember { defaultPrefs.getBoolean("lyrics_auto_translate", true) }
 
+    // Sub-frame 120 FPS high-precision position engine with zero-overhead frame clock
+    var syncPositionMs by remember { mutableLongStateOf(currentPositionMs) }
+    var syncSysTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var currentFrameTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(currentPositionMs) {
+        syncPositionMs = currentPositionMs
+        syncSysTime = System.currentTimeMillis()
+        currentFrameTime = syncSysTime
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                withFrameMillis {
+                    currentFrameTime = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    val smoothPositionMs = if (isPlaying) {
+        val elapsedLocal = (currentFrameTime - syncSysTime).coerceAtLeast(0L)
+        syncPositionMs + elapsedLocal
+    } else {
+        syncPositionMs
+    }
+
+    // 350ms Predictive Vocal Lead Compensation (Matches human reaction & audio buffer latency)
+    val adjustedPositionMs = smoothPositionMs + 350L
+
     // Handle system back gesture
     BackHandler {
         onDismiss()
@@ -127,9 +157,6 @@ fun LyricsScreen(
         }
         list
     }
-
-    // Add 150ms lead offset to match human visual reaction & audio buffer latency
-    val adjustedPositionMs = currentPositionMs + 150L
 
     val activeItemIndex = remember(displayItems, adjustedPositionMs) {
         if (displayItems.isEmpty()) -1
@@ -431,17 +458,21 @@ fun LyricsScreen(
                                             label = "lineBgColor"
                                         )
 
-                                        // Adjusted elegant compact font sizes
                                         val fontSize = if (isActive) 22.sp else 17.sp
                                         val fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                                         val lineHeight = if (isActive) 30.sp else 24.sp
 
-                                        // Compute progress fraction across line duration
+                                        // Compute Vocal Attack Pacing S-Curve across line duration
                                         val startMs = line.start.toLong()
-                                        val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3000L
-                                        val totalDuration = (endMs - startMs).coerceAtLeast(100L)
-                                        val elapsed = (adjustedPositionMs - startMs).coerceAtLeast(0L)
-                                        val lineProgressFraction = if (isActive) (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+                                        val endMs = if (line.end > line.start) line.end.toLong() else startMs + 3200L
+                                        val totalDurationMs = (endMs - startMs).coerceAtLeast(100L)
+                                        val elapsedMs = (adjustedPositionMs - startMs).coerceAtLeast(0L)
+                                        
+                                        val vocalProgressFraction = if (isActive) {
+                                            calculateVocalProgress(elapsedMs, totalDurationMs)
+                                        } else {
+                                            0f
+                                        }
 
                                         Box(
                                             modifier = Modifier
@@ -475,7 +506,7 @@ fun LyricsScreen(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     LiquidKaraokeText(
                                                         text = line.text.ifEmpty { "♪" },
-                                                        progressFraction = lineProgressFraction,
+                                                        progressFraction = vocalProgressFraction,
                                                         isActive = isActive,
                                                         fontSize = fontSize,
                                                         fontWeight = fontWeight,
@@ -502,7 +533,7 @@ fun LyricsScreen(
 
                                     is LyricsDisplayItem.InstrumentalInterlude -> {
                                         val totalDuration = (item.endMs - item.startMs).coerceAtLeast(1L)
-                                        val elapsed = (currentPositionMs - item.startMs).coerceAtLeast(0L)
+                                        val elapsed = (adjustedPositionMs - item.startMs).coerceAtLeast(0L)
                                         val progressFraction = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
 
                                         val cardBgColor by animateColorAsState(
@@ -593,6 +624,17 @@ fun LyricsScreen(
     }
 }
 
+private fun calculateVocalProgress(elapsedMs: Long, totalDurationMs: Long): Float {
+    if (totalDurationMs <= 0) return 0f
+    val raw = (elapsedMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+    // Singer Pacing S-Curve: Fast initial vocal attack (0..0.6 -> 0..0.8), smooth tail sustain (0.6..1.0 -> 0.8..1.0)
+    return if (raw < 0.60f) {
+        (raw / 0.60f) * 0.80f
+    } else {
+        0.80f + ((raw - 0.60f) / 0.40f) * 0.20f
+    }
+}
+
 @Composable
 private fun LiquidKaraokeText(
     text: String,
@@ -620,9 +662,12 @@ private fun LiquidKaraokeText(
     val totalLength = text.length
     val charProgress = totalLength * progressFraction.coerceIn(0f, 1f)
     val fullSungCount = charProgress.toInt().coerceIn(0, totalLength)
+    // Quantize sub-character alpha into 10 discrete steps to prevent unnecessary AnnotatedString rebuilds on sub-pixel frames
     val partialCharFraction = charProgress - fullSungCount
+    val quantizedAlphaStep = (partialCharFraction * 10f).toInt().coerceIn(0, 10)
 
-    val annotatedString = remember(text, fullSungCount, partialCharFraction, activeColor, inactiveColor) {
+    val annotatedString = remember(text, fullSungCount, quantizedAlphaStep, activeColor, inactiveColor) {
+        val currentAlpha = 0.38f + (0.62f * (quantizedAlphaStep / 10f))
         buildAnnotatedString {
             for (i in 0 until totalLength) {
                 val ch = text[i].toString()
@@ -638,7 +683,6 @@ private fun LiquidKaraokeText(
                         }
                     }
                     i == fullSungCount -> {
-                        val currentAlpha = 0.38f + (0.62f * partialCharFraction.coerceIn(0f, 1f))
                         withStyle(
                             SpanStyle(
                                 color = activeColor.copy(alpha = currentAlpha),

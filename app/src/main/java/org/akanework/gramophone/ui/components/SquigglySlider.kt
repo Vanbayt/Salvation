@@ -42,8 +42,9 @@ fun SquigglySlider(
     val isDragged by interactionSource.collectIsDraggedAsState()
 
     // Бесконечная анимация для бегущей волны
+    val shouldAnimateWave = isPlaying || isDragged
     val infiniteTransition = rememberInfiniteTransition(label = "wave_shift")
-    val phaseShift by infiniteTransition.animateFloat(
+    val rawPhaseShift by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2f * Math.PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -52,6 +53,7 @@ fun SquigglySlider(
         ),
         label = "phase_shift"
     )
+    val phaseShift = if (shouldAnimateWave) rawPhaseShift else 0f
 
     // 🔥 ПРУЖИННАЯ АНИМАЦИЯ ИЗ MATERIAL 3 EXPRESSIVE
     val targetAmplitude = when {

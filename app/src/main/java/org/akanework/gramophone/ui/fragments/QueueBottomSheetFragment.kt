@@ -33,7 +33,7 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
         data class Header(val title: String) : QueueRow()
         data class Item(
             val mediaItem: MediaItem,
-            val originalIndex: Int,
+            var originalIndex: Int,
             val isCurrent: Boolean
         ) : QueueRow()
     }
@@ -138,11 +138,17 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
                     val fromRow = rows.getOrNull(fromPos) as? QueueRow.Item ?: return false
                     val toRow = rows.getOrNull(toPos) as? QueueRow.Item ?: return false
 
+                    val oldFromIndex = fromRow.originalIndex
+                    val oldToIndex = toRow.originalIndex
+
+                    fromRow.originalIndex = oldToIndex
+                    toRow.originalIndex = oldFromIndex
+
                     rows[fromPos] = toRow
                     rows[toPos] = fromRow
                     adapter.notifyItemMoved(fromPos, toPos)
 
-                    controller.moveMediaItem(fromRow.originalIndex, toRow.originalIndex)
+                    controller.moveMediaItem(oldFromIndex, oldToIndex)
                     return true
                 }
 

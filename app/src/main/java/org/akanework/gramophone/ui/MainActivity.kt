@@ -153,6 +153,7 @@ class MainActivity : BaseActivity() {
     private var trackArtist by mutableStateOf("")
     private var coverUrl by mutableStateOf("")
     private var isPlaying by mutableStateOf(false)
+    private var isBuffering by mutableStateOf(false)
     private var currentPosition by mutableFloatStateOf(0f)
     private var trackDuration by mutableFloatStateOf(100f)
     private var isLiked by mutableStateOf(false)
@@ -164,6 +165,14 @@ class MainActivity : BaseActivity() {
     // 🔥 Ссылка на пейджер
     private lateinit var mainPager: ViewPager2
 
+    private var collapsePlayerAction: (() -> Unit)? = null
+
+    fun collapsePlayer() {
+        runOnUiThread {
+            collapsePlayerAction?.invoke()
+        }
+    }
+
     private var isForeground = false
     private val progressHandler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
@@ -171,6 +180,7 @@ class MainActivity : BaseActivity() {
             if (!isForeground) return
             val player = getPlayer()
             if (player != null) {
+                isBuffering = player.playbackState == Player.STATE_BUFFERING
                 val isPlaying = player.isPlaying || (player.playWhenReady && player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE)
                 if (isPlaying) {
                     val currentId = player.currentMediaItem?.mediaId
@@ -302,6 +312,21 @@ class MainActivity : BaseActivity() {
                     )
                 )
 
+                DisposableEffect(scaffoldState) {
+                    collapsePlayerAction = {
+                        coroutineScope.launch {
+                            try {
+                                scaffoldState.bottomSheetState.partialExpand()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                    onDispose {
+                        collapsePlayerAction = null
+                    }
+                }
+
                 var extractedColor by remember { mutableStateOf<Color?>(null) }
                 var isLyricsOpenState by remember { mutableStateOf(false) }
 
@@ -358,8 +383,8 @@ class MainActivity : BaseActivity() {
                             if (offset.isNaN()) {
                                 if (state.targetValue == SheetValue.Expanded) 1f else 0f
                             } else {
-                                val rawFraction = (1f - (offset / maxTravel)).coerceIn(0f, 1f)
-                                if (rawFraction < 0.05f) 0f else rawFraction
+                                val raw = (1f - (offset / maxTravel)).coerceIn(0f, 1f)
+                                if (raw <= 0.03f) 0f else if (raw >= 0.98f) 1f else raw
                             }
                         }
                     }
@@ -376,17 +401,19 @@ class MainActivity : BaseActivity() {
                         containerColor = Color.Transparent,
                         content = {},
                         sheetContent = {
+                            val fraction = fractionState.value
+                            val sheetProgress = androidx.compose.animation.core.FastOutSlowInEasing.transform(fraction)
+
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        val fraction = fractionState.value
                                         val topRadius = 32.dp.toPx()
-                                        val bottomRadius = 12.dp.toPx() + (20.dp.toPx() * fraction)
-                                        val hPad = 16.dp.toPx() * (1f - fraction)
+                                        val bottomRadius = 12.dp.toPx() + (20.dp.toPx() * sheetProgress)
+                                        val hPad = 16.dp.toPx() * (1f - sheetProgress)
 
                                         val collapsedHeight = miniPlayerHeight.toPx()
-                                        val currentHeight = collapsedHeight + (size.height - collapsedHeight) * fraction
+                                        val currentHeight = collapsedHeight + (size.height - collapsedHeight) * sheetProgress
 
                                         shape = object : androidx.compose.ui.graphics.Shape {
                                             override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
@@ -407,34 +434,18 @@ class MainActivity : BaseActivity() {
                                         clip = true
                                     }
                                     .drawBehind {
-                                        val fraction = fractionState.value
                                         drawRect(fullColor)
-                                        drawRect(baseMiniColor.copy(alpha = 1f - fraction))
+                                        drawRect(baseMiniColor.copy(alpha = (1f - sheetProgress).coerceIn(0f, 1f)))
                                     }
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer { alpha = fractionState.value }
-                                ) {
-                                    FullPlayerComposeBlock(
-                                        onClose = { coroutineScope.launch { scaffoldState.bottomSheetState.partialExpand() } }
+                                if (miniPlayerVisible) {
+                                    MorphingPlayerComposeBlock(
+                                        fraction = fraction,
+                                        auraColor = animatedMiniColor,
+                                        onLyricsStateChange = { isLyricsOpenState = it },
+                                        onClose = { coroutineScope.launch { scaffoldState.bottomSheetState.partialExpand() } },
+                                        onExpand = { coroutineScope.launch { scaffoldState.bottomSheetState.expand() } }
                                     )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(miniPlayerHeight)
-                                        .padding(horizontal = 32.dp)
-                                        .graphicsLayer { alpha = 1f - fractionState.value }
-                                ) {
-                                    if (miniPlayerVisible) {
-                                        MiniPlayerComposeBlock(
-                                            auraColor = animatedMiniColor,
-                                            onClick = { coroutineScope.launch { scaffoldState.bottomSheetState.expand() } }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -452,8 +463,8 @@ class MainActivity : BaseActivity() {
                                 .padding(horizontal = 16.dp)
                                 .graphicsLayer {
                                     val fraction = fractionState.value
-                                    alpha = 1f - fraction
-                                    translationY = fraction * 150f
+                                    alpha = (1f - fraction * 2.2f).coerceIn(0f, 1f)
+                                    translationY = fraction * 200f
                                 }
                         )
                     }
@@ -590,143 +601,11 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    @Composable
-    private fun MiniPlayerComposeBlock(
-        auraColor: Color?,
-        onClick: () -> Unit
-    ) {
-        val haptic = LocalHapticFeedback.current // 🔥 Haptic
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onClick()
-                    }
-                )
-        ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "aura")
-
-            val auraPulse by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = 1.2f,
-                animationSpec = infiniteRepeatable(tween(3000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-                label = "pulse"
-            )
-
-            val auraRotation by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing)),
-                label = "rotation"
-            )
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(72.dp)
-            ) {
-                if (auraColor != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .scale(auraPulse)
-                            .graphicsLayer { rotationZ = auraRotation }
-                            .drawBehind {
-                                val brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        auraColor.copy(alpha = 0.15f),
-                                        auraColor.copy(alpha = 0.05f),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(size.width * 0.4f, size.height * 0.4f),
-                                    radius = size.width / 2f
-                                )
-                                drawCircle(brush)
-                            }
-                    )
-                }
-
-                AsyncImage(
-                    model = coverUrl.ifEmpty { R.drawable.ic_library },
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f).padding(start = 2.dp)) {
-                Text(
-                    text = trackTitle.ifEmpty { "Загрузка..." },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = trackArtist.ifEmpty { "Ожидание" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                        getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
-                if (isLoading) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        strokeWidth = 2.5.dp
-                    )
-                } else {
-                    Icon(
-                        painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                        contentDescription = "Play/Pause",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                    getPlayer()?.seekToNext()
-                },
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    painterResource(id = R.drawable.ic_skip_next),
-                    contentDescription = "Next",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-    }
 
     @Composable
     fun AnimatedPlayingIndicator(isPlaying: Boolean) {
+        val shouldAnimate = isPlaying && isForeground
         val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "eq_transition")
 
         val bar1 by infiniteTransition.animateFloat(
@@ -754,9 +633,9 @@ class MainActivity : BaseActivity() {
             label = "bar3"
         )
 
-        val h1 by animateFloatAsState(if (isPlaying) bar1 else 0.3f, label = "h1")
-        val h2 by animateFloatAsState(if (isPlaying) bar2 else 0.5f, label = "h2")
-        val h3 by animateFloatAsState(if (isPlaying) bar3 else 0.4f, label = "h3")
+        val h1 = if (shouldAnimate) bar1 else 0.3f
+        val h2 = if (shouldAnimate) bar2 else 0.5f
+        val h3 = if (shouldAnimate) bar3 else 0.4f
 
         Row(
             verticalAlignment = Alignment.Bottom,
@@ -770,16 +649,17 @@ class MainActivity : BaseActivity() {
     }
 
     @Composable
-    private fun FullPlayerComposeBlock(
-        modifier: Modifier = Modifier,
-        onLyricsStateChange: (Boolean) -> Unit = {},
-        onClose: () -> Unit
+    private fun MorphingPlayerComposeBlock(
+        fraction: Float,
+        auraColor: Color?,
+        onLyricsStateChange: (Boolean) -> Unit,
+        onClose: () -> Unit,
+        onExpand: () -> Unit
     ) {
         val coroutineScope = rememberCoroutineScope()
-        val haptic = LocalHapticFeedback.current // 🔥 Haptic
+        val haptic = LocalHapticFeedback.current
 
         var showLyricsScreen by remember { mutableStateOf(false) }
-
         LaunchedEffect(showLyricsScreen) {
             onLyricsStateChange(showLyricsScreen)
         }
@@ -884,424 +764,655 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        Box(modifier = modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .statusBarsPadding()
-            ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) {
-                    Icon(painterResource(R.drawable.ic_expand_more), "Close", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedPlayingIndicator(isPlaying = isPlaying)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Сейчас играет", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                }
-                IconButton(onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                    org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
-                }, modifier = Modifier.size(56.dp)) {
-                    Icon(painterResource(R.drawable.ic_more_vert), "Menu", modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface)
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val currentImageRequest = remember(coverUrl) {
+            coil3.request.ImageRequest.Builder(context)
+                .data(coverUrl.ifEmpty { R.drawable.ic_library })
+                .size(coil3.size.Size.ORIGINAL)
+                .build()
+        }
+
+        val prevImageRequest = remember(prevCoverUrl) {
+            if (prevCoverUrl.isNotEmpty()) {
+                coil3.request.ImageRequest.Builder(context)
+                    .data(prevCoverUrl)
+                    .size(coil3.size.Size.ORIGINAL)
+                    .build()
+            } else null
+        }
+
+        val nextImageRequest = remember(nextCoverUrl) {
+            if (nextCoverUrl.isNotEmpty()) {
+                coil3.request.ImageRequest.Builder(context)
+                    .data(nextCoverUrl)
+                    .size(coil3.size.Size.ORIGINAL)
+                    .build()
+            } else null
+        }
+
+        val configuration = LocalConfiguration.current
+        val density = LocalDensity.current
+        val screenWidthDp = configuration.screenWidthDp.dp
+        val screenHeightDp = configuration.screenHeightDp.dp
+
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+        // 1. Full Player Geometry (Anchored to screen bottom & top)
+        val fullHeaderTop = statusBarTop + 8.dp
+        val fullHeaderHeight = 48.dp
+        val fullHeaderBottom = fullHeaderTop + fullHeaderHeight
+
+        val fullBottomPadding = maxOf(16.dp, navBarBottom + 12.dp)
+
+        val bottomActionsHeight = 56.dp
+        val actionsToControlsGap = 16.dp
+        val mainControlsHeight = 88.dp
+        val controlsToTimeGap = 16.dp
+        val timeHeight = 16.dp
+        val sliderHeight = 44.dp
+        val sliderToTextGap = 16.dp
+        val textBlockHeight = 64.dp
+
+        val totalBottomStackHeight = bottomActionsHeight + actionsToControlsGap + mainControlsHeight + controlsToTimeGap + timeHeight + sliderHeight + sliderToTextGap + textBlockHeight
+
+        val fullTextY = screenHeightDp - fullBottomPadding - totalBottomStackHeight
+        val fullControlsY = fullTextY + textBlockHeight + sliderToTextGap
+
+        val availableCoverHeight = fullTextY - fullHeaderBottom - 24.dp
+        val maxFullCoverSize = minOf(screenWidthDp - 48.dp, maxOf(200.dp, availableCoverHeight))
+        val targetFullCoverSize = maxFullCoverSize * finalCoverScale
+        val targetFullCoverX = (screenWidthDp - targetFullCoverSize) / 2
+        val targetFullCoverY = fullHeaderBottom + ((availableCoverHeight - targetFullCoverSize) / 2).coerceAtLeast(8.dp)
+        val fullCoverRadius = 24.dp
+
+        val fullTextX = 24.dp
+        val fullTextWidth = screenWidthDp - 48.dp
+
+        // 2. Mini Player Geometry
+        val miniHPad = 16.dp
+        val miniCoverSize = 48.dp
+        val miniCoverX = miniHPad + 12.dp // 28.dp
+        val miniCoverY = 12.dp
+
+        val miniTextX = miniCoverX + miniCoverSize + 12.dp // 88.dp
+        val miniTextY = 15.dp
+        val miniTextWidth = maxOf(0.dp, screenWidthDp - miniTextX - 116.dp)
+
+        // 3. Expressive Motion Curves (Душа анимации)
+        val emphasizedDecelerate = remember { androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f) }
+        val emphasizedSpring = remember { androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) }
+
+        val coverProgress = emphasizedDecelerate.transform(fraction)
+        val textProgress = emphasizedSpring.transform(((fraction - 0.03f) / 0.97f).coerceIn(0f, 1f))
+        val controlsProgress = androidx.compose.animation.core.FastOutSlowInEasing.transform(((fraction - 0.12f) / 0.88f).coerceIn(0f, 1f))
+
+        // Current interpolated values:
+        val curCoverSize = miniCoverSize + (targetFullCoverSize - miniCoverSize) * coverProgress
+        val curCoverX = miniCoverX + (targetFullCoverX - miniCoverX) * coverProgress
+        val curCoverY = miniCoverY + (targetFullCoverY - miniCoverY) * coverProgress
+
+        val circleRadius = curCoverSize / 2f
+        val curCoverRadius = androidx.compose.ui.unit.lerp(circleRadius, fullCoverRadius, coverProgress)
+
+        val curTextX = miniTextX + (fullTextX - miniTextX) * textProgress
+        val curTextY = miniTextY + (fullTextY - miniTextY) * textProgress
+        val curTextWidth = miniTextWidth + (fullTextWidth - miniTextWidth) * textProgress
+
+        val shouldAnimateAura = isPlaying && isForeground
+        val infiniteTransition = rememberInfiniteTransition(label = "aura")
+
+        val rawPulse by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.2f,
+            animationSpec = infiniteRepeatable(tween(3000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "pulse"
+        )
+
+        val rawRotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing)),
+            label = "rotation"
+        )
+
+        val auraPulse = if (shouldAnimateAura) rawPulse else 1f
+        val auraRotation = if (shouldAnimateAura) rawRotation else 0f
+
+        val widthPx = with(density) { (screenWidthDp - 32.dp).toPx() }
+        val spacingPx = with(density) { 32.dp.toPx() }
+        val totalOffsetPx = widthPx + spacingPx
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (fraction < 0.2f) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onExpand()
+                            }
+                        )
+                    } else Modifier
+                )
+        ) {
+            // 1. FULL HEADER (Close, Title, Menu)
+            if (fraction > 0.1f) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = fullHeaderTop, start = 16.dp, end = 16.dp)
+                        .graphicsLayer {
+                            alpha = ((fraction - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                            translationY = -30f * (1f - coverProgress)
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) {
+                        Icon(painterResource(R.drawable.ic_expand_more), "Close", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AnimatedPlayingIndicator(isPlaying = isPlaying)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Сейчас играет", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    IconButton(onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
+                    }, modifier = Modifier.size(56.dp)) {
+                        Icon(painterResource(R.drawable.ic_more_vert), "Menu", modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
 
-            val configuration = LocalConfiguration.current
-            val density = LocalDensity.current
+            // 2. MINI CONTROLS (Play/Pause, Next)
+            if (fraction < 0.6f) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 14.dp, end = 28.dp)
+                        .graphicsLayer {
+                            alpha = (1f - fraction * 2.8f).coerceIn(0f, 1f)
+                            translationX = fraction * 30f
+                        }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
+                        if (isLoading) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Icon(
+                                painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                                contentDescription = "Play/Pause",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
 
-            val widthPx = with(density) { (configuration.screenWidthDp.dp - 32.dp).toPx() }
-            val spacingPx = with(density) { 32.dp.toPx() }
-            val totalOffsetPx = widthPx + spacingPx
+                    Spacer(modifier = Modifier.width(8.dp))
 
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            getPlayer()?.seekToNext()
+                        },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            painterResource(id = R.drawable.ic_skip_next),
+                            contentDescription = "Next",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+
+            // 3. SHARED COVER ARTWORK (Continuous Morphing size, position, radius)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(vertical = 16.dp)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { isDragging = true },
-                            onDragEnd = {
-                                isDragging = false
-                                val threshold = widthPx * 0.25f
-                                coroutineScope.launch {
-                                    if (dragOffset.value > threshold && prevCoverUrl.isNotEmpty()) {
-                                        dragOffset.animateTo(totalOffsetPx, tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥 Вибрация при свайпе трека
-                                        getPlayer()?.seekToPrevious()
-                                    } else if (dragOffset.value < -threshold && nextCoverUrl.isNotEmpty()) {
-                                        dragOffset.animateTo(-totalOffsetPx, tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥 Вибрация при свайпе трека
-                                        getPlayer()?.seekToNext()
-                                    } else {
-                                        dragOffset.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 400f))
+                    .offset(x = curCoverX, y = curCoverY)
+                    .size(curCoverSize)
+                    .then(
+                        if (fraction > 0.85f) {
+                            Modifier.pointerInput(Unit) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { isDragging = true },
+                                    onDragEnd = {
+                                        isDragging = false
+                                        val threshold = widthPx * 0.25f
+                                        coroutineScope.launch {
+                                            if (dragOffset.value > threshold && prevCoverUrl.isNotEmpty()) {
+                                                dragOffset.animateTo(totalOffsetPx, tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                getPlayer()?.seekToPrevious()
+                                            } else if (dragOffset.value < -threshold && nextCoverUrl.isNotEmpty()) {
+                                                dragOffset.animateTo(-totalOffsetPx, tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                getPlayer()?.seekToNext()
+                                            } else {
+                                                dragOffset.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 400f))
+                                            }
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        coroutineScope.launch { dragOffset.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 400f)) }
                                     }
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    coroutineScope.launch { dragOffset.snapTo(dragOffset.value + dragAmount) }
                                 }
-                            },
-                            onDragCancel = {
-                                isDragging = false
-                                coroutineScope.launch { dragOffset.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 400f)) }
                             }
-                        ) { change, dragAmount ->
-                            change.consume()
-                            coroutineScope.launch { dragOffset.snapTo(dragOffset.value + dragAmount) }
-                        }
-                    },
+                        } else Modifier
+                    ),
                 contentAlignment = Alignment.Center
             ) {
+                // Aura (visible in mini state)
+                if (auraColor != null && fraction < 0.5f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(auraPulse)
+                            .graphicsLayer {
+                                rotationZ = auraRotation
+                                alpha = (1f - fraction * 2f).coerceIn(0f, 1f)
+                            }
+                            .drawBehind {
+                                val brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        auraColor.copy(alpha = 0.25f),
+                                        auraColor.copy(alpha = 0.08f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.5f, size.height * 0.5f),
+                                    radius = size.width / 1.8f
+                                )
+                                drawCircle(brush)
+                            }
+                    )
+                }
+
                 val leftProgress = (-dragOffset.value / widthPx).coerceIn(0f, 1f)
                 val rightProgress = (dragOffset.value / widthPx).coerceIn(0f, 1f)
                 val maxProgress = maxOf(leftProgress, rightProgress)
 
-                val currentScale = finalCoverScale - (maxProgress * 0.15f)
-                val currentAlpha = 1f - (maxProgress * 0.5f)
+                val dragScaleFactor = if (fraction > 0.85f) (1f - (maxProgress * 0.15f)) else 1f
+                val dragAlphaFactor = if (fraction > 0.85f) (1f - (maxProgress * 0.5f)) else 1f
 
-                val prevScale = 0.85f + (rightProgress * 0.15f)
-                val prevAlpha = 0.5f + (rightProgress * 0.5f)
-
-                val nextScale = 0.85f + (leftProgress * 0.15f)
-                val nextAlpha = 0.5f + (leftProgress * 0.5f)
-
-                if (prevCoverUrl.isNotEmpty()) {
+                if (fraction > 0.85f && prevCoverUrl.isNotEmpty() && prevImageRequest != null) {
+                    val prevScale = 0.85f + (rightProgress * 0.15f)
+                    val prevAlpha = 0.5f + (rightProgress * 0.5f)
                     AsyncImage(
-                        model = prevCoverUrl.ifEmpty { R.drawable.ic_library },
+                        model = prevImageRequest,
                         contentDescription = "Prev Cover",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .aspectRatio(1f)
                             .graphicsLayer {
                                 translationX = dragOffset.value - totalOffsetPx
                                 scaleX = prevScale
                                 scaleY = prevScale
                                 alpha = prevAlpha
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(curCoverRadius)
                                 clip = true
                             }
                     )
                 }
 
                 AsyncImage(
-                    model = coverUrl.ifEmpty { R.drawable.ic_library },
-                    contentDescription = "Current Cover",
+                    model = currentImageRequest,
+                    contentDescription = "Cover",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .aspectRatio(1f)
                         .graphicsLayer {
-                            translationX = dragOffset.value
-                            scaleX = currentScale
-                            scaleY = currentScale
-                            alpha = currentAlpha
-                            shadowElevation = if (visuallyPlaying) 20.dp.toPx() else 8.dp.toPx()
-                            shape = RoundedCornerShape(20.dp)
+                            translationX = if (fraction > 0.85f) dragOffset.value else 0f
+                            scaleX = dragScaleFactor
+                            scaleY = dragScaleFactor
+                            alpha = dragAlphaFactor
+                            shadowElevation = if (visuallyPlaying && fraction > 0.8f) (20.dp.toPx() * fraction) else 0f
+                            shape = RoundedCornerShape(curCoverRadius)
                             clip = true
                         }
                 )
 
-                if (nextCoverUrl.isNotEmpty()) {
+                if (fraction > 0.85f && nextCoverUrl.isNotEmpty() && nextImageRequest != null) {
+                    val nextScale = 0.85f + (leftProgress * 0.15f)
+                    val nextAlpha = 0.5f + (leftProgress * 0.5f)
                     AsyncImage(
-                        model = nextCoverUrl.ifEmpty { R.drawable.ic_library },
+                        model = nextImageRequest,
                         contentDescription = "Next Cover",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .aspectRatio(1f)
                             .graphicsLayer {
                                 translationX = dragOffset.value + totalOffsetPx
                                 scaleX = nextScale
                                 scaleY = nextScale
                                 alpha = nextAlpha
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(curCoverRadius)
                                 clip = true
                             }
                     )
                 }
             }
 
+            // 4. SHARED TRACK TITLE & ARTIST (Continuous morphing position, typography, width)
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.Start
+                    .offset(x = curTextX, y = curTextY)
+                    .width(curTextWidth)
             ) {
+                val titleFontSize = androidx.compose.ui.unit.lerp(15.sp, 24.sp, textProgress)
+                val titleLineHeight = androidx.compose.ui.unit.lerp(20.sp, 28.sp, textProgress)
+                val artistFontSize = androidx.compose.ui.unit.lerp(13.sp, 17.sp, textProgress)
+                val artistLineHeight = androidx.compose.ui.unit.lerp(16.sp, 22.sp, textProgress)
+                val textSpacing = androidx.compose.ui.unit.lerp(2.dp, 6.dp, textProgress)
+
                 Text(
                     text = trackTitle.ifEmpty { "Загрузка..." },
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = titleFontSize,
+                        lineHeight = titleLineHeight,
+                        fontWeight = FontWeight.Bold
+                    ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Start
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(textSpacing))
                 Text(
                     text = trackArtist.ifEmpty { "Ожидание" },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = artistFontSize,
+                        lineHeight = artistLineHeight
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Start
                 )
             }
 
-            Box(modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp)) {
-                SquigglySlider(
-                    position = currentPosition,
-                    duration = trackDuration,
+            // 5. FULL PLAYER CONTROLS (Slider, Play/Pause, Shuffle, Loop, Like, Lyrics)
+            if (fraction > 0.12f) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = fullControlsY)
+                        .padding(horizontal = 16.dp)
+                        .graphicsLayer {
+                            alpha = ((fraction - 0.25f) / 0.75f).coerceIn(0f, 1f)
+                            translationY = 60f * (1f - controlsProgress)
+                        }
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().height(sliderHeight).padding(horizontal = 8.dp)) {
+                        SquigglySlider(
+                            position = currentPosition,
+                            duration = trackDuration,
+                            isPlaying = isPlaying,
+                            onValueChange = { newValue ->
+                                currentPosition = newValue
+                                progressHandler.removeCallbacks(progressRunnable)
+                            },
+                            onValueChangeFinished = {
+                                getPlayer()?.seekTo(currentPosition.toLong())
+                                if (isPlaying) progressHandler.post(progressRunnable)
+                            }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(formatTime(currentPosition.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(formatTime(trackDuration.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    Spacer(modifier = Modifier.height(controlsToTimeGap))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(if (isLiked) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@clickable
+                                    if (currentTrackId.isEmpty()) return@clickable
+
+                                    val newLikeState = !isLiked
+                                    isLiked = newLikeState
+                                    if (newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
+
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        try {
+                                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
+                                            val response = if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
+                                            if (!response.isSuccessful) {
+                                                withContext(Dispatchers.Main) {
+                                                    if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
+                                                    if (!newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            withContext(Dispatchers.Main) {
+                                                if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
+                                                if (!newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
+                                            }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painterResource(if (isLiked) R.drawable.ic_favorite_filled else R.drawable.ic_favorite),
+                                contentDescription = "Like",
+                                modifier = Modifier.size(28.dp),
+                                tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                getPlayer()?.seekToPrevious()
+                            },
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Icon(painterResource(R.drawable.ic_skip_previous), "Prev", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
+                        }
+
+                        Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                            CookiePlayButton(
+                                isPlaying = isPlaying,
+                                isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                                }
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                getPlayer()?.seekToNext()
+                            },
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Icon(painterResource(R.drawable.ic_skip_next), "Next", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(if (isShuffle) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val p = getPlayer() ?: return@clickable
+                                    val newState = !p.shuffleModeEnabled
+                                    p.shuffleModeEnabled = newState
+                                    if (newState) applyPhysicalShuffle(p)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.ic_shuffle), "Shuffle",
+                                modifier = Modifier.size(28.dp),
+                                tint = if (isShuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(actionsToControlsGap))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val targetState = !showLyricsScreen
+                                showLyricsScreen = targetState
+                                if (targetState && currentLyricsResult == null && !isLyricsLoading) {
+                                    loadLyrics()
+                                }
+                            },
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.ic_article),
+                                "Lyrics",
+                                modifier = Modifier.size(24.dp),
+                                tint = if (showLyricsScreen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showNextTrack && nextTrackName.isNotEmpty(),
+                                enter = androidx.compose.animation.fadeIn(tween(700)) +
+                                        androidx.compose.animation.slideInVertically(tween(700)) { it / 2 },
+                                exit = androidx.compose.animation.fadeOut(tween(500)) +
+                                        androidx.compose.animation.slideOutVertically(tween(500)) { it / 2 }
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Далее:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    Text(nextTrackName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val p = getPlayer() ?: return@IconButton
+                                val newMode = when (p.repeatMode) {
+                                    androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                                    androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                                    else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                                }
+                                p.repeatMode = newMode
+                            },
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            val iconRes = when (repeatModeState) {
+                                androidx.media3.common.Player.REPEAT_MODE_ONE -> R.drawable.ic_repeat_one
+                                androidx.media3.common.Player.REPEAT_MODE_ALL -> R.drawable.ic_repeat
+                                else -> R.drawable.ic_repeat
+                            }
+                            Icon(
+                                painterResource(iconRes),
+                                "Loop",
+                                modifier = Modifier.size(24.dp),
+                                tint = if (isLoop) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 6. LYRICS FULLSCREEN OVERLAY
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showLyricsScreen,
+                enter = androidx.compose.animation.fadeIn(tween(300)) +
+                        androidx.compose.animation.slideInVertically(tween(300)) { it },
+                exit = androidx.compose.animation.fadeOut(tween(300)) +
+                        androidx.compose.animation.slideOutVertically(tween(300)) { it }
+            ) {
+                org.akanework.gramophone.ui.components.LyricsScreen(
+                    trackTitle = trackTitle,
+                    artistName = trackArtist,
+                    coverUrl = coverUrl,
                     isPlaying = isPlaying,
-                    onValueChange = { newValue ->
-                        currentPosition = newValue
-                        progressHandler.removeCallbacks(progressRunnable)
+                    lyricsResult = currentLyricsResult,
+                    isLoading = isLyricsLoading,
+                    currentPositionMs = currentPosition.toLong(),
+                    selectedSource = selectedLyricsSource,
+                    onSourceSelected = { newSource ->
+                        selectedLyricsSource = newSource
+                        loadLyrics(newSource)
                     },
-                    onValueChangeFinished = {
-                        getPlayer()?.seekTo(currentPosition.toLong())
-                        if (isPlaying) progressHandler.post(progressRunnable)
+                    onPlayPauseToggle = {
+                        getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                    },
+                    onSkipNext = {
+                        getPlayer()?.seekToNext()
+                    },
+                    onSeekTo = { pos ->
+                        getPlayer()?.seekTo(pos)
+                    },
+                    onDismiss = {
+                        showLyricsScreen = false
                     }
                 )
             }
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(formatTime(currentPosition.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(formatTime(trackDuration.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(if (isLiked) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥 Вибрация на лайк
-
-                            val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@clickable
-                            if (currentTrackId.isEmpty()) return@clickable
-
-                            val newLikeState = !isLiked
-                            isLiked = newLikeState
-                            if (newLikeState) LikeCache.likedTracks.add(currentTrackId) else LikeCache.likedTracks.remove(currentTrackId)
-
-                            CoroutineScope(Dispatchers.IO).launch {
-                                try {
-                                    val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
-                                    val response = if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
-                                    if (!response.isSuccessful) {
-                                        withContext(Dispatchers.Main) {
-                                            if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
-                                            if (!newLikeState) LikeCache.likedTracks.add(currentTrackId) else LikeCache.likedTracks.remove(currentTrackId)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
-                                        if (!newLikeState) LikeCache.likedTracks.add(currentTrackId) else LikeCache.likedTracks.remove(currentTrackId)
-                                    }
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painterResource(if (isLiked) R.drawable.ic_favorite_filled else R.drawable.ic_favorite),
-                        contentDescription = "Like",
-                        modifier = Modifier.size(28.dp),
-                        tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                        getPlayer()?.seekToPrevious()
-                    },
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(painterResource(R.drawable.ic_skip_previous), "Prev", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
-                }
-
-                Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
-                    CookiePlayButton(
-                        isPlaying = isPlaying,
-                        isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                            getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
-                        }
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                        getPlayer()?.seekToNext()
-                    },
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(painterResource(R.drawable.ic_skip_next), "Next", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(if (isShuffle) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 🔥
-                            val p = getPlayer() ?: return@clickable
-                            val newState = !p.shuffleModeEnabled
-                            p.shuffleModeEnabled = newState
-                            if (newState) applyPhysicalShuffle(p)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_shuffle), "Shuffle",
-                        modifier = Modifier.size(28.dp),
-                        tint = if (isShuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 32.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val targetState = !showLyricsScreen
-                        showLyricsScreen = targetState
-                        if (targetState && currentLyricsResult == null && !isLyricsLoading) {
-                            loadLyrics()
-                        }
-                    },
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_article),
-                        "Lyrics",
-                        modifier = Modifier.size(24.dp),
-                        tint = if (showLyricsScreen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showNextTrack && nextTrackName.isNotEmpty(),
-                        enter = androidx.compose.animation.fadeIn(tween(700)) +
-                                androidx.compose.animation.slideInVertically(tween(700)) { it / 2 },
-                        exit = androidx.compose.animation.fadeOut(tween(500)) +
-                                androidx.compose.animation.slideOutVertically(tween(500)) { it / 2 }
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Text(
-                                text = "Далее",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = nextTrackName,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(if (isLoop) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            val p = getPlayer() ?: return@clickable
-                            p.repeatMode = when (p.repeatMode) {
-                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                                Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
-                                else -> Player.REPEAT_MODE_OFF
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painterResource(if (repeatModeState == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat), "Loop",
-                        modifier = Modifier.size(24.dp),
-                        tint = if (isLoop) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showLyricsScreen,
-            enter = androidx.compose.animation.fadeIn(tween(300)) +
-                    androidx.compose.animation.slideInVertically(tween(300)) { it },
-            exit = androidx.compose.animation.fadeOut(tween(300)) +
-                    androidx.compose.animation.slideOutVertically(tween(300)) { it }
-        ) {
-            org.akanework.gramophone.ui.components.LyricsScreen(
-                trackTitle = trackTitle,
-                artistName = trackArtist,
-                coverUrl = coverUrl,
-                isPlaying = isPlaying,
-                lyricsResult = currentLyricsResult,
-                isLoading = isLyricsLoading,
-                currentPositionMs = currentPosition.toLong(),
-                selectedSource = selectedLyricsSource,
-                onSourceSelected = { newSource ->
-                    selectedLyricsSource = newSource
-                    loadLyrics(newSource)
-                },
-                onPlayPauseToggle = {
-                    getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
-                },
-                onSkipNext = {
-                    getPlayer()?.seekToNext()
-                },
-                onSeekTo = { pos ->
-                    getPlayer()?.seekTo(pos)
-                },
-                onDismiss = {
-                    showLyricsScreen = false
-                }
-            )
         }
     }
-}
+
     private fun formatTime(ms: Long): String {
         if (ms < 0) return "0:00"
         val seconds = (ms / 1000) % 60
@@ -1579,9 +1690,10 @@ class MainActivity : BaseActivity() {
         trackTitle = metadata.title?.toString() ?: "Неизвестный трек"
         trackArtist = metadata.artist?.toString() ?: "Неизвестный артист"
         isPlaying = controller.isPlaying
+        isBuffering = controller.playbackState == Player.STATE_BUFFERING
 
         val trackId = controller.currentMediaItem?.mediaId ?: ""
-        isLiked = LikeCache.likedTracks.contains(trackId)
+        isLiked = LikeCache.isLiked(trackId, title = trackTitle, artist = trackArtist)
 
         android.util.Log.d("SalvationLike", "Cache keys: ${LikeCache.likedTracks.take(10)}, type is ${LikeCache.likedTracks.firstOrNull()?.let { it::class.simpleName }}")
         android.util.Log.d("SalvationLike", "updatePlayerUI: trackId='$trackId', isLiked_state=$isLiked, isPlaying=$isPlaying")
@@ -1606,7 +1718,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun syncLikedTracksCache() {
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 android.util.Log.d("SalvationLike", "Начинаем фоновую синхронизацию лайков...")
                 val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
@@ -1615,12 +1727,12 @@ class MainActivity : BaseActivity() {
 
                 if (response.isSuccessful) {
                     val tracks = response.body() ?: emptyList()
-                    val likedIds = tracks.map { it.id.toString() }
+                    LikeCache.clear()
+                    tracks.forEach { track ->
+                        LikeCache.add(track.id, track.sourceId, track.title, track.artist)
+                    }
 
-                    LikeCache.likedTracks.clear()
-                    LikeCache.likedTracks.addAll(likedIds)
-
-                    android.util.Log.d("SalvationLike", "Синхронизация успешна! В кэш загружено ${likedIds.size} треков.")
+                    android.util.Log.d("SalvationLike", "Синхронизация успешна! В кэш загружено ${LikeCache.likedTracks.size} ключей и ${LikeCache.likedSignatures.size} сигнатур для ${tracks.size} треков.")
 
                     withContext(Dispatchers.Main) {
                         getPlayer()?.let { updatePlayerUI(it) }

@@ -31,6 +31,15 @@ interface GramophoneApi {
     @GET("/search")
     fun searchMusic(@Query("query") query: String): Call<SearchResponse>
 
+    @GET("/api/v1/search/artist")
+    fun searchArtistFast(@Query("query") query: String): Call<ArtistLookupResponse>
+
+    @GET("/api/v1/search/album")
+    fun searchAlbumFast(
+        @Query("query") query: String? = null,
+        @Query("track_id") trackId: String? = null
+    ): Call<AlbumLookupResponse>
+
     // --- МЕТОДЫ ДЛЯ ЛАЙКОВ ---
     @POST("/tracks/{id}/like")
     fun likeTrack(@Path("id") id: String): Call<ResponseBody>
@@ -172,4 +181,20 @@ data class PlaylistUpdateRequest(
 @Keep
 data class EditorAddRequest(
     @SerializedName("username") val username: String
+)
+
+@Keep
+data class ArtistLookupResponse(
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("picture") val picture: String? = null
+)
+
+@Keep
+data class AlbumLookupResponse(
+    @SerializedName("id") val id: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("artist_name") val artistName: String? = null,
+    @SerializedName("artist_id") val artistId: String? = null,
+    @SerializedName("cover") val cover: String? = null
 )

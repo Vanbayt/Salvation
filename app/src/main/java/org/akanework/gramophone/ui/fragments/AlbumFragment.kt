@@ -216,7 +216,7 @@ class AlbumFragment : Fragment() {
                     val mediaItems = tracks.map { track ->
                         val extrasBundle = Bundle().apply {
                             putFloat("replay_gain", track.replayGain)
-                            putString("ARTIST_ID", track.artistId)
+                            putString("ARTIST_ID", track.artistId ?: currentAlbum.artistId)
                             putString("ALBUM_ID", track.albumId ?: currentAlbum.id)
                             putString("PLAYING_FROM", "Альбом: ${currentAlbum.title}")
                         }
@@ -339,11 +339,12 @@ class AlbumFragment : Fragment() {
         val originalCover = track.cover ?: ""
         val finalCoverUrl = if (originalCover.startsWith("/")) "http://185.196.41.31$originalCover" else originalCover
 
-        val albumTitle = viewModel.album.value?.title ?: "Альбом"
+        val albumObj = viewModel.album.value
+        val albumTitle = albumObj?.title ?: "Альбом"
         val extrasBundle = Bundle().apply {
             putFloat("replay_gain", track.replayGain)
-            putString("ARTIST_ID", track.artistId)
-            putString("ALBUM_ID", track.albumId)
+            putString("ARTIST_ID", track.artistId ?: albumObj?.artistId)
+            putString("ALBUM_ID", track.albumId ?: albumObj?.id)
             putString("PLAYING_FROM", "Очередь ($albumTitle)")
         }
 
