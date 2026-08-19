@@ -243,6 +243,7 @@ class GramophoneApplication : Application(), SingletonImageLoader.Factory,
             }
 
             LyricWidgetProvider.update(this@GramophoneApplication)
+            org.akanework.gramophone.logic.utils.exoplayer.PoTokenProvider.initAsync(this@GramophoneApplication)
         }
     }
 

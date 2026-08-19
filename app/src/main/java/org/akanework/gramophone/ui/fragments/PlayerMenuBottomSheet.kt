@@ -4,35 +4,144 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import coil3.load
+import coil3.compose.AsyncImage
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.imageview.ShapeableImageView
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
 import org.akanework.gramophone.ui.MainActivity
-import android.util.Log
+import org.akanework.gramophone.ui.components.library.AudioQualityBadge
 
 class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.layout_bottom_sheet_player_menu, container, false)
+    ): View {
+        return ComposeView(requireContext()).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                val context = LocalContext.current
+                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+                val colorScheme = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                } else {
+                    if (isDark) darkColorScheme() else lightColorScheme()
+                }
+
+                MaterialTheme(colorScheme = colorScheme) {
+                    val activity = requireActivity() as MainActivity
+                    val player = activity.getPlayer()
+
+                    val currentItem = player?.currentMediaItem
+                    val metadata = currentItem?.mediaMetadata ?: player?.mediaMetadata
+
+                    val trackTitle = metadata?.title?.toString() ?: "Неизвестный трек"
+                    val trackArtist = metadata?.artist?.toString() ?: "Неизвестный артист"
+                    val trackAlbum = metadata?.albumTitle?.toString() ?: ""
+
+                    val originalUri = metadata?.artworkUri?.toString() ?: ""
+                    val finalCoverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+                    val isLossless = metadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+
+                    val artistId = metadata?.extras?.getString("ARTIST_ID")
+                    val albumId = metadata?.extras?.getString("ALBUM_ID")
+
+                    // Next 3 items in queue
+                    val miniQueue = remember(player?.currentMediaItemIndex, player?.mediaItemCount) {
+                        val list = mutableListOf<MediaItem>()
+                        if (player != null) {
+                            val currentIndex = player.currentMediaItemIndex
+                            for (i in (currentIndex + 1) until player.mediaItemCount) {
+                                list.add(player.getMediaItemAt(i))
+                                if (list.size >= 3) break
+                            }
+                        }
+                        list
+                    }
+
+                    PlayerMenuSheetContent(
+                        trackTitle = trackTitle,
+                        trackArtist = trackArtist,
+                        trackAlbum = trackAlbum,
+                        coverUrl = finalCoverUrl,
+                        isLossless = isLossless,
+                        miniQueue = miniQueue,
+                        onAddToPlaylist = {
+                            val currentTrackId = currentItem?.mediaId?.toIntOrNull()
+                            if (currentTrackId != null) {
+                                dismiss()
+                                AddToPlaylistBottomSheet.newInstance(currentTrackId).show(activity.supportFragmentManager, "ADD_TO_PLAYLIST_SHEET")
+                            } else {
+                                Toast.makeText(context, "Не удалось определить ID трека", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onSleepTimer = {
+                            dismiss()
+                            SleepTimerBottomSheet.newInstance().show(activity.supportFragmentManager, "SLEEP_TIMER_SHEET")
+                        },
+                        onOpenQueue = {
+                            dismiss()
+                            QueueBottomSheetFragment().show(activity.supportFragmentManager, "QUEUE_SHEET")
+                        },
+                        onReport = {
+                            Toast.makeText(context, "Жалоба отправлена", Toast.LENGTH_SHORT).show()
+                        },
+                        onGoToArtist = {
+                            resolveAndNavigateToArtist(activity, trackArtist, artistId)
+                        },
+                        onGoToAlbum = {
+                            resolveAndNavigateToAlbum(activity, trackArtist, trackTitle, trackAlbum, albumId, currentItem?.mediaId)
+                        },
+                        onPlayQueueItem = { queueItem ->
+                            if (player != null) {
+                                val index = (0 until player.mediaItemCount).firstOrNull {
+                                    player.getMediaItemAt(it).mediaId == queueItem.mediaId
+                                }
+                                if (index != null) {
+                                    player.seekToDefaultPosition(index)
+                                    player.play()
+                                }
+                            }
+                            dismiss()
+                        }
+                    )
+                }
+            }
+        }
     }
 
-    // Убираем белый системный фон со скруглениями
     override fun onStart() {
         super.onStart()
         val dialog = dialog as? com.google.android.material.bottomsheet.BottomSheetDialog
@@ -40,248 +149,530 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
         bottomSheet?.setBackgroundResource(android.R.color.transparent)
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val activity = requireActivity() as MainActivity
+    private fun resolveAndNavigateToArtist(activity: MainActivity, artistName: String, directArtistId: String?) {
+        val primaryArtist = if (artistName.isNotEmpty()) {
+            artistName.split(",", ";", " feat. ", " ft. ", " Feat. ", " Ft. ", " & ")[0].trim()
+        } else ""
 
-        activity.controllerViewModel.addControllerCallback(viewLifecycleOwner.lifecycle) { controller, _ ->
-            val currentItem = controller.currentMediaItem
-            val metadata = currentItem?.mediaMetadata ?: controller.mediaMetadata
+        val cachedId = artistIdCache[primaryArtist.lowercase()]
+        if (!cachedId.isNullOrEmpty()) {
+            dismiss()
+            activity.collapsePlayer()
+            activity.startFragment(ArtistFragment.newInstance(cachedId))
+            return
+        }
 
-            // 1. Заполняем шапку
-            view.findViewById<TextView>(R.id.menu_track_title).text = metadata.title ?: "Неизвестный трек"
-            view.findViewById<TextView>(R.id.menu_track_artist).text = metadata.artist ?: "Неизвестный артист"
+        if (!directArtistId.isNullOrEmpty() && directArtistId.all { it.isDigit() }) {
+            dismiss()
+            activity.collapsePlayer()
+            activity.startFragment(ArtistFragment.newInstance(directArtistId))
+            return
+        }
 
-            val coverView = view.findViewById<ShapeableImageView>(R.id.menu_track_cover)
-            val originalUri = metadata.artworkUri?.toString() ?: ""
-            val finalCoverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+        if (primaryArtist.isNotEmpty() && primaryArtist != "Неизвестный артист" && primaryArtist != "Unknown") {
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(activity)
+                    val resp = api.searchArtistFast(primaryArtist).execute()
+                    val artistLookup = resp.body()
 
-            coverView.setImageResource(R.drawable.ic_library)
-            if (finalCoverUrl.isNotEmpty()) {
-                coverView.load(finalCoverUrl)
-            }
-
-            // 2. Мини-очередь (следующие 2-3 трека)
-            val miniQueue = mutableListOf<MediaItem>()
-            val currentIndex = controller.currentMediaItemIndex
-            for (i in (currentIndex + 1) until controller.mediaItemCount) {
-                miniQueue.add(controller.getMediaItemAt(i))
-                if (miniQueue.size >= 3) break
-            }
-
-            val recycler = view.findViewById<RecyclerView>(R.id.menu_queue_recycler)
-            recycler.layoutManager = LinearLayoutManager(requireContext())
-            recycler.adapter = MiniQueueAdapter(miniQueue)
-
-            if (miniQueue.isEmpty()) {
-                view.findViewById<View>(R.id.menu_queue_title)?.visibility = View.GONE
-                view.findViewById<View>(R.id.menu_queue_card)?.visibility = View.GONE
-            } else {
-                view.findViewById<View>(R.id.menu_action_full_queue)?.setOnClickListener {
-                    dismiss()
-                    QueueBottomSheetFragment().show(parentFragmentManager, "QUEUE_SHEET")
-                }
-            }
-
-            // 3. БЕСШОВНАЯ НАВИГАЦИЯ (Ищем ID в кармане плеера или резолвим по имени)
-            val extras = metadata.extras
-            val artistId = extras?.getString("ARTIST_ID")
-            val albumId = extras?.getString("ALBUM_ID")
-            val artistName = metadata.artist?.toString()?.trim() ?: ""
-            val trackTitle = metadata.title?.toString()?.trim() ?: ""
-            val albumTitle = metadata.albumTitle?.toString()?.trim() ?: ""
-
-            Log.d("SALVATION_DEBUG", "Открыли меню для [${metadata.title}], ArtistID: $artistId, AlbumID: $albumId, Artist: $artistName, Album: $albumTitle")
-
-            val btnArtist = view.findViewById<View>(R.id.menu_action_artist)
-            val btnAlbum = view.findViewById<View>(R.id.menu_action_album)
-
-            btnArtist.setOnClickListener {
-                val primaryArtist = if (artistName.isNotEmpty()) {
-                    artistName.split(",", ";", " feat. ", " ft. ", " Feat. ", " Ft. ", " & ")[0].trim()
-                } else ""
-
-                // 1. Проверяем локальный кэш
-                val cachedId = artistIdCache[primaryArtist.lowercase()]
-                if (!cachedId.isNullOrEmpty()) {
-                    dismiss()
-                    activity.collapsePlayer()
-                    activity.startFragment(ArtistFragment.newInstance(cachedId))
-                    return@setOnClickListener
-                }
-
-                // 2. Если в extras есть валидный artistId (только цифры)
-                if (!artistId.isNullOrEmpty() && artistId.all { it.isDigit() }) {
-                    dismiss()
-                    activity.collapsePlayer()
-                    activity.startFragment(ArtistFragment.newInstance(artistId))
-                    return@setOnClickListener
-                }
-
-                // 3. Мгновенный поиск через ультра-быстрый API (/api/v1/search/artist)
-                if (primaryArtist.isNotEmpty() && primaryArtist != "Неизвестный артист" && primaryArtist != "Unknown" && primaryArtist != "Неизвестно") {
-                    btnArtist.isEnabled = false
-
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(requireContext())
-                            val resp = api.searchArtistFast(primaryArtist).execute()
-                            val artistLookup = resp.body()
-
-                            withContext(Dispatchers.Main) {
-                                btnArtist.isEnabled = true
-                                if (artistLookup != null && artistLookup.id.isNotEmpty()) {
-                                    artistIdCache[primaryArtist.lowercase()] = artistLookup.id
-                                    dismiss()
-                                    activity.collapsePlayer()
-                                    activity.startFragment(ArtistFragment.newInstance(artistLookup.id))
-                                } else {
-                                    Toast.makeText(context, "Артист '$primaryArtist' не найден", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                btnArtist.isEnabled = true
-                                Toast.makeText(context, "Ошибка поиска: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                            }
+                    withContext(Dispatchers.Main) {
+                        if (artistLookup != null && artistLookup.id.isNotEmpty()) {
+                            artistIdCache[primaryArtist.lowercase()] = artistLookup.id
+                            dismiss()
+                            activity.collapsePlayer()
+                            activity.startFragment(ArtistFragment.newInstance(artistLookup.id))
+                        } else {
+                            Toast.makeText(activity, "Артист '$primaryArtist' не найден", Toast.LENGTH_SHORT).show()
                         }
                     }
-                } else {
-                    Toast.makeText(context, "Исполнитель неизвестен", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            btnAlbum.setOnClickListener {
-                val currentTrackId = controller.currentMediaItem?.mediaId
-
-                // 1. Если в extras есть валидный albumId (только цифры)
-                if (!albumId.isNullOrEmpty() && albumId.all { it.isDigit() }) {
-                    dismiss()
-                    activity.collapsePlayer()
-                    activity.startFragment(AlbumFragment.newInstance(albumId))
-                    return@setOnClickListener
-                }
-
-                // 2. Резолвим через API по track_id или тексту
-                val query = if (albumTitle.isNotEmpty() && albumTitle != "Single" && albumTitle != "Unknown" && albumTitle != "Неизвестно") {
-                    "$artistName $albumTitle"
-                } else {
-                    "$artistName $trackTitle"
-                }
-
-                val cacheKey = currentTrackId ?: query.lowercase()
-                val cachedAlbumId = albumIdCache[cacheKey]
-                if (!cachedAlbumId.isNullOrEmpty()) {
-                    dismiss()
-                    activity.collapsePlayer()
-                    activity.startFragment(AlbumFragment.newInstance(cachedAlbumId))
-                    return@setOnClickListener
-                }
-
-                if (artistName.isNotEmpty() || !currentTrackId.isNullOrEmpty()) {
-                    btnAlbum.isEnabled = false
-
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(requireContext())
-                            val resp = api.searchAlbumFast(query = query.ifEmpty { null }, trackId = currentTrackId).execute()
-                            val albumLookup = resp.body()
-
-                            withContext(Dispatchers.Main) {
-                                btnAlbum.isEnabled = true
-                                if (albumLookup != null && albumLookup.id.isNotEmpty()) {
-                                    albumIdCache[cacheKey] = albumLookup.id
-                                    dismiss()
-                                    activity.collapsePlayer()
-                                    activity.startFragment(AlbumFragment.newInstance(albumLookup.id))
-                                } else {
-                                    Toast.makeText(context, "Альбом не найден", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                btnAlbum.isEnabled = true
-                                Toast.makeText(context, "Ошибка поиска: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(activity, "Ошибка поиска артиста", Toast.LENGTH_SHORT).show()
                     }
-                } else {
-                    Toast.makeText(context, "Альбом неизвестен", Toast.LENGTH_SHORT).show()
                 }
             }
-
-            // 4. ДОБАВИТЬ В ПЛЕЙЛИСТ
-            view.findViewById<View>(R.id.menu_action_playlist).setOnClickListener {
-                // Извлекаем ID трека из текущего MediaItem. В ExoPlayer он хранится в mediaId как строка.
-                val currentTrackIdString = controller.currentMediaItem?.mediaId
-                val currentTrackId = currentTrackIdString?.toIntOrNull()
-
-                if (currentTrackId != null) {
-                    // Закрываем текущее меню
-                    dismiss()
-
-                    // Открываем нашу новую Compose шторку и передаем ей ID трека
-                    val addToPlaylistSheet = AddToPlaylistBottomSheet.newInstance(currentTrackId)
-                    addToPlaylistSheet.show(activity.supportFragmentManager, "ADD_TO_PLAYLIST_SHEET")
-                } else {
-                    Toast.makeText(context, "Не удалось определить ID трека", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            // 5. ТАЙМЕР СНА (Material 3 Expressive)
-            view.findViewById<View>(R.id.menu_action_sleep).setOnClickListener {
-                dismiss()
-                val sleepTimerSheet = SleepTimerBottomSheet.newInstance()
-                sleepTimerSheet.show(activity.supportFragmentManager, "SLEEP_TIMER_SHEET")
-            }
-
-            // 6. ЖАЛОБА НА ТРЕК
-            view.findViewById<View>(R.id.menu_action_report).setOnClickListener {
-                Toast.makeText(context, "Жалоба отправлена", Toast.LENGTH_SHORT).show()
-                // TODO: отправка запроса на сервер
-            }
+        } else {
+            Toast.makeText(activity, "Исполнитель неизвестен", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // --- АДАПТЕР МИНИ-ОЧЕРЕДИ ---
-    private inner class MiniQueueAdapter(private val items: List<MediaItem>) :
-        RecyclerView.Adapter<MiniQueueAdapter.ViewHolder>() {
-
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val title: TextView = view.findViewById(R.id.tv_title)
-            val artist: TextView = view.findViewById(R.id.tv_artist)
-            val cover: ImageView = view.findViewById(R.id.iv_cover)
-            val menuBtn: View = view.findViewById(R.id.btn_menu)
+    private fun resolveAndNavigateToAlbum(
+        activity: MainActivity,
+        artistName: String,
+        trackTitle: String,
+        albumTitle: String,
+        directAlbumId: String?,
+        trackId: String?
+    ) {
+        if (!directAlbumId.isNullOrEmpty() && directAlbumId.all { it.isDigit() }) {
+            dismiss()
+            activity.collapsePlayer()
+            activity.startFragment(AlbumFragment.newInstance(directAlbumId))
+            return
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_search_result, parent, false)
-            return ViewHolder(view)
+        val query = if (albumTitle.isNotEmpty() && albumTitle != "Single" && albumTitle != "Unknown") {
+            "$artistName $albumTitle"
+        } else {
+            "$artistName $trackTitle"
         }
 
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val metadata = items[position].mediaMetadata
-            holder.title.text = metadata.title ?: "Неизвестно"
-            holder.artist.text = metadata.artist ?: "Неизвестно"
+        val cacheKey = trackId ?: query.lowercase()
+        val cachedAlbumId = albumIdCache[cacheKey]
+        if (!cachedAlbumId.isNullOrEmpty()) {
+            dismiss()
+            activity.collapsePlayer()
+            activity.startFragment(AlbumFragment.newInstance(cachedAlbumId))
+            return
+        }
 
-            // Прячем кнопку меню (три точки) у элементов в мини-очереди
-            holder.menuBtn.visibility = View.GONE
+        if (artistName.isNotEmpty() || !trackId.isNullOrEmpty()) {
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(activity)
+                    val resp = api.searchAlbumFast(query = query.ifEmpty { null }, trackId = trackId).execute()
+                    val albumLookup = resp.body()
 
-            val originalUri = metadata.artworkUri?.toString() ?: ""
-            val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
-
-            holder.cover.setImageResource(R.drawable.ic_library)
-            if (coverUrl.isNotEmpty()) {
-                holder.cover.load(coverUrl)
+                    withContext(Dispatchers.Main) {
+                        if (albumLookup != null && albumLookup.id.isNotEmpty()) {
+                            albumIdCache[cacheKey] = albumLookup.id
+                            dismiss()
+                            activity.collapsePlayer()
+                            activity.startFragment(AlbumFragment.newInstance(albumLookup.id))
+                        } else {
+                            Toast.makeText(activity, "Альбом не найден", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(activity, "Ошибка поиска альбома", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
+        } else {
+            Toast.makeText(activity, "Альбом неизвестен", Toast.LENGTH_SHORT).show()
         }
-
-        override fun getItemCount() = items.size
     }
 
     companion object {
         private val artistIdCache = java.util.concurrent.ConcurrentHashMap<String, String>()
         private val albumIdCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    }
+}
+
+@Composable
+private fun PlayerMenuSheetContent(
+    trackTitle: String,
+    trackArtist: String,
+    trackAlbum: String,
+    coverUrl: String,
+    isLossless: Boolean,
+    miniQueue: List<MediaItem>,
+    onAddToPlaylist: () -> Unit,
+    onSleepTimer: () -> Unit,
+    onOpenQueue: () -> Unit,
+    onReport: () -> Unit,
+    onGoToArtist: () -> Unit,
+    onGoToAlbum: () -> Unit,
+    onPlayQueueItem: (MediaItem) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Surface(
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        color = colors.surfaceContainerLow,
+        tonalElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            // Drag handle
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(colors.onSurfaceVariant.copy(alpha = 0.35f))
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 1. Шапка трека (Карточка с обложкой и метаданными)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.primaryContainer.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (coverUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = trackTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = colors.primary,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = trackTitle,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp
+                            ),
+                            color = colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (isLossless) {
+                            AudioQualityBadge(text = "FLAC")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Text(
+                        text = trackArtist + (if (trackAlbum.isNotBlank()) " • $trackAlbum" else ""),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.5.sp
+                        ),
+                        color = colors.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // 2. Быстрые действия (4 выразительные пилл-кнопки со своими акцентными цветами)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickActionPill(
+                    icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                    label = "В плейлист",
+                    containerColor = colors.primaryContainer,
+                    contentColor = colors.onPrimaryContainer,
+                    iconColor = colors.primary,
+                    onClick = onAddToPlaylist,
+                    modifier = Modifier.weight(1f)
+                )
+                QuickActionPill(
+                    icon = Icons.Rounded.Bedtime,
+                    label = "Таймер",
+                    containerColor = colors.secondaryContainer,
+                    contentColor = colors.onSecondaryContainer,
+                    iconColor = colors.secondary,
+                    onClick = onSleepTimer,
+                    modifier = Modifier.weight(1f)
+                )
+                QuickActionPill(
+                    icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                    label = "Очередь",
+                    containerColor = colors.tertiaryContainer,
+                    contentColor = colors.onTertiaryContainer,
+                    iconColor = colors.tertiary,
+                    onClick = onOpenQueue,
+                    modifier = Modifier.weight(1f)
+                )
+                QuickActionPill(
+                    icon = Icons.Rounded.ReportProblem,
+                    label = "Жалоба",
+                    containerColor = colors.errorContainer.copy(alpha = 0.65f),
+                    contentColor = colors.onErrorContainer,
+                    iconColor = colors.error,
+                    onClick = onReport,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.35f))
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. Навигация к артисту и альбому с выразительными акцентами
+            MenuNavigationItem(
+                icon = Icons.Rounded.Person,
+                title = "Исполнитель: $trackArtist",
+                subtitle = "Перейти к странице артиста",
+                iconContainerColor = colors.primaryContainer,
+                iconColor = colors.onPrimaryContainer,
+                onClick = onGoToArtist
+            )
+
+            if (trackAlbum.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                MenuNavigationItem(
+                    icon = Icons.Rounded.Album,
+                    title = "Альбом: $trackAlbum",
+                    subtitle = "Открыть весь альбом",
+                    iconContainerColor = colors.secondaryContainer,
+                    iconColor = colors.onSecondaryContainer,
+                    onClick = onGoToAlbum
+                )
+            }
+
+            // 4. Мини-очередь (если есть следующие треки)
+            if (miniQueue.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "ДАЛЕЕ В ОЧЕРЕДИ",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            fontSize = 11.sp
+                        ),
+                        color = colors.primary
+                    )
+                    Text(
+                        text = "Смотреть все",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp
+                        ),
+                        color = colors.primary,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(onClick = onOpenQueue)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = colors.surfaceContainerHighest.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        miniQueue.forEachIndexed { idx, item ->
+                            val meta = item.mediaMetadata
+                            val itemTitle = meta.title?.toString() ?: "Неизвестный трек"
+                            val itemArtist = meta.artist?.toString() ?: "Неизвестный артист"
+                            val itemCoverUri = meta.artworkUri?.toString() ?: ""
+                            val itemCover = if (itemCoverUri.startsWith("/")) "http://185.196.41.31$itemCoverUri" else itemCoverUri
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onPlayQueueItem(item) }
+                                    .padding(vertical = 6.dp, horizontal = 4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(colors.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (itemCover.isNotEmpty()) {
+                                        AsyncImage(
+                                            model = itemCover,
+                                            contentDescription = itemTitle,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Rounded.MusicNote,
+                                            contentDescription = null,
+                                            tint = colors.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = itemTitle,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.5.sp
+                                        ),
+                                        color = colors.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = itemArtist,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                        color = colors.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            if (idx < miniQueue.lastIndex) {
+                                HorizontalDivider(
+                                    color = colors.outlineVariant.copy(alpha = 0.2f),
+                                    modifier = Modifier.padding(start = 48.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+private fun QuickActionPill(
+    icon: ImageVector,
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    iconColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        modifier = modifier
+            .height(68.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconColor,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuNavigationItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    iconContainerColor: Color,
+    iconColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(iconContainerColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.5.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
 }

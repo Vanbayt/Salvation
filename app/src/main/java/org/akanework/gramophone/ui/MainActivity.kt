@@ -45,29 +45,53 @@ import coil3.imageLoader
 import coil3.compose.AsyncImage
 
 // Compose Imports
+import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,11 +99,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType // 🔥 Импорт вибрации
-import androidx.compose.ui.platform.LocalHapticFeedback // 🔥 Импорт вибрации
+import org.akanework.gramophone.ui.components.library.AudioQualityBadge
 import coil3.request.allowHardware
 import coil3.request.SuccessResult
 import coil3.BitmapImage
@@ -116,13 +137,6 @@ import org.akanework.gramophone.ui.components.SquigglySlider
 import org.akanework.gramophone.ui.fragments.ComposeContainerFragment
 import uk.akane.libphonograph.manipulator.ItemManipulator
 import java.io.File
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.animation.core.spring
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.geometry.Offset
 
 enum class AppTab(val title: String, val iconRes: Int) {
     HOME("Главная", R.drawable.ic_home),
@@ -235,6 +249,7 @@ class MainActivity : BaseActivity() {
 
         // 🔥 ИНИЦИАЛИЗАЦИЯ VIEWPAGER
         mainPager = findViewById(R.id.main_pager)
+        mainPager.isUserInputEnabled = false // Отключаем свайп между корневыми экранами навбара
         mainPager.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount() = 3
             override fun createFragment(position: Int): Fragment {
@@ -807,24 +822,24 @@ class MainActivity : BaseActivity() {
 
         val bottomActionsHeight = 56.dp
         val actionsToControlsGap = 16.dp
-        val mainControlsHeight = 88.dp
-        val controlsToTimeGap = 16.dp
+        val mainControlsHeight = 76.dp
+        val controlsToTimeGap = 14.dp
         val timeHeight = 16.dp
-        val sliderHeight = 44.dp
-        val sliderToTextGap = 16.dp
-        val textBlockHeight = 64.dp
+        val sliderHeight = 38.dp
+        val sliderToTextGap = 14.dp
+        val textBlockHeight = 60.dp
 
         val totalBottomStackHeight = bottomActionsHeight + actionsToControlsGap + mainControlsHeight + controlsToTimeGap + timeHeight + sliderHeight + sliderToTextGap + textBlockHeight
 
         val fullTextY = screenHeightDp - fullBottomPadding - totalBottomStackHeight
         val fullControlsY = fullTextY + textBlockHeight + sliderToTextGap
 
-        val availableCoverHeight = fullTextY - fullHeaderBottom - 24.dp
-        val maxFullCoverSize = minOf(screenWidthDp - 48.dp, maxOf(200.dp, availableCoverHeight))
+        val availableCoverHeight = fullTextY - fullHeaderBottom - 20.dp
+        val maxFullCoverSize = minOf(screenWidthDp - 44.dp, maxOf(200.dp, availableCoverHeight))
         val targetFullCoverSize = maxFullCoverSize * finalCoverScale
         val targetFullCoverX = (screenWidthDp - targetFullCoverSize) / 2
-        val targetFullCoverY = fullHeaderBottom + ((availableCoverHeight - targetFullCoverSize) / 2).coerceAtLeast(8.dp)
-        val fullCoverRadius = 24.dp
+        val targetFullCoverY = fullHeaderBottom + ((availableCoverHeight - targetFullCoverSize) / 2).coerceAtLeast(6.dp)
+        val fullCoverRadius = 28.dp
 
         val fullTextX = 24.dp
         val fullTextWidth = screenWidthDp - 48.dp
@@ -899,8 +914,18 @@ class MainActivity : BaseActivity() {
                     } else Modifier
                 )
         ) {
-            // 1. FULL HEADER (Close, Title, Menu)
+            // 1. FULL HEADER (Close, Playing From Source, Menu)
             if (fraction > 0.1f) {
+                val playingFrom = remember(trackTitle, trackArtist) {
+                    val meta = getPlayer()?.currentMediaItem?.mediaMetadata
+                    val fromExtra = meta?.extras?.getString("PLAYING_FROM")
+                    when {
+                        !fromExtra.isNullOrBlank() -> fromExtra
+                        !meta?.albumTitle.isNullOrBlank() -> "Альбом: ${meta.albumTitle}"
+                        else -> "Медиатека"
+                    }
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -912,19 +937,80 @@ class MainActivity : BaseActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onClose, modifier = Modifier.size(56.dp)) {
-                        Icon(painterResource(R.drawable.ic_expand_more), "Close", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    FilledTonalIconButton(
+                        onClick = onClose,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, "Close", modifier = Modifier.size(28.dp))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AnimatedPlayingIndicator(isPlaying = isPlaying)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Сейчас играет", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                    ) {
+                        Text(
+                            "СЕЙЧАС ИГРАЕТ",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.4.sp,
+                                fontSize = 10.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    org.akanework.gramophone.ui.fragments.QueueBottomSheetFragment().show(this@MainActivity.supportFragmentManager, "QUEUE_SHEET")
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_library),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = playingFrom,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
-                    IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
-                    }, modifier = Modifier.size(56.dp)) {
-                        Icon(painterResource(R.drawable.ic_more_vert), "Menu", modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    FilledTonalIconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
+                        },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.Rounded.MoreVert, "Menu", modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -1053,6 +1139,30 @@ class MainActivity : BaseActivity() {
                     )
                 }
 
+                // Full Player Ambient Album Glow (PixelPlayer style)
+                if (auraColor != null && fraction > 0.6f && isPlaying) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(1.18f)
+                            .graphicsLayer {
+                                alpha = ((fraction - 0.6f) / 0.4f) * 0.42f
+                            }
+                            .drawBehind {
+                                val brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        auraColor.copy(alpha = 0.35f),
+                                        auraColor.copy(alpha = 0.10f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.5f, size.height * 0.5f),
+                                    radius = size.width / 1.5f
+                                )
+                                drawCircle(brush)
+                            }
+                    )
+                }
+
                 val leftProgress = (-dragOffset.value / widthPx).coerceIn(0f, 1f)
                 val rightProgress = (dragOffset.value / widthPx).coerceIn(0f, 1f)
                 val maxProgress = maxOf(leftProgress, rightProgress)
@@ -1126,33 +1236,42 @@ class MainActivity : BaseActivity() {
             ) {
                 val titleFontSize = androidx.compose.ui.unit.lerp(15.sp, 24.sp, textProgress)
                 val titleLineHeight = androidx.compose.ui.unit.lerp(20.sp, 28.sp, textProgress)
-                val artistFontSize = androidx.compose.ui.unit.lerp(13.sp, 17.sp, textProgress)
+                val artistFontSize = androidx.compose.ui.unit.lerp(13.sp, 16.sp, textProgress)
                 val artistLineHeight = androidx.compose.ui.unit.lerp(16.sp, 22.sp, textProgress)
                 val textSpacing = androidx.compose.ui.unit.lerp(2.dp, 6.dp, textProgress)
 
                 Text(
                     text = trackTitle.ifEmpty { "Загрузка..." },
-                    style = MaterialTheme.typography.titleMedium.copy(
+                    style = MaterialTheme.typography.headlineMedium.copy(
                         fontSize = titleFontSize,
                         lineHeight = titleLineHeight,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-0.3).sp
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee(),
                     textAlign = TextAlign.Start
                 )
                 Spacer(modifier = Modifier.height(textSpacing))
                 Text(
                     text = trackArtist.ifEmpty { "Ожидание" },
-                    style = MaterialTheme.typography.bodySmall.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = artistFontSize,
-                        lineHeight = artistLineHeight
+                        lineHeight = artistLineHeight,
+                        fontWeight = FontWeight.SemiBold
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    color = if (fraction > 0.5f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Start
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.clickable {
+                        val artistId = getPlayer()?.currentMediaItem?.mediaMetadata?.extras?.getString("ARTIST_ID")
+                        if (!artistId.isNullOrBlank()) {
+                            startFragment(org.akanework.gramophone.ui.fragments.ArtistFragment.newInstance(artistId))
+                            collapsePlayer()
+                        }
+                    }
                 )
             }
 
@@ -1188,188 +1307,250 @@ class MainActivity : BaseActivity() {
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(formatTime(currentPosition.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(formatTime(trackDuration.toLong()), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            formatTime(currentPosition.toLong()),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatTime(trackDuration.toLong()),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(controlsToTimeGap))
 
+                    // Экспрессивные соединенные кнопки Prev / Play-Pause / Next (PixelPlayer Animated Controls)
+                    var pressedAction by remember { mutableStateOf<String?>(null) }
+                    LaunchedEffect(pressedAction) {
+                        if (pressedAction != null) {
+                            kotlinx.coroutines.delay(200)
+                            pressedAction = null
+                        }
+                    }
+
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(76.dp)
+                            .padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
+                        val prevWeight by animateFloatAsState(
+                            targetValue = if (pressedAction == "PREV") 1.25f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "prevWeight"
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(32.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(if (isLiked) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .weight(prevWeight)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(32.dp))
                                 .clickable {
+                                    pressedAction = "PREV"
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@clickable
-                                    if (currentTrackId.isEmpty()) return@clickable
-
-                                    val newLikeState = !isLiked
-                                    isLiked = newLikeState
-                                    if (newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
-
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
-                                            val response = if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
-                                            if (!response.isSuccessful) {
-                                                withContext(Dispatchers.Main) {
-                                                    if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
-                                                    if (!newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                if (getPlayer()?.currentMediaItem?.mediaId == currentTrackId) isLiked = !newLikeState
-                                                if (!newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
-                                            }
-                                        }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
+                                    getPlayer()?.seekToPrevious()
+                                }
                         ) {
-                            Icon(
-                                painterResource(if (isLiked) R.drawable.ic_favorite_filled else R.drawable.ic_favorite),
-                                contentDescription = "Like",
-                                modifier = Modifier.size(28.dp),
-                                tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.SkipPrevious, "Prev", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            }
                         }
 
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                getPlayer()?.seekToPrevious()
-                            },
-                            modifier = Modifier.size(64.dp)
-                        ) {
-                            Icon(painterResource(R.drawable.ic_skip_previous), "Prev", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
-                        }
-
-                        Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
-                            CookiePlayButton(
-                                isPlaying = isPlaying,
-                                isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying,
-                                onClick = {
+                        val playWeight by animateFloatAsState(
+                            targetValue = if (pressedAction == "PLAY") 1.35f else 1.25f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "playWeight"
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(32.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .weight(playWeight)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(32.dp))
+                                .clickable {
+                                    pressedAction = "PLAY"
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
                                 }
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                getPlayer()?.seekToNext()
-                            },
-                            modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(painterResource(R.drawable.ic_skip_next), "Next", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            Box(contentAlignment = Alignment.Center) {
+                                androidx.compose.animation.AnimatedContent(
+                                    targetState = isPlaying,
+                                    transitionSpec = { androidx.compose.animation.fadeIn(tween(150)) togetherWith androidx.compose.animation.fadeOut(tween(150)) },
+                                    label = "PlayPauseIcon"
+                                ) { playing ->
+                                    Icon(
+                                        imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                        contentDescription = if (playing) "Pause" else "Play",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(38.dp)
+                                    )
+                                }
+                            }
                         }
 
-                        Box(
+                        val nextWeight by animateFloatAsState(
+                            targetValue = if (pressedAction == "NEXT") 1.25f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "nextWeight"
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(32.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(if (isShuffle) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .weight(nextWeight)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(32.dp))
                                 .clickable {
+                                    pressedAction = "NEXT"
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val p = getPlayer() ?: return@clickable
-                                    val newState = !p.shuffleModeEnabled
-                                    p.shuffleModeEnabled = newState
-                                    if (newState) applyPhysicalShuffle(p)
-                                },
-                            contentAlignment = Alignment.Center
+                                    getPlayer()?.seekToNext()
+                                }
                         ) {
-                            Icon(
-                                painterResource(R.drawable.ic_shuffle), "Shuffle",
-                                modifier = Modifier.size(28.dp),
-                                tint = if (isShuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(actionsToControlsGap))
 
-                    Row(
+                    // Нижняя сегментированная капсула 4 переключателей (PixelPlayer BottomToggleRow Style)
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .height(56.dp)
+                            .padding(horizontal = 6.dp)
+                            .clip(CircleShape)
                     ) {
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val targetState = !showLyricsScreen
-                                showLyricsScreen = targetState
-                                if (targetState && currentLyricsResult == null && !isLyricsLoading) {
-                                    loadLyrics()
-                                }
-                            },
-                            modifier = Modifier.size(56.dp)
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                painterResource(R.drawable.ic_article),
-                                "Lyrics",
-                                modifier = Modifier.size(24.dp),
-                                tint = if (showLyricsScreen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            // 1. Shuffle
+                            SegmentedCapsuleBtn(
+                                icon = Icons.Rounded.Shuffle,
+                                isActive = isShuffle,
+                                activeBg = MaterialTheme.colorScheme.primaryContainer,
+                                activeFg = MaterialTheme.colorScheme.onPrimaryContainer,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val p = getPlayer() ?: return@SegmentedCapsuleBtn
+                                    val newState = !p.shuffleModeEnabled
+                                    p.shuffleModeEnabled = newState
+                                    if (newState) applyPhysicalShuffle(p)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // 2. Repeat
+                            val repeatIcon = if (repeatModeState == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
+                            SegmentedCapsuleBtn(
+                                icon = repeatIcon,
+                                isActive = isLoop,
+                                activeBg = MaterialTheme.colorScheme.secondaryContainer,
+                                activeFg = MaterialTheme.colorScheme.onSecondaryContainer,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val p = getPlayer() ?: return@SegmentedCapsuleBtn
+                                    val newMode = when (p.repeatMode) {
+                                        androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                                        androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                                        else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                                    }
+                                    p.repeatMode = newMode
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // 3. Favorite
+                            SegmentedCapsuleBtn(
+                                icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                isActive = isLiked,
+                                activeBg = MaterialTheme.colorScheme.tertiaryContainer,
+                                activeFg = MaterialTheme.colorScheme.onTertiaryContainer,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@SegmentedCapsuleBtn
+                                    if (currentTrackId.isEmpty()) return@SegmentedCapsuleBtn
+                                    val newLikeState = !isLiked
+                                    isLiked = newLikeState
+                                    if (newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        try {
+                                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
+                                            if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
+                                        } catch (_: Exception) {}
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // 4. Lyrics
+                            SegmentedCapsuleBtn(
+                                icon = Icons.Rounded.Lyrics,
+                                isActive = showLyricsScreen,
+                                activeBg = MaterialTheme.colorScheme.primaryContainer,
+                                activeFg = MaterialTheme.colorScheme.onPrimaryContainer,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val targetState = !showLyricsScreen
+                                    showLyricsScreen = targetState
+                                    if (targetState && currentLyricsResult == null && !isLyricsLoading) {
+                                        loadLyrics()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
+                    }
 
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.Center
+                    // Интерактивный баннер следующего трека (Next Track Pill)
+                    AnimatedVisibility(
+                        visible = showNextTrack && nextTrackName.isNotEmpty(),
+                        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 2 },
+                        exit = fadeOut(tween(300)) + slideOutVertically(tween(300)) { it / 2 }
+                    ) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    getPlayer()?.seekToNext()
+                                }
                         ) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = showNextTrack && nextTrackName.isNotEmpty(),
-                                enter = androidx.compose.animation.fadeIn(tween(700)) +
-                                        androidx.compose.animation.slideInVertically(tween(700)) { it / 2 },
-                                exit = androidx.compose.animation.fadeOut(tween(500)) +
-                                        androidx.compose.animation.slideOutVertically(tween(500)) { it / 2 }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text("Далее:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text(nextTrackName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
-                                }
+                                Text(
+                                    "Далее: ",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = nextTrackName,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
-                        }
-
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val p = getPlayer() ?: return@IconButton
-                                val newMode = when (p.repeatMode) {
-                                    androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                                    androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                                    else -> androidx.media3.common.Player.REPEAT_MODE_OFF
-                                }
-                                p.repeatMode = newMode
-                            },
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            val iconRes = when (repeatModeState) {
-                                androidx.media3.common.Player.REPEAT_MODE_ONE -> R.drawable.ic_repeat_one
-                                androidx.media3.common.Player.REPEAT_MODE_ALL -> R.drawable.ic_repeat
-                                else -> R.drawable.ic_repeat
-                            }
-                            Icon(
-                                painterResource(iconRes),
-                                "Loop",
-                                modifier = Modifier.size(24.dp),
-                                tint = if (isLoop) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }
@@ -1408,6 +1589,45 @@ class MainActivity : BaseActivity() {
                     onDismiss = {
                         showLyricsScreen = false
                     }
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun SegmentedCapsuleBtn(
+        icon: androidx.compose.ui.graphics.vector.ImageVector,
+        isActive: Boolean,
+        activeBg: Color,
+        activeFg: Color,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier
+    ) {
+        val containerColor by animateColorAsState(
+            targetValue = if (isActive) activeBg else Color.Transparent,
+            animationSpec = tween(200),
+            label = "segContainer"
+        )
+        val contentColor by animateColorAsState(
+            targetValue = if (isActive) activeFg else MaterialTheme.colorScheme.onSurfaceVariant,
+            animationSpec = tween(200),
+            label = "segContent"
+        )
+
+        Surface(
+            shape = CircleShape,
+            color = containerColor,
+            modifier = modifier
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }

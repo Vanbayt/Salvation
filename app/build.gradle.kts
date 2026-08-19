@@ -94,8 +94,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     lint {
@@ -241,7 +241,7 @@ resourcePlaceholders {
 
 kotlin {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_21
+        jvmTarget = JvmTarget.JVM_17
         freeCompilerArgs = listOf(
             "-Xno-param-assertions",
             "-Xno-call-assertions",
@@ -355,6 +355,7 @@ dependencies {
 
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("sh.calvin.reorderable:reorderable:2.4.3")
 }
 
 fun String.runCommand(

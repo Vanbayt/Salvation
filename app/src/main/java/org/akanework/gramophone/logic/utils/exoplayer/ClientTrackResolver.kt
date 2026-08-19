@@ -41,11 +41,30 @@ object ClientTrackResolver {
     @Volatile
     private var lastVisitorData: String = ""
 
+    @Volatile
+    private var currentSignatureTimestamp: Int = 20681
+
     private val resolveInfoCache = java.util.concurrent.ConcurrentHashMap<String, TrackResolveInfo>()
     private val directStreamCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
     private val uriToTrackIdMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val urlToUserAgentMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun getDirectStreamUrl(trackId: Long): String? = directStreamCache[trackId]
+
+    fun getUserAgentForUrl(url: String): String {
+        val mapped = urlToUserAgentMap[url]
+        if (!mapped.isNullOrEmpty()) return mapped
+        if (url.contains("c=VISIONOS") || url.contains("c%3DVISIONOS")) {
+            return "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+        }
+        if (url.contains("c=ANDROID_VR") || url.contains("c%3DANDROID_VR")) {
+            return "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)"
+        }
+        if (url.contains("c=IOS") || url.contains("c%3DIOS")) {
+            return "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)"
+        }
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    }
 
     fun findTrackIdForUri(uri: Uri): String? {
         val seg = uri.lastPathSegment ?: ""
@@ -60,62 +79,90 @@ object ClientTrackResolver {
         .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
-    fun getOrFetchVisitorData(): String {
-        if (lastVisitorData.isNotEmpty()) return lastVisitorData
-        synchronized(this) {
-            if (lastVisitorData.isNotEmpty()) return lastVisitorData
-            try {
-                // Method 1: Official lightweight visitor_id endpoint (40ms)
-                val reqBody = JSONObject().apply {
-                    put("context", JSONObject().apply {
-                        put("client", JSONObject().apply {
-                            put("clientName", "WEB_REMIX")
-                            put("clientVersion", "1.20240101.01.00")
-                            put("hl", "en")
-                            put("gl", "US")
-                        })
-                    })
-                }
-                val req = Request.Builder()
-                    .url("https://music.youtube.com/youtubei/v1/visitor_id")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                    .post(reqBody.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                httpClient.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val body = resp.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val vData = json.optJSONObject("responseContext")?.optString("visitorData", "") ?: ""
-                        if (vData.isNotEmpty()) {
-                            lastVisitorData = vData
-                            Log.i(TAG, "Bootstrapped visitorData from visitor_id API: ${lastVisitorData.take(30)}...")
-                            return lastVisitorData
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "visitor_id API bootstrap failed: ${e.message}")
-            }
+    data class ExtractorProfile(
+        val name: String,
+        val version: String,
+        val uaPlayer: String,
+        val uaDownload: String,
+        val deviceMake: String = "",
+        val deviceModel: String = "",
+        val sdkVersion: Int = 0,
+        val osName: String = "",
+        val osVersion: String = "",
+        val clientNameHeader: String = ""
+    )
 
-            try {
-                // Method 2: Fallback from youtube.com homepage HTML
-                val req = Request.Builder()
-                    .url("https://www.youtube.com/")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                    .build()
-                httpClient.newCall(req).execute().use { resp ->
+    private val profileVisitorDataMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    fun getOrFetchVisitorData(prof: ExtractorProfile? = null): String {
+        val clientKey = prof?.name ?: "WEB_REMIX"
+        val cached = profileVisitorDataMap[clientKey]
+        if (!cached.isNullOrEmpty()) return cached
+
+        val clientVersion = prof?.version ?: "1.20240101.01.00"
+        val clientUA = prof?.uaPlayer ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+
+        try {
+            val reqBody = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", clientKey)
+                        put("clientVersion", clientVersion)
+                        put("hl", "en")
+                        put("gl", "US")
+                        if (prof != null) {
+                            if (prof.deviceMake.isNotEmpty()) put("deviceMake", prof.deviceMake)
+                            if (prof.deviceModel.isNotEmpty()) put("deviceModel", prof.deviceModel)
+                            if (prof.sdkVersion > 0) put("androidSdkVersion", prof.sdkVersion)
+                            if (prof.osName.isNotEmpty()) put("osName", prof.osName)
+                            if (prof.osVersion.isNotEmpty()) put("osVersion", prof.osVersion)
+                        }
+                    })
+                })
+            }
+            val req = Request.Builder()
+                .url("https://www.youtube.com/youtubei/v1/visitor_id")
+                .header("User-Agent", clientUA)
+                .post(reqBody.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
                     val body = resp.body?.string() ?: ""
-                    val m = Regex("\"visitorData\":\\s*\"([^\"]+)\"").find(body)
-                    if (m != null && m.groupValues.size > 1) {
-                        lastVisitorData = m.groupValues[1]
-                        Log.i(TAG, "Bootstrapped visitorData from HTML: ${lastVisitorData.take(30)}...")
+                    val json = JSONObject(body)
+                    val vData = json.optJSONObject("responseContext")?.optString("visitorData", "") ?: ""
+                    if (vData.isNotEmpty()) {
+                        profileVisitorDataMap[clientKey] = vData
+                        lastVisitorData = vData
+                        Log.i(TAG, "Bootstrapped visitorData for $clientKey from visitor_id API: ${vData.take(30)}...")
+                        return vData
                     }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "HTML visitorData bootstrap failed: ${e.message}")
             }
-            return lastVisitorData
+        } catch (e: Exception) {
+            Log.w(TAG, "visitor_id API bootstrap for $clientKey failed: ${e.message}")
         }
+
+        try {
+            // Method 2: Fallback from youtube.com homepage HTML
+            val req = Request.Builder()
+                .url("https://www.youtube.com/")
+                .header("User-Agent", clientUA)
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                val m = Regex("\"visitorData\":\\s*\"([^\"]+)\"").find(body)
+                if (m != null && m.groupValues.size > 1) {
+                    val vData = m.groupValues[1]
+                    profileVisitorDataMap[clientKey] = vData
+                    lastVisitorData = vData
+                    Log.i(TAG, "Bootstrapped visitorData from HTML: ${lastVisitorData.take(30)}...")
+                    return vData
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "HTML visitorData bootstrap failed: ${e.message}")
+        }
+        return lastVisitorData
     }
 
     data class TrackResolveInfo(
@@ -174,6 +221,7 @@ object ClientTrackResolver {
         }
 
         try {
+            PoTokenProvider.initAsync(context)
             // 1. Fetch Track Metadata from Backend
             val info = fetchTrackInfo(trackIdStr) ?: return rawUri
             Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId})")
@@ -349,7 +397,7 @@ object ClientTrackResolver {
             val proxyUrl = "$BACKEND_BASE_URL/stream/${info.trackId}"
             uriToTrackIdMap[proxyUrl] = info.trackId.toString()
             resolvedCache.put(info.trackId, Pair(winnerUrl, System.currentTimeMillis()))
-            Log.i(TAG, "Successfully resolved stream for track ${info.trackId} -> $winnerUrl")
+            Log.i(TAG, "Successfully resolved direct stream for track ${info.trackId} -> $winnerUrl")
             return Uri.parse(winnerUrl)
 
         } catch (e: Exception) {
@@ -1021,68 +1069,112 @@ object ClientTrackResolver {
     }
 
     private fun extractPlayerStreamUrl(videoId: String, targetDurationSec: Int = 0): String? {
-        val vData = getOrFetchVisitorData()
+        val sts = currentSignatureTimestamp
+
         val profiles = listOf(
-            Pair("ANDROID_VR", "1.65.10"),
-            Pair("IOS", "19.29.1"),
-            Pair("ANDROID_MUSIC", "7.02.51"),
-            Pair("WEB_REMIX", "1.20240101.01.00"),
-            Pair("ANDROID_TESTSUITE", "1.9")
+            ExtractorProfile(
+                name = "VISIONOS",
+                version = "1.02",
+                uaPlayer = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+                uaDownload = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+                deviceMake = "Apple",
+                deviceModel = "RealityDevice17,1",
+                osName = "visionOS",
+                osVersion = "26.5.23O471",
+                clientNameHeader = "101"
+            ),
+            ExtractorProfile(
+                name = "WEB_REMIX",
+                version = "1.20241021.01.00",
+                uaPlayer = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                uaDownload = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+            ),
+            ExtractorProfile(
+                name = "ANDROID_VR",
+                version = "1.65.10",
+                uaPlayer = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+                uaDownload = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)",
+                deviceMake = "Oculus",
+                deviceModel = "Quest 3",
+                sdkVersion = 32,
+                osName = "Android",
+                osVersion = "12L"
+            ),
+            ExtractorProfile(
+                name = "IOS",
+                version = "19.29.1",
+                uaPlayer = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
+                uaDownload = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
+                deviceMake = "Apple",
+                deviceModel = "iPhone16,2",
+                osName = "iOS",
+                osVersion = "17.5.1"
+            )
         )
 
-        for ((cName, cVer) in profiles) {
+        for (prof in profiles) {
             try {
+                val vData = getOrFetchVisitorData(prof)
                 val url = "https://www.youtube.com/youtubei/v1/player"
+                val clientJson = JSONObject().apply {
+                    put("clientName", prof.name)
+                    put("clientVersion", prof.version)
+                    put("hl", "en")
+                    put("gl", "US")
+                    if (prof.deviceMake.isNotEmpty()) {
+                        put("deviceMake", prof.deviceMake)
+                        put("deviceModel", prof.deviceModel)
+                    }
+                    if (prof.sdkVersion > 0) {
+                        put("androidSdkVersion", prof.sdkVersion)
+                    }
+                    if (prof.osName.isNotEmpty()) {
+                        put("osName", prof.osName)
+                        put("osVersion", prof.osVersion)
+                    }
+                    if (vData.isNotEmpty()) {
+                        put("visitorData", vData)
+                    }
+                }
+
+                val poToken = if (vData.isNotEmpty()) PoTokenProvider.generatePoToken(vData) else PoTokenProvider.generatePoToken(videoId)
                 val reqBodyJson = JSONObject().apply {
                     put("context", JSONObject().apply {
-                        put("client", JSONObject().apply {
-                            put("clientName", cName)
-                            put("clientVersion", cVer)
-                            put("hl", "en")
-                            put("gl", "US")
-                            if (cName == "ANDROID_VR") {
-                                put("deviceMake", "Oculus")
-                                put("deviceModel", "Quest 3")
-                                put("androidSdkVersion", 32)
-                                put("userAgent", "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip")
-                                put("osName", "Android")
-                                put("osVersion", "12L")
-                                put("timeZone", "UTC")
-                                put("utcOffsetMinutes", 0)
-                            }
-                            if (vData.isNotEmpty()) {
-                                put("visitorData", vData)
-                            }
-                        })
+                        put("client", clientJson)
                     })
+                    if (poToken.isNotEmpty()) {
+                        put("serviceIntegrityDimensions", JSONObject().apply {
+                            put("poToken", poToken)
+                        })
+                    }
                     put("videoId", videoId)
                     put("playbackContext", JSONObject().apply {
                         put("contentPlaybackContext", JSONObject().apply {
                             put("html5Preference", "HTML5_PREF_WANTS")
-                            put("signatureTimestamp", 20676)
+                            put("signatureTimestamp", sts)
                         })
                     })
                     put("contentCheckOk", true)
                     put("racyCheckOk", true)
                 }
 
-                val ua = when (cName) {
-                    "ANDROID_VR" -> "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
-                    "ANDROID_TESTSUITE" -> "com.google.android.youtube/1.9 (Linux; U; Android 12; gzip)"
-                    "ANDROID_MUSIC" -> "com.google.android.apps.youtube.music/7.02.51 (Linux; U; Android 12; gzip)"
-                    "IOS" -> "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)"
-                    else -> "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-                }
-
-                val req = Request.Builder()
+                val reqBuilder = Request.Builder()
                     .url(url)
-                    .header("User-Agent", ua)
+                    .header("User-Agent", prof.uaPlayer)
+                if (prof.clientNameHeader.isNotEmpty()) {
+                    reqBuilder.header("X-YouTube-Client-Name", prof.clientNameHeader)
+                    reqBuilder.header("X-YouTube-Client-Version", prof.version)
+                }
+                if (vData.isNotEmpty()) {
+                    reqBuilder.header("X-Goog-Visitor-Id", vData)
+                }
+                val req = reqBuilder
                     .post(reqBodyJson.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
                 httpClient.newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) {
-                        val msg = "HTTP Error ${resp.code} for profile $cName"
+                        val msg = "HTTP Error ${resp.code} for profile ${prof.name}"
                         Log.w(TAG, "Extraction failed for $videoId: $msg")
                         org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | $msg")
                         return@use
@@ -1094,8 +1186,8 @@ object ClientTrackResolver {
                     val status = playability?.optString("status", "") ?: ""
                     if (status != "OK") {
                         val reason = playability?.optString("reason", "") ?: "Status: $status"
-                        Log.w(TAG, "Profile $cName unplayable for $videoId: $status - $reason")
-                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile $cName Status: $status | Reason: '$reason'")
+                        Log.w(TAG, "Profile ${prof.name} unplayable for $videoId: $status - $reason")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile ${prof.name} Status: $status | Reason: '$reason'")
                         return@use
                     }
 
@@ -1113,15 +1205,15 @@ object ClientTrackResolver {
 
                     val streamingData = json.optJSONObject("streamingData")
                     if (streamingData == null) {
-                        Log.w(TAG, "No streamingData for $videoId using profile $cName")
-                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile $cName: No streamingData")
+                        Log.w(TAG, "No streamingData for $videoId using profile ${prof.name}")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile ${prof.name}: No streamingData")
                         return@use
                     }
 
                     val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
                     if (adaptiveFormats == null || adaptiveFormats.length() == 0) {
-                        Log.w(TAG, "No adaptiveFormats for $videoId using profile $cName")
-                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile $cName: Empty adaptiveFormats")
+                        Log.w(TAG, "No adaptiveFormats for $videoId using profile ${prof.name}")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile ${prof.name}: Empty adaptiveFormats")
                         return@use
                     }
 
@@ -1153,20 +1245,21 @@ object ClientTrackResolver {
 
                     if (!bestUrl.isNullOrEmpty()) {
                         var finalUrl = bestUrl
-                        if (cName == "WEB_REMIX" && !finalUrl.contains("ratebypass=yes")) {
+                        if (!finalUrl.contains("ratebypass=yes")) {
                             finalUrl = if (finalUrl.contains("?")) "$finalUrl&ratebypass=yes" else "$finalUrl?ratebypass=yes"
                         }
-                        Log.i(TAG, "Successfully extracted direct audio URL using profile $cName for VideoID $videoId")
-                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_SUCCESS", "VideoID $videoId | Profile: $cName | Quality score: $bestScore")
+                        urlToUserAgentMap[finalUrl] = prof.uaDownload
+                        Log.i(TAG, "Successfully extracted direct audio URL using profile ${prof.name} for VideoID $videoId")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_SUCCESS", "VideoID $videoId | Profile: ${prof.name} | Quality score: $bestScore")
                         return finalUrl
                     } else {
-                        Log.w(TAG, "No direct audio URL found for $videoId using profile $cName")
-                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile $cName: No audio stream URL")
+                        Log.w(TAG, "No direct audio URL found for $videoId using profile ${prof.name}")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile ${prof.name}: No audio stream URL")
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed profile $cName for VideoID $videoId: ${e.message}")
-                org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile $cName Exception: ${e.message}")
+                Log.w(TAG, "Failed profile ${prof.name} for VideoID $videoId: ${e.message}")
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | Profile ${prof.name} Exception: ${e.message}")
             }
         }
         return null

@@ -372,10 +372,51 @@ class GramophoneMediaSourceFactory(
 // КЛАССЫ-ОБЕРТКИ ДЛЯ АВТОРИЗАЦИИ И ТАЙМ-АУТОВ
 // =========================================================================
 
-private val sharedOkHttpClient: okhttp3.OkHttpClient by lazy {
+private val streamingOkHttpClient: okhttp3.OkHttpClient by lazy {
     okhttp3.OkHttpClient.Builder()
-        .cookieJar(ClientTrackResolver.cookieJar)
+        .followRedirects(true)
+        .followSslRedirects(true)
         .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+        .addNetworkInterceptor { chain ->
+            val orig = chain.request()
+            val host = orig.url.host
+            if (host.contains("googlevideo.com")) {
+                val ua = ClientTrackResolver.getUserAgentForUrl(orig.url.toString())
+                val builder = orig.newBuilder()
+                    .removeHeader("Authorization")
+                    .removeHeader("Referer")
+                    .removeHeader("Origin")
+                    .removeHeader("Cookie")
+                    .header("User-Agent", ua)
+
+                // 🔥 CRITICAL CDN RULE: Google Video CDN returns 403 on open-ended ranges or ranges > 1MB.
+                // Must always provide a strictly bounded Range: bytes=start-end with max chunk size 512 KB (524287 bytes).
+                val existingRange = orig.header("Range")
+                if (existingRange == null) {
+                    builder.header("Range", "bytes=0-524287")
+                } else if (existingRange.startsWith("bytes=")) {
+                    val rangeBody = existingRange.removePrefix("bytes=").trim()
+                    val dashIdx = rangeBody.indexOf('-')
+                    if (dashIdx != -1) {
+                        val startStr = rangeBody.substring(0, dashIdx).trim()
+                        val endStr = rangeBody.substring(dashIdx + 1).trim()
+                        val start = startStr.toLongOrNull() ?: 0L
+                        val end = endStr.toLongOrNull()
+                        val clampedEnd = if (end == null || (end - start) >= 524288L) {
+                            start + 524287L
+                        } else {
+                            end
+                        }
+                        builder.header("Range", "bytes=$start-$clampedEnd")
+                    } else {
+                        builder.header("Range", "bytes=0-524287")
+                    }
+                }
+                chain.proceed(builder.build())
+            } else {
+                chain.proceed(orig)
+            }
+        }
         .connectionPool(okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES))
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -390,21 +431,32 @@ private class AuthenticatedDataSourceFactory(
 
     private val defaultDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
         context,
-        androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(sharedOkHttpClient)
+        androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(streamingOkHttpClient)
     )
 
     override fun createDataSource(): DataSource {
-        return AuthenticatedDataSource(context, defaultDataSourceFactory.createDataSource())
+        return AuthenticatedDataSource(context, defaultDataSourceFactory)
     }
 }
 
 private class AuthenticatedDataSource(
     private val context: android.content.Context,
-    private val upstream: DataSource
+    private val dataSourceFactory: DataSource.Factory
 ) : DataSource {
 
     private companion object {
-        private const val CHUNK_SIZE_BYTES = 512 * 1024L // 512 KB HTTP Range Chunks (Guaranteed within Google CDN burst limits)
+        private const val CHUNK_SIZE_BYTES = 512 * 1024L // 512 KB HTTP Range Chunks
+    }
+
+    private val transferListeners = java.util.concurrent.CopyOnWriteArrayList<TransferListener>()
+    private var activeDataSource: DataSource = createDelegate()
+
+    private fun createDelegate(): DataSource {
+        val ds = dataSourceFactory.createDataSource()
+        for (listener in transferListeners) {
+            ds.addTransferListener(listener)
+        }
+        return ds
     }
 
     private var isChunkedMode = false
@@ -416,7 +468,10 @@ private class AuthenticatedDataSource(
     private var knownTotalLength = 0L
 
     override fun addTransferListener(transferListener: TransferListener) {
-        upstream.addTransferListener(transferListener)
+        if (!transferListeners.contains(transferListener)) {
+            transferListeners.add(transferListener)
+        }
+        activeDataSource.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
@@ -434,24 +489,26 @@ private class AuthenticatedDataSource(
         // 1. Подставляем токен авторизации ТОЛЬКО для нашего сервера 185.196.41.31
         val targetHost = targetUri.host ?: ""
         val isOurBackend = targetHost == "185.196.41.31"
+        val isGoogleVideo = targetHost.contains("googlevideo.com")
 
-        if (isOurBackend) {
+        if (isGoogleVideo) {
+            newHeaders.remove("Authorization")
+            newHeaders.remove("Referer")
+            newHeaders.remove("Origin")
+            newHeaders.remove("Cookie")
+            newHeaders["User-Agent"] = ClientTrackResolver.getUserAgentForUrl(targetUri.toString())
+        } else if (isOurBackend) {
             if (token != null) {
                 newHeaders["Authorization"] = "Bearer $token"
             }
         } else {
             newHeaders.remove("Authorization")
-            val isGoogleVideo = targetHost.contains("googlevideo.com")
-            if (isGoogleVideo) {
-                newHeaders["User-Agent"] = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
-            } else {
-                newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-                newHeaders["Referer"] = "https://music.youtube.com/"
-                newHeaders["Origin"] = "https://music.youtube.com"
-            }
+            newHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            newHeaders["Referer"] = "https://music.youtube.com/"
+            newHeaders["Origin"] = "https://music.youtube.com"
         }
 
-        // 2. Continuous streaming mode (disable rapid 512KB connection churning to prevent Google CDN 403)
+        // 2. Continuous streaming mode
         isChunkedMode = false
         originalDataSpec = dataSpec
         currentStreamPosition = dataSpec.position
@@ -479,7 +536,12 @@ private class AuthenticatedDataSource(
         while (attempt <= maxRetries) {
             attempt++
             try {
-                val bytesRemaining = upstream.open(newSpec)
+                try {
+                    activeDataSource.close()
+                } catch (_: Exception) {}
+                activeDataSource = createDelegate()
+
+                val bytesRemaining = activeDataSource.open(newSpec)
                 val elapsed = System.currentTimeMillis() - startTime
 
                 // 🔍 ДЕТАЛЬНАЯ ДИАГНОСТИКА YOUTUBE CDN
@@ -492,7 +554,7 @@ private class AuthenticatedDataSource(
                     val nowSec = System.currentTimeMillis() / 1000L
                     val expireDiffSec = expire - nowSec
 
-                    val respHeaders = upstream.responseHeaders
+                    val respHeaders = activeDataSource.responseHeaders
                     val serverHeader = respHeaders.entries.find { it.key.equals("Server", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
                     val googStat = respHeaders.entries.find { it.key.equals("X-Goog-Stat", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
                     val googBackoff = respHeaders.entries.find { it.key.equals("X-Goog-Backoff", ignoreCase = true) }?.value?.firstOrNull() ?: "none"
@@ -524,7 +586,7 @@ private class AuthenticatedDataSource(
 
                 // 4. ДИНАМИЧЕСКАЯ ОБРАБОТКА X-Content-Duration
                 try {
-                    val respHeaders = upstream.responseHeaders
+                    val respHeaders = activeDataSource.responseHeaders
                     val durationHeader = respHeaders.entries
                         .find { it.key.equals("X-Content-Duration", ignoreCase = true) }
                         ?.value?.firstOrNull()
@@ -539,11 +601,14 @@ private class AuthenticatedDataSource(
                     }
                 } catch (_: Exception) {}
 
-                return if (isChunkedMode) {
-                    if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) totalLengthRequested else androidx.media3.common.C.LENGTH_UNSET.toLong()
+                val remainingToReturn = if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
+                    totalLengthRequested
+                } else if (knownTotalLength > 0L) {
+                    knownTotalLength - currentStreamPosition
                 } else {
                     bytesRemaining
                 }
+                return remainingToReturn
             } catch (e: Exception) {
                 lastException = e
                 val elapsed = System.currentTimeMillis() - startTime
@@ -566,11 +631,12 @@ private class AuthenticatedDataSource(
                             .build()
                         try {
                             try {
-                                upstream.close()
+                                activeDataSource.close()
                             } catch (_: Exception) {}
+                            activeDataSource = createDelegate()
                             activeSpecToUse = directSpec
                             originalDataSpec = directSpec.buildUpon().setLength(androidx.media3.common.C.LENGTH_UNSET.toLong()).build()
-                            val freshBytes = upstream.open(directSpec)
+                            val freshBytes = activeDataSource.open(directSpec)
                             org.akanework.gramophone.logic.utils.PlaybackLogger.log(
                                 "STREAM_FAILOVER_DIRECT_SUCCESS",
                                 "Direct client stream connected in failover! Playing directly from phone IP"
@@ -589,18 +655,19 @@ private class AuthenticatedDataSource(
                         "STREAM_RETRY",
                         "Retrying stream open (Attempt $attempt/$maxRetries) with fresh URL resolution after error: ${e.javaClass.simpleName} - ${e.message}"
                     )
-                    // 🔥 ALWAYS close upstream safely before opening a new spec to prevent IllegalStateException
-                    try {
-                        upstream.close()
-                    } catch (_: Exception) {}
 
                     val effectiveTrackId = ClientTrackResolver.findTrackIdForUri(dataSpec.uri) ?: trackIdStr
                     val freshUri = ClientTrackResolver.resolveStreamUrl(context, dataSpec.uri, forceRefresh = true)
                     val freshHost = freshUri.host ?: ""
                     val freshHeaders = specToUse.httpRequestHeaders.toMutableMap()
                     if (freshHost.contains("googlevideo.com")) {
-                        freshHeaders["User-Agent"] = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
+                        freshHeaders.remove("Authorization")
+                        freshHeaders.remove("Referer")
+                        freshHeaders.remove("Origin")
+                        freshHeaders.remove("Cookie")
+                        freshHeaders["User-Agent"] = ClientTrackResolver.getUserAgentForUrl(freshUri.toString())
                     } else {
+                        freshHeaders.remove("Authorization")
                         freshHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
                         freshHeaders["Referer"] = "https://music.youtube.com/"
                         freshHeaders["Origin"] = "https://music.youtube.com"
@@ -614,7 +681,12 @@ private class AuthenticatedDataSource(
                     activeSpecToUse = retrySpec
 
                     try {
-                        val freshBytes = upstream.open(retrySpec)
+                        try {
+                            activeDataSource.close()
+                        } catch (_: Exception) {}
+                        activeDataSource = createDelegate()
+
+                        val freshBytes = activeDataSource.open(retrySpec)
                         org.akanework.gramophone.logic.utils.PlaybackLogger.log(
                             "STREAM_RETRY_SUCCESS",
                             "Retry $attempt succeeded! Stream opened for track '$effectiveTrackId' on host '$freshHost'"
@@ -643,100 +715,37 @@ private class AuthenticatedDataSource(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         val t0 = System.currentTimeMillis()
         try {
-            var bytes = upstream.read(buffer, offset, length)
+            var bytes = activeDataSource.read(buffer, offset, length)
 
-            // 🔥 512KB HTTP RANGE CHUNKING FOR GOOGLEVIDEO.COM (PREVENTS CDN THROTTLING)
-            if (bytes == androidx.media3.common.C.RESULT_END_OF_INPUT && isChunkedMode) {
-                val spec = activeSpecToUse
-                val origSpec = originalDataSpec
-                if (spec != null && origSpec != null) {
-                    val endPosition = if (knownTotalLength > 0L) {
-                        knownTotalLength
-                    } else if (totalLengthRequested != androidx.media3.common.C.LENGTH_UNSET.toLong()) {
-                        origSpec.position + totalLengthRequested
-                    } else {
-                        Long.MAX_VALUE
-                    }
+            // 🔥 SEAMLESS CHUNK ADVANCE: When reaching end of current 512KB bounded chunk, open next chunk!
+            if (bytes == androidx.media3.common.C.RESULT_END_OF_INPUT || bytes <= 0) {
+                if (knownTotalLength <= 0L || currentStreamPosition < knownTotalLength) {
+                    try {
+                        activeDataSource.close()
+                    } catch (_: Exception) {}
+                    activeDataSource = createDelegate()
 
-                    if (currentStreamPosition < endPosition) {
-                        try {
-                            upstream.close()
-                        } catch (_: Exception) {}
-
-                        val remainingTotal = endPosition - currentStreamPosition
-                        val nextChunkLength = kotlin.math.min(CHUNK_SIZE_BYTES, remainingTotal)
-
-                        if (nextChunkLength > 0L) {
-                            val nextChunkSpec = spec.buildUpon()
-                                .setPosition(currentStreamPosition)
-                                .setLength(nextChunkLength)
-                                .build()
-
-                            org.akanework.gramophone.logic.utils.PlaybackLogger.log(
-                                "STREAM_CHUNK_NEXT",
-                                "Opening next chunk at position $currentStreamPosition (Length: $nextChunkLength, Remaining: $remainingTotal)"
-                            )
-
-                            try {
-                                upstream.open(nextChunkSpec)
-                                bytes = upstream.read(buffer, offset, length)
-                            } catch (chunkEx: Exception) {
-                                if (knownTotalLength > 0L && currentStreamPosition >= (knownTotalLength - 32768L)) {
-                                    org.akanework.gramophone.logic.utils.PlaybackLogger.log("STREAM_EOF", "Chunk at EOF reached, returning RESULT_END_OF_INPUT: ${chunkEx.message}")
-                                    return androidx.media3.common.C.RESULT_END_OF_INPUT
-                                } else {
-                                    // 🔥 SEAMLESS PROACTIVE FAILOVER:
-                                    // When Google Video CDN limits direct streaming at offset >= 1MB (HTTP 403),
-                                    // seamlessly switch upstream to server proxy /stream/{trackId} at currentStreamPosition.
-                                    val origUri = originalDataSpec?.uri ?: spec.uri
-                                    val trackIdStr = ClientTrackResolver.findTrackIdForUri(origUri) ?: (origUri.lastPathSegment ?: "")
-                                    val currentHost = upstream.uri?.host ?: ""
-                                    if (trackIdStr.isNotEmpty() && trackIdStr.toLongOrNull() != null && !currentHost.contains("185.196.41.31")) {
-                                        val serverProxyUrl = "http://185.196.41.31/stream/$trackIdStr"
-                                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
-                                            "STREAM_CHUNK_FAILOVER",
-                                            "Direct chunk 403 at offset $currentStreamPosition. Seamlessly switching to server proxy '$serverProxyUrl'..."
-                                        )
-                                        try {
-                                            upstream.close()
-                                        } catch (_: Exception) {}
-
-                                        val proxyHeaders = mutableMapOf<String, String>()
-                                        proxyHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-
-                                        val proxySpec = (originalDataSpec ?: activeSpecToUse ?: spec).buildUpon()
-                                            .setUri(Uri.parse(serverProxyUrl))
-                                            .setHttpRequestHeaders(proxyHeaders)
-                                            .setPosition(currentStreamPosition)
-                                            .setLength(androidx.media3.common.C.LENGTH_UNSET.toLong())
-                                            .build()
-
-                                        activeSpecToUse = proxySpec
-                                        isChunkedMode = false // Server proxy streams continuously to EOF!
-
-                                        upstream.open(proxySpec)
-                                        org.akanework.gramophone.logic.utils.PlaybackLogger.log(
-                                            "STREAM_CHUNK_FAILOVER_SUCCESS",
-                                            "Server proxy failover connected! Streaming continuous audio from offset $currentStreamPosition to EOF"
-                                        )
-                                        bytes = upstream.read(buffer, offset, length)
-                                    } else {
-                                        throw chunkEx
-                                    }
-                                }
-                            }
-                        }
+                    val base = activeSpecToUse ?: originalDataSpec
+                    if (base != null) {
+                        val nextSpec = base.buildUpon()
+                            .setPosition(currentStreamPosition)
+                            .setLength(androidx.media3.common.C.LENGTH_UNSET.toLong())
+                            .build()
+                        activeDataSource.open(nextSpec)
+                        bytes = activeDataSource.read(buffer, offset, length)
                     }
                 }
             }
+
+            val readTime = System.currentTimeMillis() - t0
 
             if (bytes > 0) {
                 totalBytesReadInStream += bytes
                 currentStreamPosition += bytes
             }
-            val readTime = System.currentTimeMillis() - t0
+
             if (readTime > 1000L) {
-                val host = upstream.uri?.host ?: ""
+                val host = activeDataSource.uri?.host ?: ""
                 org.akanework.gramophone.logic.utils.PlaybackLogger.log(
                     "STREAM_READ_BLOCK",
                     "Read delayed: ${readTime}ms for $bytes bytes on host '$host' (Total bytes read: $totalBytesReadInStream)"
@@ -745,13 +754,13 @@ private class AuthenticatedDataSource(
             return bytes
         } catch (e: Exception) {
             val readTime = System.currentTimeMillis() - t0
-            val host = upstream.uri?.host ?: ""
+            val host = activeDataSource.uri?.host ?: ""
             org.akanework.gramophone.logic.utils.PlaybackLogger.log(
                 "STREAM_READ_EXCEPTION",
                 "Read exception after ${readTime}ms on host '$host': ${e.javaClass.simpleName} - ${e.message} at offset $currentStreamPosition"
             )
 
-            // 🔥 AUTO-RECONNECT ON CDN DISCONNECT (1.8MB / unexpected end of stream)
+            // 🔥 AUTO-RECONNECT ON CDN DISCONNECT
             if (e is androidx.media3.datasource.HttpDataSource.HttpDataSourceException || e is java.io.IOException) {
                 if (currentStreamPosition > 0L && (knownTotalLength <= 0L || currentStreamPosition < knownTotalLength - 32768L)) {
                     org.akanework.gramophone.logic.utils.PlaybackLogger.log(
@@ -759,8 +768,9 @@ private class AuthenticatedDataSource(
                         "Auto-reconnecting continuous stream from offset $currentStreamPosition..."
                     )
                     try {
-                        upstream.close()
+                        activeDataSource.close()
                     } catch (_: Exception) {}
+                    activeDataSource = createDelegate()
 
                     val base = activeSpecToUse ?: originalDataSpec
                     if (base != null) {
@@ -769,8 +779,8 @@ private class AuthenticatedDataSource(
                             .setLength(androidx.media3.common.C.LENGTH_UNSET.toLong())
                             .build()
                         try {
-                            val freshBytesRemaining = upstream.open(resumeSpec)
-                            val resumedBytes = upstream.read(buffer, offset, length)
+                            val freshBytesRemaining = activeDataSource.open(resumeSpec)
+                            val resumedBytes = activeDataSource.read(buffer, offset, length)
                             if (resumedBytes > 0) {
                                 totalBytesReadInStream += resumedBytes
                                 currentStreamPosition += resumedBytes
@@ -791,18 +801,20 @@ private class AuthenticatedDataSource(
     }
 
     override fun getUri(): Uri? {
-        return upstream.uri
+        return activeDataSource.uri
     }
 
     override fun getResponseHeaders(): Map<String, List<String>> {
-        return upstream.responseHeaders
+        return activeDataSource.responseHeaders
     }
 
     override fun close() {
         isChunkedMode = false
         originalDataSpec = null
         activeSpecToUse = null
-        upstream.close()
+        try {
+            activeDataSource.close()
+        } catch (_: Exception) {}
     }
 }
 
