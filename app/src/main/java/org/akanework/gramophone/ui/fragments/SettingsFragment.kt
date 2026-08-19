@@ -120,6 +120,11 @@ fun SettingsScreen(onBackClick: () -> Unit) {
         mutableStateOf(defaultPrefs.getBoolean("lyrics_auto_translate", true))
     }
 
+    // Динамический цвет фона под обложку трека
+    var isDynamicCoverColorEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
+    }
+
     // --- КЭШ ---
     var imageCacheSize by remember { mutableStateOf("Вычисление...") }
     var dataCacheSize by remember { mutableStateOf("Вычисление...") }
@@ -175,8 +180,18 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             item {
                 AnimatedListItem(index = 1) {
                     SettingsGroupCard(title = "Кастомизация") {
-                        SettingsRow(
+                        SettingsSwitchRow(
                             icon = Icons.Rounded.Palette,
+                            title = "Динамический цвет фона",
+                            subtitle = "Цвет фона мини-плеера и плеера подстраивается под обложку",
+                            checked = isDynamicCoverColorEnabled,
+                            onCheckedChange = { isChecked ->
+                                isDynamicCoverColorEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("dynamic_cover_color", isChecked).apply()
+                            }
+                        )
+                        SettingsRow(
+                            icon = Icons.Rounded.DarkMode,
                             title = "Тема",
                             subtitle = "Системная",
                             onClick = { Toast.makeText(context, "Выбор темы (в разработке)", Toast.LENGTH_SHORT).show() }

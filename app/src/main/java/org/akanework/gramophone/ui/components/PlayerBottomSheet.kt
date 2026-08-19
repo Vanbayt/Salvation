@@ -134,12 +134,13 @@ class PlayerBottomSheet private constructor(
             when (newState) {
                 BottomSheetBehavior.STATE_COLLAPSED -> {
                     fullPlayer.visibility = GONE
+                    fullPlayer.alpha = 0f
+                    fullPlayer.expansionFraction = 0f
                     previewPlayer.visibility = VISIBLE
                     previewPlayer.alpha = 1f
                     previewPlayer.scaleX = 1f
                     previewPlayer.scaleY = 1f
                     previewPlayer.translationY = 0f
-                    fullPlayer.expansionFraction = 0f
                     bottomSheetBackCallback!!.isEnabled = false
                 }
 
@@ -150,8 +151,9 @@ class PlayerBottomSheet private constructor(
 
                 BottomSheetBehavior.STATE_EXPANDED, BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                     previewPlayer.visibility = GONE
-                    fullPlayer.visibility = VISIBLE
                     previewPlayer.alpha = 0f
+                    fullPlayer.visibility = VISIBLE
+                    fullPlayer.alpha = 1f
                     fullPlayer.expansionFraction = 1f
                     bottomSheetBackCallback!!.isEnabled = true
                 }
@@ -160,6 +162,7 @@ class PlayerBottomSheet private constructor(
                     previewPlayer.visibility = GONE
                     fullPlayer.visibility = GONE
                     previewPlayer.alpha = 0f
+                    fullPlayer.alpha = 0f
                     fullPlayer.expansionFraction = 0f
                     bottomSheetBackCallback!!.isEnabled = false
                 }
@@ -175,8 +178,10 @@ class PlayerBottomSheet private constructor(
                 // Hidden transition state
                 val progress = (1f + slideOffset).coerceIn(0f, 1f)
                 previewPlayer.alpha = progress
-                previewPlayer.scaleX = 0.95f + (0.05f * progress)
-                previewPlayer.scaleY = 0.95f + (0.05f * progress)
+                previewPlayer.scaleX = 1f
+                previewPlayer.scaleY = 1f
+                previewPlayer.translationY = 0f
+                fullPlayer.alpha = 0f
                 fullPlayer.expansionFraction = 0f
                 return
             }
@@ -184,12 +189,17 @@ class PlayerBottomSheet private constructor(
             val fraction = slideOffset.coerceIn(0f, 1f)
             fullPlayer.expansionFraction = fraction
 
-            // MiniPlayer fades out quickly in the first 25% of the gesture
-            val miniAlpha = (1f - (fraction * 3.5f)).coerceIn(0f, 1f)
+            // Direct natural crossfade without artificial downward translations:
+            // MiniPlayer stays stable at the top of the rising sheet and fades out between 0.15 and 0.40
+            val miniAlpha = if (fraction < 0.15f) 1f else (1f - ((fraction - 0.15f) / 0.25f)).coerceIn(0f, 1f)
             previewPlayer.alpha = miniAlpha
-            previewPlayer.scaleX = 1f - (fraction * 0.05f)
-            previewPlayer.scaleY = 1f - (fraction * 0.05f)
-            previewPlayer.translationY = fraction * 10f
+            previewPlayer.scaleX = 1f
+            previewPlayer.scaleY = 1f
+            previewPlayer.translationY = 0f
+
+            // FullPlayer stays invisible until 0.15, then smoothly fades in as sheet rises
+            val fullAlpha = if (fraction < 0.15f) 0f else ((fraction - 0.15f) / 0.85f).coerceIn(0f, 1f)
+            fullPlayer.alpha = fullAlpha
         }
     }
 

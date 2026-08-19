@@ -18,6 +18,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -218,12 +219,34 @@ fun FullPlayerScreen(
         mutableStateOf(LikeCache.isLiked(trackId, title = title, artist = artist))
     }
 
+    val defaultPrefs = remember { androidx.preference.PreferenceManager.getDefaultSharedPreferences(context) }
+    var isDynamicCoverColorEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
+    }
+
+    DisposableEffect(Unit) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "dynamic_cover_color") {
+                isDynamicCoverColorEnabled = defaultPrefs.getBoolean("dynamic_cover_color", true)
+            }
+        }
+        defaultPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            defaultPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val isDarkTheme = isSystemInDarkTheme()
+    var dynamicColors by remember { mutableStateOf<org.akanework.gramophone.ui.theme.DynamicArtworkTheme.ArtworkColors?>(null) }
+    val defaultSurface = MaterialTheme.colorScheme.surface
+    val defaultSurfaceContainer = MaterialTheme.colorScheme.surfaceContainerLowest
+
     val coverUrl = metadata?.artworkUri?.toString()?.let {
         if (it.startsWith("/")) "http://185.196.41.31$it" else it
     }
 
     // Извлечение динамической палитры
-    LaunchedEffect(coverUrl) {
+    LaunchedEffect(coverUrl, isDarkTheme) {
         if (!coverUrl.isNullOrEmpty()) {
             withContext(Dispatchers.IO) {
                 try {
@@ -235,16 +258,20 @@ fun FullPlayerScreen(
                     if (result is SuccessResult) {
                         val bitmap = (result.image as? BitmapDrawable)?.bitmap
                         if (bitmap != null) {
-                            val pixel = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
-                            withContext(Dispatchers.Main) {
-                                dominantColor = Color(pixel).copy(alpha = 0.35f)
+                            androidx.palette.graphics.Palette.from(bitmap).generate { palette ->
+                                dynamicColors = org.akanework.gramophone.ui.theme.DynamicArtworkTheme.calculateFromPalette(
+                                    palette = palette,
+                                    isDarkTheme = isDarkTheme,
+                                    defaultSurface = defaultSurface,
+                                    defaultSurfaceContainer = defaultSurfaceContainer
+                                )
                             }
                         }
                     }
                 } catch (_: Exception) {}
             }
         } else {
-            dominantColor = null
+            dynamicColors = null
         }
     }
 
@@ -287,10 +314,28 @@ fun FullPlayerScreen(
         isLyricsVisible = false
     }
 
-    val animatedBgColor by animateColorAsState(
-        targetValue = dominantColor ?: MaterialTheme.colorScheme.surfaceContainerLowest,
-        animationSpec = tween(700),
-        label = "dominantBg"
+    val targetTopColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+        dynamicColors!!.fullPlayerGradientTop
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    }
+
+    val targetSecondaryColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+        dynamicColors!!.fullPlayerSecondaryGlow
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    val animatedTopColor by animateColorAsState(
+        targetValue = targetTopColor,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "dominantTopBg"
+    )
+
+    val animatedSecondaryColor by animateColorAsState(
+        targetValue = targetSecondaryColor,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "dominantSecBg"
     )
 
     val coverScale by animateFloatAsState(
@@ -314,8 +359,9 @@ fun FullPlayerScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            animatedBgColor.copy(alpha = 0.45f * expansionFraction),
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                            animatedTopColor.copy(alpha = 0.55f * expansionFraction),
+                            animatedSecondaryColor.copy(alpha = 0.25f * expansionFraction),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
                             MaterialTheme.colorScheme.surface
                         )
                     )
@@ -332,17 +378,10 @@ fun FullPlayerScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // 1. Верхний Top Bar (Большой круглый Chevron + Заголовок + Бейдж + 3 точки)
-            val topBarAlpha = ((expansionFraction - 0.40f) / 0.60f).coerceIn(0f, 1f)
-            val topBarTranslationY = (1f - expansionFraction) * -24f
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp)
-                    .graphicsLayer {
-                        alpha = topBarAlpha
-                        translationY = topBarTranslationY
-                    },
+                    .padding(top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -404,18 +443,11 @@ fun FullPlayerScreen(
             }
 
             // 2. Центральная область (Большая Обложка со скруглением 32.dp ИЛИ Караоке)
-            val coverAlpha = ((expansionFraction - 0.05f) / 0.95f).coerceIn(0f, 1f)
-            val coverScaleFactor = 0.88f + (0.12f * expansionFraction)
-            val coverCornerRadius = lerp(16.dp, 32.dp, expansionFraction)
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 14.dp)
-                    .graphicsLayer {
-                        alpha = coverAlpha
-                    },
+                    .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(
@@ -427,6 +459,8 @@ fun FullPlayerScreen(
                         LyricsScreen(
                             trackTitle = title,
                             artistName = artist,
+                            coverUrl = coverUrl ?: "",
+                            isPlaying = isPlaying,
                             lyricsResult = currentLyricsResult,
                             isLoading = isLyricsLoading,
                             currentPositionMs = currentPositionMs,
@@ -434,6 +468,13 @@ fun FullPlayerScreen(
                             onSourceSelected = { newSource ->
                                 selectedLyricsSource = newSource
                                 loadLyrics(newSource)
+                            },
+                            onPlayPauseToggle = {
+                                val p = player ?: return@LyricsScreen
+                                if (p.playWhenReady) p.pause() else p.play()
+                            },
+                            onSkipNext = {
+                                player?.seekToNext()
                             },
                             onSeekTo = { pos -> player?.seekTo(pos) },
                             onDismiss = { isLyricsVisible = false },
@@ -451,9 +492,9 @@ fun FullPlayerScreen(
                                 .fillMaxWidth(0.96f)
                                 .aspectRatio(1f)
                                 .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
-                                .scale(coverScale * coverScaleFactor)
-                                .shadow(elevation = if (isPlaying) 24.dp else 8.dp, shape = RoundedCornerShape(coverCornerRadius))
-                                .clip(RoundedCornerShape(coverCornerRadius))
+                                .scale(coverScale)
+                                .shadow(elevation = if (isPlaying) 24.dp else 8.dp, shape = RoundedCornerShape(32.dp))
+                                .clip(RoundedCornerShape(32.dp))
                                 .pointerInput(Unit) {
                                     detectHorizontalDragGestures(
                                         onDragEnd = {
@@ -471,7 +512,7 @@ fun FullPlayerScreen(
                                         }
                                     )
                                 },
-                            shape = RoundedCornerShape(coverCornerRadius),
+                            shape = RoundedCornerShape(32.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             if (!coverUrl.isNullOrEmpty()) {
@@ -500,17 +541,10 @@ fun FullPlayerScreen(
             }
 
             // 3. Секция Названия и Исполнителя (Expressive Typography)
-            val infoAlpha = ((expansionFraction - 0.20f) / 0.80f).coerceIn(0f, 1f)
-            val infoTranslationY = (1f - expansionFraction) * 28f
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
-                    .graphicsLayer {
-                        alpha = infoAlpha
-                        translationY = infoTranslationY
-                    },
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -553,17 +587,10 @@ fun FullPlayerScreen(
             }
 
             // 4. Волнистый слайдер прогресса (SquigglySlider)
-            val sliderAlpha = ((expansionFraction - 0.30f) / 0.70f).coerceIn(0f, 1f)
-            val sliderTranslationY = (1f - expansionFraction) * 36f
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
-                    .graphicsLayer {
-                        alpha = sliderAlpha
-                        translationY = sliderTranslationY
-                    }
             ) {
                 SquigglySlider(
                     position = currentPositionMs.toFloat(),
@@ -604,10 +631,6 @@ fun FullPlayerScreen(
             }
 
             // 5. Экспрессивный блок кнопок управления воспроизведением (PixelPlayer Animated Controls)
-            val controlsAlpha = ((expansionFraction - 0.38f) / 0.62f).coerceIn(0f, 1f)
-            val controlsTranslationY = (1f - expansionFraction) * 44f
-            val controlsScale = 0.90f + (0.10f * expansionFraction)
-
             ExpressivePlaybackControlsRow(
                 isPlaying = isPlaying,
                 onPrevious = {
@@ -626,18 +649,9 @@ fun FullPlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
-                    .graphicsLayer {
-                        alpha = controlsAlpha
-                        translationY = controlsTranslationY
-                        scaleX = controlsScale
-                        scaleY = controlsScale
-                    }
             )
 
             // 6. Нижняя сегментированная капсула (PixelPlayer BottomToggleRow Capsule)
-            val bottomAlpha = ((expansionFraction - 0.46f) / 0.54f).coerceIn(0f, 1f)
-            val bottomTranslationY = (1f - expansionFraction) * 32f
-
             BottomSegmentedCapsuleRow(
                 isShuffleEnabled = shuffleEnabled,
                 onShuffleToggle = {
@@ -694,10 +708,6 @@ fun FullPlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp, top = 4.dp)
-                    .graphicsLayer {
-                        alpha = bottomAlpha
-                        translationY = bottomTranslationY
-                    }
             )
         }
     }

@@ -342,13 +342,30 @@ class MainActivity : BaseActivity() {
                     }
                 }
 
-                var extractedColor by remember { mutableStateOf<Color?>(null) }
+                val defaultPrefs = remember { androidx.preference.PreferenceManager.getDefaultSharedPreferences(context) }
+                var isDynamicCoverColorEnabled by remember {
+                    mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
+                }
+
+                DisposableEffect(Unit) {
+                    val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == "dynamic_cover_color") {
+                            isDynamicCoverColorEnabled = defaultPrefs.getBoolean("dynamic_cover_color", true)
+                        }
+                    }
+                    defaultPrefs.registerOnSharedPreferenceChangeListener(listener)
+                    onDispose {
+                        defaultPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+                    }
+                }
+
+                var dynamicColors by remember { mutableStateOf<org.akanework.gramophone.ui.theme.DynamicArtworkTheme.ArtworkColors?>(null) }
                 var isLyricsOpenState by remember { mutableStateOf(false) }
 
                 val baseMiniColor = MaterialTheme.colorScheme.surfaceVariant
                 val fullColor = MaterialTheme.colorScheme.surface
 
-                LaunchedEffect(coverUrl) {
+                LaunchedEffect(coverUrl, isDarkTheme) {
                     if (coverUrl.isNotEmpty()) {
                         withContext(Dispatchers.IO) {
                             try {
@@ -362,32 +379,39 @@ class MainActivity : BaseActivity() {
 
                                 bitmap?.let { bmp ->
                                     androidx.palette.graphics.Palette.from(bmp).generate { palette ->
-                                        val fallback = android.graphics.Color.TRANSPARENT
-
-                                        val rawColor = palette?.getMutedColor(fallback)
-                                            ?.takeIf { it != fallback }
-                                            ?: palette?.getDominantColor(fallback)
-                                            ?: fallback
-
-                                        if (rawColor != fallback) {
-                                            extractedColor = Color(rawColor)
-                                        } else {
-                                            extractedColor = null
-                                        }
+                                        dynamicColors = org.akanework.gramophone.ui.theme.DynamicArtworkTheme.calculateFromPalette(
+                                            palette = palette,
+                                            isDarkTheme = isDarkTheme,
+                                            defaultSurface = fullColor,
+                                            defaultSurfaceContainer = baseMiniColor
+                                        )
                                     }
                                 }
-                            } catch (e: Exception) { extractedColor = null }
+                            } catch (e: Exception) { dynamicColors = null }
                         }
                     } else {
-                        extractedColor = null
+                        dynamicColors = null
                     }
                 }
 
-                val targetMiniColor = extractedColor ?: baseMiniColor
+                val targetMiniColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+                    dynamicColors!!.miniPlayerContainer
+                } else baseMiniColor
+
+                val targetFullColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+                    dynamicColors!!.fullPlayerGradientTop
+                } else fullColor
+
                 val animatedMiniColor by androidx.compose.animation.animateColorAsState(
                     targetValue = targetMiniColor,
-                    animationSpec = tween(durationMillis = 800),
+                    animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                     label = "miniPlayerColorAnim"
+                )
+
+                val animatedFullColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetFullColor,
+                    animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                    label = "fullPlayerColorAnim"
                 )
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -450,7 +474,10 @@ class MainActivity : BaseActivity() {
                                     }
                                     .drawBehind {
                                         drawRect(fullColor)
-                                        drawRect(baseMiniColor.copy(alpha = (1f - sheetProgress).coerceIn(0f, 1f)))
+                                        if (isDynamicCoverColorEnabled) {
+                                            drawRect(animatedFullColor.copy(alpha = sheetProgress.coerceIn(0f, 1f)))
+                                        }
+                                        drawRect(animatedMiniColor.copy(alpha = (1f - sheetProgress).coerceIn(0f, 1f)))
                                     }
                             ) {
                                 if (miniPlayerVisible) {

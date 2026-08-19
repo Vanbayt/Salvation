@@ -48,4 +48,10 @@ data class Track(
 
     @SerializedName("source_id")
     val sourceId: String? = null,
+
+    @SerializedName("disc_number", alternate = ["disk_number", "disc_num", "disk_num"])
+    val discNumber: Int? = 1,
+
+    @SerializedName("track_number", alternate = ["track_position", "track_pos", "track_num", "position"])
+    val trackNumber: Int? = null,
 ) : Serializable

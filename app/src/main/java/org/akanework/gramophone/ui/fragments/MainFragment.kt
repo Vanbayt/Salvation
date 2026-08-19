@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -19,6 +20,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
@@ -40,23 +45,26 @@ import androidx.fragment.app.Fragment
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import org.akanework.gramophone.R
+import org.akanework.gramophone.logic.HistoryManager
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.Artist
 import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.api.Track
 import org.akanework.gramophone.ui.AppTab
 import org.akanework.gramophone.ui.MainActivity
+import org.akanework.gramophone.ui.components.PlayingEqIcon
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import java.util.Calendar
 
 class MainFragment : Fragment() {
 
     private var isMixLoading = false
 
-    private var historyItemsState = mutableStateOf<List<Album>>(emptyList())
+    private var historyAlbumsState = mutableStateOf<List<Album>>(emptyList())
+    private var historyTracksState = mutableStateOf<List<Track>>(emptyList())
     private var favoriteAlbumsState = mutableStateOf<List<Album>>(emptyList())
     private var favoriteArtistsState = mutableStateOf<List<Artist>>(emptyList())
     private var favoriteTracksState = mutableStateOf<List<Track>>(emptyList())
@@ -99,16 +107,35 @@ class MainFragment : Fragment() {
                 var isVisible by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { isVisible = true }
 
-                var selectedCategory by remember { mutableStateOf("Все") }
+                val mainActivity = remember { requireActivity() as MainActivity }
+                var currentPlayingTrackId by remember { mutableStateOf<String?>(null) }
+                var isCurrentPlaying by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        val p = mainActivity.getPlayer()
+                        currentPlayingTrackId = p?.currentMediaItem?.mediaId
+                        isCurrentPlaying = p?.isPlaying == true
+                        delay(350)
+                    }
+                }
+
+                val recentOrFavoriteTracks = remember(historyTracksState.value, favoriteTracksState.value) {
+                    if (historyTracksState.value.isNotEmpty()) {
+                        historyTracksState.value.take(6)
+                    } else {
+                        favoriteTracksState.value.take(6)
+                    }
+                }
 
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(nestedScrollConnection),
-                    // 🔥 Большой отступ от нижнего бара и плеера (260dp), статус бар padding сверху
-                    contentPadding = PaddingValues(bottom = 260.dp)
+                    contentPadding = PaddingValues(bottom = 260.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // 0. TOP HEADER (Встроен прямо в LazyColumn с безопасными отступами от статуса)
+                    // 0. TOP APP BAR (Только Salvation + иконки поиска и настроек)
                     item {
                         ExpressiveTopAppBar(
                             onSearchClick = {
@@ -120,29 +147,26 @@ class MainFragment : Fragment() {
                         )
                     }
 
-                    // 1. HERO SPOTLIGHT CARD (Фокус медиатеки)
+                    // 1. HERO TITLE & FLOATING PLAY BUTTON ("Your Mix" Style)
                     item {
                         AnimatedVisibility(
                             visible = isVisible,
                             enter = fadeIn(tween(400)) + slideInVertically(tween(500)) { it / 3 }
                         ) {
-                            ExpressiveSpotlightHeroCard(
+                            ExpressiveYourMixHeroHeader(
                                 tracksCount = favoriteTracksState.value.size,
-                                albumsCount = favoriteAlbumsState.value.size,
-                                latestAlbum = historyItemsState.value.firstOrNull(),
-                                onMixClick = { if (!isMixLoading) playMyMix() },
-                                onRandomClick = { playRandomFavoriteTrack() }
+                                onPlayClick = { if (!isMixLoading) playMyMix() }
                             )
                         }
                     }
 
-                    // 2. SMART QUICK GRID (Асимметричные плитки быстрого доступа с разной геометрией)
+                    // 2. BENTO QUICK ACCESS (Симметричный 2x2 грид быстрого доступа)
                     item {
                         AnimatedVisibility(
                             visible = isVisible,
-                            enter = fadeIn(tween(500)) + slideInVertically(tween(600)) { it / 3 }
+                            enter = fadeIn(tween(600)) + slideInVertically(tween(700)) { it / 3 }
                         ) {
-                            ExpressiveAsymmetricQuickGrid(
+                            ExpressiveBentoGrid(
                                 favoritesCount = favoriteTracksState.value.size,
                                 albumsCount = favoriteAlbumsState.value.size,
                                 artistsCount = favoriteArtistsState.value.size,
@@ -155,63 +179,56 @@ class MainFragment : Fragment() {
                                 onArtistsClick = {
                                     (requireActivity() as MainActivity).switchTab(AppTab.LIBRARY)
                                 },
-                                onHistoryClick = {
-                                    if (historyItemsState.value.isNotEmpty()) {
-                                        openAlbum(historyItemsState.value.first().id, null)
-                                    } else {
-                                        Toast.makeText(context, "История пуста", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                onMixClick = { if (!isMixLoading) playMyMix() },
-                                onSearchClick = {
-                                    (requireActivity() as MainActivity).switchTab(AppTab.SEARCH)
-                                }
+                                onMixClick = { if (!isMixLoading) playMyMix() }
                             )
                         }
                     }
 
-                    // 3. ИЗБРАННЫЕ ТРЕКИ В ФОКУСЕ
-                    if (favoriteTracksState.value.isNotEmpty()) {
-                        item {
-                            AnimatedVisibility(
-                                visible = isVisible,
-                                enter = fadeIn(tween(600)) + slideInVertically(tween(700)) { it / 3 }
-                            ) {
-                                ExpressiveQuickTracksSection(
-                                    tracks = favoriteTracksState.value.take(6),
-                                    onTrackClick = { clickedTrack ->
-                                        playTrack(clickedTrack, favoriteTracksState.value, "Избранное (Главная)")
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // 4. НЕДАВНО В ЭФИРЕ
-                    if (historyItemsState.value.isNotEmpty()) {
+                    // 4. НЕДАВНО ИГРАЛО / ИЗБРАННЫЕ ТРЕКИ С ЖИВЫМ ЭКВАЛАЙЗЕРОМ
+                    if (recentOrFavoriteTracks.isNotEmpty()) {
                         item {
                             AnimatedVisibility(
                                 visible = isVisible,
                                 enter = fadeIn(tween(700)) + slideInVertically(tween(800)) { it / 3 }
                             ) {
-                                SectionWithCarousel(
-                                    title = "Недавно в эфире",
-                                    items = historyItemsState.value,
-                                    onItemClick = { openAlbum(it.id, null) }
+                                ExpressiveQuickTracksSection(
+                                    title = if (historyTracksState.value.isNotEmpty()) "Недавно играло" else "Избранные треки в фокусе",
+                                    tracks = recentOrFavoriteTracks,
+                                    currentPlayingTrackId = currentPlayingTrackId,
+                                    isPlaying = isCurrentPlaying,
+                                    onTrackClick = { clickedTrack ->
+                                        playTrack(clickedTrack, recentOrFavoriteTracks, "Главный экран")
+                                    }
                                 )
                             }
                         }
                     }
 
-                    // 5. ВАШИ АЛЬБОМЫ
-                    if (favoriteAlbumsState.value.isNotEmpty()) {
+                    // 5. НЕДАВНО В ЭФИРЕ (АЛЬБОМЫ)
+                    if (historyAlbumsState.value.isNotEmpty()) {
                         item {
                             AnimatedVisibility(
                                 visible = isVisible,
                                 enter = fadeIn(tween(800)) + slideInVertically(tween(900)) { it / 3 }
                             ) {
                                 SectionWithCarousel(
-                                    title = "Ваши альбомы",
+                                    title = "Недавно в эфире",
+                                    items = historyAlbumsState.value,
+                                    onItemClick = { openAlbum(it.id, null) }
+                                )
+                            }
+                        }
+                    }
+
+                    // 6. ВАШИ АЛЬБОМЫ
+                    if (favoriteAlbumsState.value.isNotEmpty()) {
+                        item {
+                            AnimatedVisibility(
+                                visible = isVisible,
+                                enter = fadeIn(tween(900)) + slideInVertically(tween(1000)) { it / 3 }
+                            ) {
+                                SectionWithCarousel(
+                                    title = "Альбомы в коллекции",
                                     items = favoriteAlbumsState.value,
                                     onItemClick = { openAlbum(it.id, null) }
                                 )
@@ -219,12 +236,12 @@ class MainFragment : Fragment() {
                         }
                     }
 
-                    // 6. ВАШИ АРТИСТЫ
+                    // 7. ВАШИ АРТИСТЫ
                     if (favoriteArtistsState.value.isNotEmpty()) {
                         item {
                             AnimatedVisibility(
                                 visible = isVisible,
-                                enter = fadeIn(tween(900)) + slideInVertically(tween(1000)) { it / 3 }
+                                enter = fadeIn(tween(1000)) + slideInVertically(tween(1100)) { it / 3 }
                             ) {
                                 SectionWithCarouselArtist(
                                     title = "Любимые артисты",
@@ -232,6 +249,23 @@ class MainFragment : Fragment() {
                                     onItemClick = { openArtist(it.id, null) }
                                 )
                             }
+                        }
+                    }
+
+                    // 8. СТАТИСТИКА МЕДИАТЕКИ (PixelPlayer Inspired Overview)
+                    item {
+                        AnimatedVisibility(
+                            visible = isVisible,
+                            enter = fadeIn(tween(1100)) + slideInVertically(tween(1200)) { it / 3 }
+                        ) {
+                            StatsOverviewCard(
+                                tracksCount = favoriteTracksState.value.size,
+                                albumsCount = favoriteAlbumsState.value.size,
+                                artistsCount = favoriteArtistsState.value.size,
+                                onClick = {
+                                    (requireActivity() as MainActivity).switchTab(AppTab.LIBRARY)
+                                }
+                            )
                         }
                     }
                 }
@@ -246,42 +280,28 @@ class MainFragment : Fragment() {
         onSearchClick: () -> Unit,
         onSettingsClick: () -> Unit
     ) {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val greetingText = when (hour) {
-            in 5..11 -> "Доброе утро"
-            in 12..16 -> "Добрый день"
-            in 17..23 -> "Добрый вечер"
-            else -> "Доброй ночи"
-        }
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding() // 🔥 Безопасный отступ от статусного бара
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+                .statusBarsPadding()
+                .padding(start = 24.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Salvation",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-0.5).sp
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = greetingText,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "Salvation",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = MaterialTheme.colorScheme.primary
+            )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FilledTonalIconButton(
                     onClick = onSearchClick,
                     modifier = Modifier.size(46.dp),
+                    shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -297,6 +317,7 @@ class MainFragment : Fragment() {
                 FilledTonalIconButton(
                     onClick = onSettingsClick,
                     modifier = Modifier.size(46.dp),
+                    shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -313,191 +334,73 @@ class MainFragment : Fragment() {
     }
 
     @Composable
-    fun ExpressiveSpotlightHeroCard(
+    fun ExpressiveYourMixHeroHeader(
         tracksCount: Int,
-        albumsCount: Int,
-        latestAlbum: Album?,
-        onMixClick: () -> Unit,
-        onRandomClick: () -> Unit
+        onPlayClick: () -> Unit
     ) {
-        Card(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(topStart = 36.dp, topEnd = 16.dp, bottomEnd = 36.dp, bottomStart = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        )
-                    )
-                    .padding(20.dp)
+            Column {
+                Text(
+                    text = "Ваш\nМикс",
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        lineHeight = 44.sp,
+                        letterSpacing = (-1.2).sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (tracksCount > 0) "$tracksCount треков для вас" else "Микс на сегодня",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+            }
+
+            // Big Floating Play Button (From Reference Screen)
+            Surface(
+                onClick = onPlayClick,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shadowElevation = 8.dp,
+                tonalElevation = 6.dp,
+                modifier = Modifier.size(80.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_equalizer),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "ФОКУС МЕДИАТЕКИ",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 1.2.sp
-                                        ),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "Музыкальный поток",
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = if (tracksCount > 0) "$tracksCount треков в коллекции" else "Загрузка вашей музыки...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        // 🔥 КНОПКИ БЕЗ ПЕРЕНОСА СТРОК И КРИВЫХ ТЕКСТОВ
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Button(
-                                onClick = onMixClick,
-                                modifier = Modifier
-                                    .weight(1.2f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_play),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Микс",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            FilledTonalButton(
-                                onClick = onRandomClick,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_shuffle),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Случайный",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (latestAlbum != null) {
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                            modifier = Modifier
-                                .size(96.dp)
-                                .clickable { openAlbum(latestAlbum.id, null) }
-                        ) {
-                            val coverUrl = if (latestAlbum.cover?.startsWith("/") == true) "http://185.196.41.31${latestAlbum.cover}" else latestAlbum.cover
-                            AsyncImage(
-                                model = coverUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_play),
+                        contentDescription = "Играть микс",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(34.dp)
+                    )
                 }
             }
         }
     }
 
     @Composable
-    fun ExpressiveAsymmetricQuickGrid(
+    fun ExpressiveBentoGrid(
         favoritesCount: Int,
         albumsCount: Int,
         artistsCount: Int,
         onFavoritesClick: () -> Unit,
         onAlbumsClick: () -> Unit,
         onArtistsClick: () -> Unit,
-        onHistoryClick: () -> Unit,
-        onMixClick: () -> Unit,
-        onSearchClick: () -> Unit
+        onMixClick: () -> Unit
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .padding(horizontal = 20.dp)
         ) {
             Text(
                 text = "Быстрый доступ",
@@ -506,84 +409,56 @@ class MainFragment : Fragment() {
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // ROW 1: Wide Hero Tile (Избранное) + Pill Tile (Мой Микс)
+            // ROW 1: "Любимые треки" & "Мой поток"
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AsymmetricShapeCard(
-                    title = "Избранное",
-                    subtitle = if (favoritesCount > 0) "$favoritesCount треков" else "Любимое",
+                BentoCard(
+                    title = "Любимые треки",
+                    subtitle = if (favoritesCount > 0) "$favoritesCount треков" else "Медиатека",
                     iconRes = R.drawable.ic_favorite_filled,
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 14.dp, bottomEnd = 32.dp, bottomStart = 14.dp),
-                    cardHeight = 84.dp,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                    contentColor = MaterialTheme.colorScheme.primary,
                     onClick = onFavoritesClick,
-                    modifier = Modifier.weight(1.3f)
+                    modifier = Modifier.weight(1f)
                 )
 
-                AsymmetricShapeCard(
-                    title = "Мой Микс",
-                    subtitle = "Микс дня",
+                BentoCard(
+                    title = "Мой поток",
+                    subtitle = "Автомикс",
                     iconRes = R.drawable.ic_shuffle,
-                    shape = RoundedCornerShape(26.dp),
-                    cardHeight = 84.dp,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+                    contentColor = MaterialTheme.colorScheme.tertiary,
                     onClick = onMixClick,
                     modifier = Modifier.weight(1f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // ROW 2: Organic Pill (Альбомы) + Opposite Asymmetric (Артисты)
+            // ROW 2: "Альбомы" & "Артисты"
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AsymmetricShapeCard(
+                BentoCard(
                     title = "Альбомы",
                     subtitle = if (albumsCount > 0) "$albumsCount релизов" else "Дискография",
                     iconRes = R.drawable.ic_library,
-                    shape = RoundedCornerShape(28.dp),
-                    cardHeight = 76.dp,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                    contentColor = MaterialTheme.colorScheme.secondary,
                     onClick = onAlbumsClick,
                     modifier = Modifier.weight(1f)
                 )
 
-                AsymmetricShapeCard(
+                BentoCard(
                     title = "Артисты",
                     subtitle = if (artistsCount > 0) "$artistsCount авторов" else "Исполнители",
                     iconRes = R.drawable.ic_person,
-                    shape = RoundedCornerShape(topStart = 14.dp, topEnd = 32.dp, bottomEnd = 14.dp, bottomStart = 32.dp),
-                    cardHeight = 76.dp,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     onClick = onArtistsClick,
-                    modifier = Modifier.weight(1.2f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // ROW 3: Smooth Rounded Cards (История & Поиск)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                AsymmetricShapeCard(
-                    title = "История",
-                    subtitle = "Недавно",
-                    iconRes = R.drawable.ic_timer,
-                    shape = RoundedCornerShape(22.dp),
-                    cardHeight = 74.dp,
-                    onClick = onHistoryClick,
-                    modifier = Modifier.weight(1.1f)
-                )
-
-                AsymmetricShapeCard(
-                    title = "Поиск",
-                    subtitle = "Каталог",
-                    iconRes = R.drawable.ic_search,
-                    shape = RoundedCornerShape(22.dp),
-                    cardHeight = 74.dp,
-                    onClick = onSearchClick,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -591,21 +466,21 @@ class MainFragment : Fragment() {
     }
 
     @Composable
-    fun AsymmetricShapeCard(
+    fun BentoCard(
         title: String,
         subtitle: String,
         iconRes: Int,
-        shape: RoundedCornerShape,
-        cardHeight: androidx.compose.ui.unit.Dp,
+        containerColor: Color,
+        contentColor: Color,
         onClick: () -> Unit,
         modifier: Modifier = Modifier
     ) {
         Surface(
             onClick = onClick,
-            modifier = modifier.height(cardHeight),
-            shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 2.dp
+            modifier = modifier.height(78.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = containerColor,
+            tonalElevation = 1.dp
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -615,20 +490,20 @@ class MainFragment : Fragment() {
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    color = contentColor.copy(alpha = 0.18f),
+                    modifier = Modifier.size(42.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(id = iconRes),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(19.dp)
+                            tint = contentColor,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -652,15 +527,18 @@ class MainFragment : Fragment() {
 
     @Composable
     fun ExpressiveQuickTracksSection(
+        title: String,
         tracks: List<Track>,
+        currentPlayingTrackId: String?,
+        isPlaying: Boolean,
         onTrackClick: (Track) -> Unit
     ) {
-        Column(modifier = Modifier.padding(top = 12.dp)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Избранные треки в фокусе",
+                text = title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
 
             Column(
@@ -668,10 +546,21 @@ class MainFragment : Fragment() {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 tracks.forEach { track ->
+                    val isThisTrackPlaying = track.id == currentPlayingTrackId
+                    val cardBgColor by animateColorAsState(
+                        targetValue = if (isThisTrackPlaying) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
+                        },
+                        animationSpec = tween(250),
+                        label = "trackCardBg"
+                    )
+
                     Surface(
                         onClick = { onTrackClick(track) },
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        color = cardBgColor,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -695,8 +584,10 @@ class MainFragment : Fragment() {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = track.title,
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = if (isThisTrackPlaying) FontWeight.ExtraBold else FontWeight.Bold
+                                    ),
+                                    color = if (isThisTrackPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -709,16 +600,32 @@ class MainFragment : Fragment() {
                                 )
                             }
 
-                            FilledTonalIconButton(
-                                onClick = { onTrackClick(track) },
-                                modifier = Modifier.size(40.dp),
-                                shape = CircleShape
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_play),
-                                    contentDescription = "Играть",
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            if (isThisTrackPlaying) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        PlayingEqIcon(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            isPlaying = isPlaying,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            } else {
+                                FilledTonalIconButton(
+                                    onClick = { onTrackClick(track) },
+                                    modifier = Modifier.size(40.dp),
+                                    shape = CircleShape
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_play),
+                                        contentDescription = "Играть",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -727,15 +634,14 @@ class MainFragment : Fragment() {
         }
     }
 
-    // 🔥 СТИЛЬНЫЕ СТЕКЛЯННЫЕ КАРТОЧКИ АЛЬБОМОВ С КНОПКОЙ PLAY
     @Composable
     fun SectionWithCarousel(title: String, items: List<Album>, onItemClick: (Album) -> Unit) {
-        Column(modifier = Modifier.padding(top = 20.dp)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),
@@ -744,12 +650,12 @@ class MainFragment : Fragment() {
                 items(items, key = { it.id }) { album ->
                     Card(
                         modifier = Modifier
-                            .width(176.dp)
-                            .height(230.dp)
+                            .width(172.dp)
+                            .height(224.dp)
                             .clickable { onItemClick(album) },
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                        shape = RoundedCornerShape(26.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(22.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             val coverUrl = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
@@ -760,20 +666,18 @@ class MainFragment : Fragment() {
                                 modifier = Modifier.fillMaxSize()
                             )
 
-                            // Градиентное затемнение
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
                                         Brush.verticalGradient(
-                                            0.3f to Color.Transparent,
-                                            0.7f to Color.Black.copy(alpha = 0.6f),
-                                            1.0f to Color.Black.copy(alpha = 0.92f)
+                                            0.35f to Color.Transparent,
+                                            0.7f to Color.Black.copy(alpha = 0.55f),
+                                            1.0f to Color.Black.copy(alpha = 0.90f)
                                         )
                                     )
                             )
 
-                            // Плавающий текстовый плашка с заголовком
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
@@ -821,15 +725,14 @@ class MainFragment : Fragment() {
         }
     }
 
-    // 🔥 СТИЛЬНЫЕ АВАТАРЫ АРТИСТОВ С СВЕТЯЩИМСЯ КОЛЬЦОМ
     @Composable
     fun SectionWithCarouselArtist(title: String, items: List<Artist>, onItemClick: (Artist) -> Unit) {
-        Column(modifier = Modifier.padding(top = 20.dp)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),
@@ -839,14 +742,14 @@ class MainFragment : Fragment() {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(110.dp)
+                            .width(108.dp)
                             .clickable { onItemClick(artist) }
                     ) {
                         Surface(
                             shape = CircleShape,
-                            border = BorderStroke(3.dp, MaterialTheme.colorScheme.primaryContainer),
-                            tonalElevation = 4.dp,
-                            modifier = Modifier.size(106.dp)
+                            border = BorderStroke(2.5.dp, MaterialTheme.colorScheme.primaryContainer),
+                            tonalElevation = 3.dp,
+                            modifier = Modifier.size(100.dp)
                         ) {
                             val coverUrl = if (artist.cover?.startsWith("/") == true) "http://185.196.41.31${artist.cover}" else artist.cover
                             AsyncImage(
@@ -867,6 +770,92 @@ class MainFragment : Fragment() {
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    fun StatsOverviewCard(
+        tracksCount: Int,
+        albumsCount: Int,
+        artistsCount: Int,
+        onClick: () -> Unit
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            onClick = onClick
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_equalizer),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "ВАША МЕДИАТЕКА",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(title = if (tracksCount > 0) "$tracksCount" else "—", subtitle = "Треков")
+                    StatItem(title = if (albumsCount > 0) "$albumsCount" else "—", subtitle = "Альбомов")
+                    StatItem(title = if (artistsCount > 0) "$artistsCount" else "—", subtitle = "Артистов")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun StatItem(title: String, subtitle: String) {
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 
@@ -897,7 +886,7 @@ class MainFragment : Fragment() {
     }
 
     private fun loadFavoriteTracks() {
-        NetworkClient.getApi(requireContext()).getFavorites(0, 500)
+        NetworkClient.getApi(requireContext()).getFavorites(skip = 0, limit = 10000)
             .enqueue(object : Callback<List<Track>> {
                 override fun onResponse(call: Call<List<Track>>, response: Response<List<Track>>) {
                     if (isAdded && response.isSuccessful) {
@@ -909,9 +898,9 @@ class MainFragment : Fragment() {
     }
 
     private fun loadHistory() {
-        val historyList = org.akanework.gramophone.logic.HistoryManager.getHistory(requireContext())
-        val albumsOnly = historyList.filterIsInstance<Album>()
-        historyItemsState.value = albumsOnly
+        val historyList = HistoryManager.getHistory(requireContext())
+        historyAlbumsState.value = historyList.filterIsInstance<Album>()
+        historyTracksState.value = historyList.filterIsInstance<Track>()
     }
 
     private fun openArtist(id: String, sharedView: View?) {
@@ -969,7 +958,7 @@ class MainFragment : Fragment() {
         isMixLoading = true
         Toast.makeText(context, "Собираем микс...", Toast.LENGTH_SHORT).show()
 
-        NetworkClient.getApi(requireContext()).getFavorites(0, 500)
+        NetworkClient.getApi(requireContext()).getFavorites(skip = 0, limit = 10000)
             .enqueue(object : Callback<List<Track>> {
                 override fun onResponse(call: Call<List<Track>>, response: Response<List<Track>>) {
                     isMixLoading = false
