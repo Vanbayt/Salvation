@@ -111,17 +111,18 @@ class PostAmpAudioSink(
     private var rgVolume = 1f
 
     init {
+        val appContext = context.applicationContext
         var forVolumeChanged = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
         if (!forVolumeChanged) {
             try {
-                AudioSystemHiddenApi.addVolumeCallback(context, this)
+                AudioSystemHiddenApi.addVolumeCallback(appContext, this)
             } catch (e: Exception) {
                 Log.e(TAG, "failed to register volume cb", e)
                 forVolumeChanged = true
             }
         }
         ContextCompat.registerReceiver(
-            context,
+            appContext,
             receiver,
             IntentFilter().apply {
                 if (forVolumeChanged) // only register if better native callback doesn't work

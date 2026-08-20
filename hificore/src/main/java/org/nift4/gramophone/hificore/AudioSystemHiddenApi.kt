@@ -315,21 +315,28 @@ object AudioSystemHiddenApi {
         }
     }
 
-    @Throws(IllegalStateException::class, IllegalArgumentException::class)
     @RequiresApi(Build.VERSION_CODES.Q)
     fun removeVolumeCallback(context: Context, cb: VolumeChangeListener) {
-        val adapter =
-            adapterCache.remove(cb) ?: throw IllegalArgumentException("never registered $cb")
+        val adapter = adapterCache.remove(cb) ?: return
         try {
             if (Build.VERSION.SDK_INT >= 36) {
                 removeAudioVolumeGroupCallbackFn.invoke(null, adapter)
             } else {
-                val audioManager = context.getSystemService<AudioManager>()
+                val audioManager = context.applicationContext.getSystemService<AudioManager>()
                 removeVolumeGroupCallbackFn.invoke(audioManager, adapter)
             }
         } catch (t: Throwable) {
-            throw IllegalStateException("failed to add vol cb", t)
+            // Silently ignore during teardown
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun clearVolumeCallbacks(context: Context) {
+        val entries = adapterCache.keys.toList()
+        for (cb in entries) {
+            removeVolumeCallback(context, cb)
+        }
+        adapterCache.clear()
     }
 
     fun interface VolumeChangeListener {

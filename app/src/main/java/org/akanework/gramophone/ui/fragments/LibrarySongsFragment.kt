@@ -80,8 +80,8 @@ class LibrarySongsFragment : BaseFragment(true) {
     private var adapter: OnlineSearchAdapter? = null
     private var currentCall: Call<List<Track>>? = null
 
-    private lateinit var btnShuffle: MaterialButton
-    private lateinit var tvTrackCount: TextView
+    private var btnShuffle: MaterialButton? = null
+    private var tvTrackCount: TextView? = null
 
     private val searchViewModel: LibrarySearchViewModel by activityViewModels()
     private var currentSearchQuery = ""
@@ -106,7 +106,7 @@ class LibrarySongsFragment : BaseFragment(true) {
 
         // 2. Добавляем поверх него ComposeView для плавающих меню
         val composeView = ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
                 val isDark = androidx.compose.foundation.isSystemInDarkTheme()
                 val dynamicColor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
@@ -205,7 +205,7 @@ class LibrarySongsFragment : BaseFragment(true) {
         )
         rvTracks?.adapter = adapter
 
-        btnShuffle.setOnClickListener {
+        btnShuffle?.setOnClickListener {
             val currentList = adapter?.currentList ?: emptyList()
             if (currentList.isNotEmpty()) {
                 playFullPlaylist(clickedTrack = currentList.random(), shuffle = true)
@@ -398,7 +398,7 @@ class LibrarySongsFragment : BaseFragment(true) {
             count % 10 in 2..4 && (count % 100 < 10 || count % 100 >= 20) -> "трека"
             else -> "треков"
         }
-        tvTrackCount.text = "$count $word"
+        tvTrackCount?.text = "$count $word"
     }
 
     private fun showSortMenu() {
@@ -537,6 +537,10 @@ class LibrarySongsFragment : BaseFragment(true) {
         playerListener = null
         playerController = null
         currentCall?.cancel()
+        currentCall = null
+        adapter = null
+        btnShuffle = null
+        tvTrackCount = null
         rvTracks?.adapter = null
         rvTracks = null
     }

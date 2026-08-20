@@ -50,7 +50,7 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
         savedInstanceState: Bundle?
     ): View {
         return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
                 val context = LocalContext.current
                 val isDark = androidx.compose.foundation.isSystemInDarkTheme()

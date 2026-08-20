@@ -66,7 +66,7 @@ class DiscographyFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val composeView = ComposeView(requireContext())
-        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
         composeView.setContent {
             val colorScheme = getThemeColorScheme()
             MaterialTheme(colorScheme = colorScheme) {

@@ -12,6 +12,7 @@ object NetworkClient {
     private var retrofit: Retrofit? = null
 
     fun getApi(context: Context): GramophoneApi {
+        val appContext = context.applicationContext
         if (retrofit == null) {
             // Создаем перехватчик (Interceptor), который добавляет токен
             val client = OkHttpClient.Builder()
@@ -19,8 +20,8 @@ object NetworkClient {
                     val original = chain.request()
                     val builder = original.newBuilder()
 
-                    // Достаем токен
-                    val token = AuthManager.getToken(context)
+                    // Достаем токен через appContext
+                    val token = AuthManager.getToken(appContext)
 
                     // --- ДОБАВЛЯЕМ ЛОГ ДЛЯ ПРОВЕРКИ ---
                     android.util.Log.d("AUTH_DEBUG", "Отправляем запрос на: ${original.url}")

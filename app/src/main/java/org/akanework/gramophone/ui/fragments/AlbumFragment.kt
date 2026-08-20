@@ -60,9 +60,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
-import org.akanework.gramophone.logic.api.Album
-import org.akanework.gramophone.logic.api.NetworkClient
-import org.akanework.gramophone.logic.api.Track
+import org.akanework.gramophone.logic.api.*
 import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.library.EnhancedSongListItem
 import org.akanework.gramophone.ui.components.library.ExpressiveScrollBar
@@ -86,7 +84,7 @@ class AlbumFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val composeView = ComposeView(requireContext())
-        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
         composeView.setContent {
             val colorScheme = getThemeColorScheme()
             MaterialTheme(colorScheme = colorScheme) {
@@ -557,8 +555,10 @@ fun AlbumDetailScreen(
                             if (it.equals("ep", ignoreCase = true)) "EP" else it.replaceFirstChar { char -> char.uppercase() }
                         } ?: "Релиз"
                         val artist = loadedAlbum?.artistName ?: "Исполнитель"
-                        val year = loadedAlbum?.releaseYear?.toString() ?: ""
-                        val subtitle = listOf(type, artist, year).filter { it.isNotBlank() }.joinToString(" • ")
+                        val origYear = loadedAlbum?.info?.releaseDate?.take(4)?.toIntOrNull()
+                        val catalogYear = loadedAlbum?.releaseYear
+                        val displayYear = origYear?.toString() ?: catalogYear?.toString() ?: ""
+                        val subtitle = listOf(type, artist, displayYear).filter { it.isNotBlank() }.joinToString(" • ")
 
                         Text(
                             text = subtitle,
@@ -934,154 +934,22 @@ fun AlbumDetailScreen(
                         }
                     }
                 } else {
-                    // ВКЛАДКА "ИНФОРМАЦИЯ" (BENTO СЕТКА С ДЕТАЛЯМИ РЕЛИЗА)
+                    // ВКЛАДКА "ИНФОРМАЦИЯ" (ОБОГАЩЕННЫЙ СТОРИТЕЛЛИНГ И BENTO СЕТКА)
                     item {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                // Карточка исполнителя
-                                loadedAlbum?.let { alb ->
-                                    Surface(
-                                        shape = RoundedCornerShape(20.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                alb.artistId?.let { id ->
-                                                    activity?.startFragment(ArtistFragment.newInstance(id))
-                                                }
-                                            }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.primaryContainer,
-                                                modifier = Modifier.size(48.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.ic_person),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(24.dp)
-                                                    )
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.width(14.dp))
-
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "Исполнитель",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Text(
-                                                    text = alb.artistName,
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-
-                                            Icon(
-                                                imageVector = Icons.Rounded.ChevronRight,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    // Bento-сетка параметров альбома
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        AlbumInfoBentoCard(
-                                            title = "Год выпуска",
-                                            value = alb.releaseYear?.toString() ?: "Не указан",
-                                            icon = Icons.Rounded.CalendarToday,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        AlbumInfoBentoCard(
-                                            title = "Тип релиза",
-                                            value = when (alb.recordType?.lowercase()) {
-                                                "ep" -> "EP (Мини-альбом)"
-                                                "single" -> "Сингл"
-                                                else -> "Студийный альбом"
-                                            },
-                                            icon = Icons.Rounded.Album,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        AlbumInfoBentoCard(
-                                            title = "Количество треков",
-                                            value = "${tracks.size} композиций",
-                                            icon = Icons.Rounded.MusicNote,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        AlbumInfoBentoCard(
-                                            title = "Общее время",
-                                            value = formattedDuration,
-                                            icon = Icons.Rounded.AccessTime,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        AlbumInfoBentoCard(
-                                            title = "Качество звука",
-                                            value = if (tracks.any { it.is_lossless }) "Lossless / Hi-Fi FLAC" else "320 kbps MP3",
-                                            icon = Icons.Rounded.HighQuality,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        AlbumInfoBentoCard(
-                                            title = "Источник",
-                                            value = "Salvation Cloud",
-                                            icon = Icons.Rounded.CloudDone,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-
-                                    // Кнопка поделиться альбомом
-                                    FilledTonalButton(
-                                        onClick = {
-                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, "Слушайте альбом «${alb.title}» исполнителя ${alb.artistName} в Salvation!")
-                                            }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Поделиться альбомом"))
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp),
-                                        shape = RoundedCornerShape(16.dp)
-                                    ) {
-                                        Icon(painterResource(R.drawable.ic_share), contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Поделиться альбомом", fontWeight = FontWeight.Bold)
+                            AlbumRichInfoContent(
+                                album = loadedAlbum,
+                                tracks = tracks,
+                                formattedDuration = formattedDuration,
+                                onArtistClick = {
+                                    loadedAlbum?.artistId?.let { id ->
+                                        activity?.startFragment(ArtistFragment.newInstance(id))
                                     }
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -1239,6 +1107,431 @@ fun AlbumInfoBentoCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+fun AlbumRichInfoContent(
+    album: Album?,
+    tracks: List<Track>,
+    formattedDuration: String,
+    onArtistClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val info = album?.info
+    var isOverviewExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 1. КАРТОЧКА ИСПОЛНИТЕЛЯ
+        album?.let { alb ->
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onArtistClick() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_person),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Исполнитель",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = alb.artistName,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 2. ИСТОРИЯ И КОНТЕКСТ СОЗДАНИЯ (ОБЗОР РЕЛИЗА)
+        val overviewText = info?.overview
+        if (!overviewText.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                        .animateContentSize()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "О релизе",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+
+                        if (overviewText.length > 200) {
+                            TextButton(
+                                onClick = { isOverviewExpanded = !isOverviewExpanded },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = if (isOverviewExpanded) "Свернуть" else "Подробнее",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = overviewText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 22.sp,
+                        maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 5,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // 3. ПРОДЮСИРОВАНИЕ И ЗАПИСЬ (BENTO CREDITS)
+        val producers = info?.producers
+        val studios = info?.studios
+        val label = info?.label
+        val releaseDate = info?.releaseDate
+
+        if (!producers.isNullOrEmpty() || !studios.isNullOrEmpty() || !label.isNullOrBlank() || !releaseDate.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Создание и продакшн",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (!producers.isNullOrEmpty()) {
+                        AlbumCreditRow(
+                            label = "Продюсирование",
+                            value = producers.joinToString(", "),
+                            icon = Icons.Rounded.Headphones
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (!studios.isNullOrEmpty()) {
+                        AlbumCreditRow(
+                            label = "Студия звукозаписи",
+                            value = studios.joinToString(", "),
+                            icon = Icons.Rounded.Mic
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (!label.isNullOrBlank()) {
+                        AlbumCreditRow(
+                            label = "Лейбл",
+                            value = label,
+                            icon = Icons.Rounded.Album
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (!releaseDate.isNullOrBlank()) {
+                        AlbumCreditRow(
+                            label = "Дата релиза",
+                            value = releaseDate,
+                            icon = Icons.Rounded.CalendarToday
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. КОНЦЕПЦИЯ И ТЕМЫ ТЕКСТОВ
+        info?.conceptThemes?.takeIf { it.isNotBlank() }?.let { themes ->
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.MenuBook,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Концепция и темы текстов",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = themes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
+        }
+
+        // 5. ИСТОРИЯ ОБЛОЖКИ И ВИЗУАЛЬНЫЙ СТИЛЬ
+        info?.coverStory?.takeIf { it.isNotBlank() }?.let { coverStory ->
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Palette,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Обложка и визуальный стиль",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = coverStory,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
+        }
+
+        // 6. ПРИЁМ КРИТИКОВ И НАГРАДЫ
+        info?.receptionAwards?.takeIf { it.isNotBlank() }?.let { awards ->
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.EmojiEvents,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Приём критиков и награды",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = awards,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
+        }
+
+        // 7. СТАНДАРТНАЯ BENTO-СЕТКА ТЕХНИЧЕСКИХ ПАРАМЕТРОВ
+        album?.let { alb ->
+            val origYear = info?.releaseDate?.take(4)?.toIntOrNull()
+            val catalogYear = alb.releaseYear
+            val yearDisplay = when {
+                origYear != null && catalogYear != null && origYear != catalogYear -> "$origYear (Ремастер: $catalogYear)"
+                origYear != null -> "$origYear"
+                catalogYear != null -> "$catalogYear"
+                else -> "Не указан"
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AlbumInfoBentoCard(
+                    title = "Год выпуска",
+                    value = yearDisplay,
+                    icon = Icons.Rounded.CalendarToday,
+                    modifier = Modifier.weight(1f)
+                )
+                AlbumInfoBentoCard(
+                    title = "Тип релиза",
+                    value = when (alb.recordType?.lowercase()) {
+                        "ep" -> "EP (Мини-альбом)"
+                        "single" -> "Сингл"
+                        else -> "Студийный альбом"
+                    },
+                    icon = Icons.Rounded.Album,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AlbumInfoBentoCard(
+                    title = "Количество треков",
+                    value = "${tracks.size} композиций",
+                    icon = Icons.Rounded.MusicNote,
+                    modifier = Modifier.weight(1f)
+                )
+                AlbumInfoBentoCard(
+                    title = "Общее время",
+                    value = formattedDuration,
+                    icon = Icons.Rounded.AccessTime,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AlbumInfoBentoCard(
+                    title = "Качество звука",
+                    value = if (tracks.any { it.is_lossless }) "Lossless / Hi-Fi FLAC" else "320 kbps MP3",
+                    icon = Icons.Rounded.HighQuality,
+                    modifier = Modifier.weight(1f)
+                )
+                AlbumInfoBentoCard(
+                    title = "Источник",
+                    value = "Salvation Cloud",
+                    icon = Icons.Rounded.CloudDone,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Кнопка поделиться альбомом
+            FilledTonalButton(
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "Слушайте альбом «${alb.title}» исполнителя ${alb.artistName} в Salvation!")
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Поделиться альбомом"))
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(painterResource(R.drawable.ic_share), contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Поделиться альбомом", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun AlbumCreditRow(
+    label: String,
+    value: String,
+    icon: ImageVector
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }

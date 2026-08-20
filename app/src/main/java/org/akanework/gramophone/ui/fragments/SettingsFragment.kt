@@ -61,7 +61,7 @@ class SettingsFragment : BaseFragment(true) {
         savedInstanceState: Bundle?
     ): View {
         return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
             setContent {

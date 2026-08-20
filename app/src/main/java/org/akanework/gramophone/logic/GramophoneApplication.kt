@@ -267,7 +267,7 @@ class GramophoneApplication : Application(), SingletonImageLoader.Factory,
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
-        return ImageLoader.Builder(context)
+        return ImageLoader.Builder(context.applicationContext)
             .crossfade(true) // Плавно появляемся
             .diskCache(null)
             .components {

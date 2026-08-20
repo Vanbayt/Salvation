@@ -57,8 +57,7 @@ class LibraryPlaylistsFragment : androidx.fragment.app.Fragment() {
         savedInstanceState: Bundle?
     ): View {
         return ComposeView(requireContext()).apply {
-            // Устанавливаем стратегию, чтобы Compose не уничтожался при перелистывании вкладок
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
 
             setContent {
                 val context = LocalContext.current
