@@ -263,7 +263,7 @@ class MainFragment : Fragment() {
                                 albumsCount = favoriteAlbumsState.value.size,
                                 artistsCount = favoriteArtistsState.value.size,
                                 onClick = {
-                                    (requireActivity() as MainActivity).switchTab(AppTab.LIBRARY)
+                                    (requireActivity() as MainActivity).startFragment(org.akanework.gramophone.ui.fragments.stats.StatsFragment.newInstance())
                                 }
                             )
                         }

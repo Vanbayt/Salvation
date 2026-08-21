@@ -112,6 +112,7 @@ fun PlaylistDetailScreen(
     // BottomSheet детальных действий над треком (3 точки)
     var selectedTrackForMenu by remember { mutableStateOf<Track?>(null) }
     var showTrackActionSheet by remember { mutableStateOf(false) }
+    var showDownloadProgressSheet by remember { mutableStateOf(false) }
 
     // Диалоги
     var showAddTracksSheet by remember { mutableStateOf(false) }
@@ -121,7 +122,20 @@ fun PlaylistDetailScreen(
 
     // Состояние текущего трека в плеере
     var currentPlayingTrackId by remember { mutableStateOf<String?>(null) }
+    var currentPlayingTitle by remember { mutableStateOf<String?>(null) }
+    var currentPlayingArtist by remember { mutableStateOf<String?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+
+    // FLAC СТАТУСЫ
+    val playlistStatuses by org.akanework.gramophone.logic.lossless.FlacDownloadManager.playlistStatuses.collectAsState()
+    val flacStatus = playlistStatuses[playlist.id]
+    val isAllFlac = (tracks.isNotEmpty() && tracks.all { org.akanework.gramophone.logic.lossless.LosslessStateManager.isTrackLossless(it.id, it.is_lossless) })
+        || flacStatus?.isComplete == true
+        || (flacStatus?.percent ?: 0f) >= 100f
+        || (flacStatus != null && flacStatus.totalTracks > 0 && flacStatus.flacTracks >= flacStatus.totalTracks)
+    val isFlacDownloading = !isAllFlac && (org.akanework.gramophone.logic.lossless.FlacDownloadManager.isPlaylistDownloading(playlist.id)
+        || ((flacStatus?.percent ?: 0f) > 0f && (flacStatus?.percent ?: 0f) < 100f && flacStatus?.isComplete != true))
+    val flacPercent = flacStatus?.percent ?: 0f
 
     // ДИНАМИЧЕСКИЕ ЦВЕТА ИЗ ОБЛОЖКИ
     var dynamicColors by remember { mutableStateOf<DynamicArtworkTheme.ArtworkColors?>(null) }
@@ -175,27 +189,35 @@ fun PlaylistDetailScreen(
 
     val listState = rememberLazyListState()
 
-    // Подписка на плеер
-    DisposableEffect(activity) {
-        val player = activity?.getPlayer()
-        if (player != null) {
-            currentPlayingTrackId = player.currentMediaItem?.mediaId
-            isPlaying = player.isPlaying
-
-            val listener = object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    currentPlayingTrackId = mediaItem?.mediaId
-                }
-
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    isPlaying = playing
-                }
+    // Непрерывная синхронизация с плеером
+    LaunchedEffect(activity) {
+        while (true) {
+            val player = activity?.getPlayer()
+            if (player != null) {
+                val mediaItem = player.currentMediaItem
+                currentPlayingTrackId = mediaItem?.mediaId
+                currentPlayingTitle = mediaItem?.mediaMetadata?.title?.toString()
+                currentPlayingArtist = mediaItem?.mediaMetadata?.artist?.toString()
+                isPlaying = player.isPlaying
             }
-            player.addListener(listener)
-            onDispose { player.removeListener(listener) }
-        } else {
-            onDispose {}
+            kotlinx.coroutines.delay(400)
         }
+    }
+
+    fun isTrackMatching(track: Track, playingId: String?, playingTitle: String?, playingArtist: String?): Boolean {
+        if (!playingId.isNullOrBlank()) {
+            if (track.id == playingId) return true
+            if (!track.sourceId.isNullOrBlank() && track.sourceId == playingId) return true
+            if (playingId.startsWith("deezer_") && track.id == playingId.removePrefix("deezer_")) return true
+        }
+        if (!playingTitle.isNullOrBlank() && !playingArtist.isNullOrBlank()) {
+            val titleMatch = track.title.trim().equals(playingTitle.trim(), ignoreCase = true)
+            val artistMatch = track.artist.trim().equals(playingArtist.trim(), ignoreCase = true) ||
+                    track.artist.contains(playingArtist, ignoreCase = true) ||
+                    playingArtist.contains(track.artist, ignoreCase = true)
+            if (titleMatch && artistMatch) return true
+        }
+        return false
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -230,9 +252,14 @@ fun PlaylistDetailScreen(
             try {
                 val response = NetworkClient.getApi(context).getPlaylistTracks(playlist.id).execute()
                 if (response.isSuccessful && response.body() != null) {
+                    val fetched = response.body()!!
                     withContext(Dispatchers.Main) {
                         tracks.clear()
-                        tracks.addAll(response.body()!!)
+                        tracks.addAll(fetched)
+                        if (fetched.isNotEmpty()) {
+                            val losslessList = fetched.filter { it.is_lossless }.map { it.id }
+                            org.akanework.gramophone.logic.lossless.LosslessStateManager.markLossless(context, losslessList)
+                        }
                     }
                 }
             } catch (e: Exception) {}
@@ -240,7 +267,10 @@ fun PlaylistDetailScreen(
         }
     }
 
-    LaunchedEffect(playlist.id) { loadTracks() }
+    LaunchedEffect(playlist.id) {
+        loadTracks()
+        org.akanework.gramophone.logic.lossless.FlacDownloadManager.fetchPlaylistStatus(context, playlist.id)
+    }
 
     fun startEditing() {
         originalTracks = tracks.toList()
@@ -362,14 +392,13 @@ fun PlaylistDetailScreen(
         }
 
         if (shuffle) {
-            player.shuffleModeEnabled = true
-            player.setMediaItems(mediaItems, startIndex, 0)
+            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems)
         } else {
             player.shuffleModeEnabled = false
             player.setMediaItems(mediaItems, startIndex, 0)
+            player.prepare()
+            player.play()
         }
-        player.prepare()
-        player.play()
     }
 
     fun addTrackToQueueNext(track: Track) {
@@ -717,7 +746,7 @@ fun PlaylistDetailScreen(
                                 .fillMaxWidth()
                                 .padding(top = 20.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (isEditing) {
                                 Button(
@@ -753,42 +782,92 @@ fun PlaylistDetailScreen(
                                     Icon(imageVector = Icons.Rounded.Delete, contentDescription = "Удалить плейлист", modifier = Modifier.size(20.dp))
                                 }
                             } else {
+                                // 1. Главная акцентная кнопка «Слушать»
                                 Button(
                                     onClick = { playTrackList(shuffle = false) },
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(52.dp),
                                     shape = RoundedCornerShape(18.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                    contentPadding = PaddingValues(horizontal = 14.dp)
                                 ) {
-                                    Icon(painterResource(R.drawable.ic_play), contentDescription = "Play", modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(painterResource(R.drawable.ic_play), contentDescription = "Play", modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Слушать",
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
-                                FilledTonalButton(
+                                // 2. Компактная кнопка «Перемешать»
+                                FilledTonalIconButton(
                                     onClick = { playTrackList(shuffle = true) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(52.dp),
+                                    modifier = Modifier.size(52.dp),
                                     shape = RoundedCornerShape(18.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Icon(painterResource(R.drawable.ic_shuffle), contentDescription = "Shuffle", modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Перемешать",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                     )
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_shuffle), contentDescription = "Перемешать", modifier = Modifier.size(20.dp))
+                                }
+
+                                // 3. Кнопка «Скачать FLAC» / Индикатор FLAC
+                                FilledTonalIconButton(
+                                    onClick = {
+                                        if (!isAllFlac && !isFlacDownloading) {
+                                            org.akanework.gramophone.logic.lossless.FlacDownloadManager.downloadPlaylist(
+                                                context = context,
+                                                playlistId = playlist.id,
+                                                playlistTitle = playlist.title,
+                                                tracks = tracks
+                                            )
+                                        }
+                                        showDownloadProgressSheet = true
+                                    },
+                                    modifier = Modifier.size(52.dp),
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = if (isAllFlac) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        contentColor = if (isAllFlac) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    when {
+                                        isFlacDownloading -> {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator(
+                                                    progress = { flacPercent / 100f },
+                                                    modifier = Modifier.size(32.dp),
+                                                    strokeWidth = 2.5.dp,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    text = "${flacPercent.toInt()}%",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Black
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                        isAllFlac -> {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_check_circle),
+                                                contentDescription = "FLAC Lossless",
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                        else -> {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_download),
+                                                contentDescription = "Скачать FLAC",
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -929,7 +1008,7 @@ fun PlaylistDetailScreen(
                     }
                 } else {
                     itemsIndexed(filteredTracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
-                        val isCurrentTrack = track.id == currentPlayingTrackId
+                        val isCurrentTrack = isTrackMatching(track, currentPlayingTrackId, currentPlayingTitle, currentPlayingArtist)
                         val isSelected = selectedTrackIds.contains(track.id)
                         val isBeingDragged = draggingIndex == index
 
@@ -1160,6 +1239,21 @@ fun PlaylistDetailScreen(
                     isSelectionMode = false
                     selectedTrackIds.clear()
                 }
+            )
+        }
+
+        if (showDownloadProgressSheet) {
+            val totalCount = flacStatus?.totalTracks?.takeIf { it > 0 } ?: tracks.size
+            val flacCount = flacStatus?.flacTracks ?: if (isAllFlac) tracks.size else tracks.count { org.akanework.gramophone.logic.lossless.LosslessStateManager.isTrackLossless(it.id, it.is_lossless) }
+            val currentPercent = if (isAllFlac) 100f else flacPercent
+
+            org.akanework.gramophone.ui.components.lossless.DownloadProgressBottomSheet(
+                title = playlist.title,
+                totalTracks = totalCount,
+                flacTracks = flacCount,
+                percent = currentPercent,
+                tracks = tracks,
+                onDismiss = { showDownloadProgressSheet = false }
             )
         }
     }

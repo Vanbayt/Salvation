@@ -37,6 +37,9 @@ data class Album(
     @SerializedName("is_liked")
     var isLiked: Boolean = false,
 
+    @SerializedName("has_flac")
+    val hasFlac: Boolean = false,
+
     @SerializedName("info")
     val info: AlbumInfo? = null
 ) : Serializable

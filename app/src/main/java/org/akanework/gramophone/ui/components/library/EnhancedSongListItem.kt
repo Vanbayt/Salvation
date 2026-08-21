@@ -223,6 +223,8 @@ fun EnhancedSongListItem(
             Spacer(modifier = Modifier.width(14.dp))
 
             // Текстовая информация о треке
+            val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
@@ -244,7 +246,7 @@ fun EnhancedSongListItem(
                     )
 
                     // Бейдж качества аудио (Lossless / FLAC)
-                    if (track.is_lossless) {
+                    if (isLossless) {
                         AudioQualityBadge(text = "FLAC")
                     }
                 }

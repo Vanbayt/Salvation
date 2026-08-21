@@ -73,7 +73,9 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
 
                     val originalUri = metadata?.artworkUri?.toString() ?: ""
                     val finalCoverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
-                    val isLossless = metadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+                    val currentTrackId = currentItem?.mediaId
+                    val isLosslessExtra = metadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+                    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(currentTrackId, isLosslessExtra)
 
                     val artistId = metadata?.extras?.getString("ARTIST_ID")
                     val albumId = metadata?.extras?.getString("ALBUM_ID")

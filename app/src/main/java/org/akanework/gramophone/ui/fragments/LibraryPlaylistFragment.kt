@@ -265,14 +265,14 @@ fun PlaylistsScreen(
             ) {
 
                 // Карточка "Создать" всегда первая (индекс 0)
-                item {
+                item(key = "create_playlist_button") {
                     AnimatedGridItem(index = 0) {
                         CreatePlaylistCard(onClick = { showCreateDialog = true })
                     }
                 }
 
                 // Используем itemsIndexed, чтобы получить номер по порядку
-                itemsIndexed(playlists, key = { _, p -> p.id }) { index, playlist ->
+                itemsIndexed(playlists, key = { index, p -> "playlist_grid_${p.id}_$index" }) { index, playlist ->
                     // Передаем index + 1, так как индекс 0 уже занят кнопкой создания
                     AnimatedGridItem(index = index + 1) {
                         PlaylistGridItem(

@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -21,6 +22,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.res.painterResource
+import org.akanework.gramophone.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -211,13 +214,14 @@ fun FullPlayerScreen(
     val metadata = currentItem?.mediaMetadata
     val title = metadata?.title?.toString() ?: "Неизвестный трек"
     val artist = metadata?.artist?.toString() ?: "Неизвестный исполнитель"
-    val album = metadata?.albumTitle?.toString() ?: ""
-    val isLossless = currentItem?.mediaMetadata?.extras?.getBoolean("IS_LOSSLESS") ?: true
-
     val trackId = currentItem?.mediaId ?: ""
+    val isLosslessExtra = currentItem?.mediaMetadata?.extras?.getBoolean("IS_LOSSLESS") ?: false
+    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(trackId, isLosslessExtra)
+
     var isLiked by remember(trackId) {
         mutableStateOf(LikeCache.isLiked(trackId, title = title, artist = artist))
     }
+    var showAudioFidelitySheet by remember { mutableStateOf(false) }
 
     val defaultPrefs = remember { androidx.preference.PreferenceManager.getDefaultSharedPreferences(context) }
     var isDynamicCoverColorEnabled by remember {
@@ -552,17 +556,57 @@ fun FullPlayerScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 24.sp,
-                            letterSpacing = (-0.3).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee()
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 24.sp,
+                                letterSpacing = (-0.3).sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .basicMarquee()
+                        )
+
+                        if (isLossless) {
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { showAudioFidelitySheet = true },
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFD4AF37).copy(alpha = 0.22f),
+                                border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_check_circle),
+                                        contentDescription = "Hi-Res FLAC",
+                                        modifier = Modifier.size(10.dp),
+                                        tint = Color(0xFFD4AF37)
+                                    )
+                                    Text(
+                                        text = "FLAC",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 0.6.sp
+                                        ),
+                                        color = Color(0xFFD4AF37)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -659,6 +703,9 @@ fun FullPlayerScreen(
                     val nextShuffle = !p.shuffleModeEnabled
                     p.shuffleModeEnabled = nextShuffle
                     shuffleEnabled = nextShuffle
+                    if (nextShuffle) {
+                        org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
+                    }
                 },
                 repeatMode = repeatMode,
                 onRepeatToggle = {
@@ -710,6 +757,15 @@ fun FullPlayerScreen(
                     .padding(bottom = 12.dp, top = 4.dp)
             )
         }
+    }
+
+    if (showAudioFidelitySheet) {
+        AudioFidelityBottomSheet(
+            trackTitle = title,
+            artistName = artist,
+            isLossless = isLossless,
+            onDismiss = { showAudioFidelitySheet = false }
+        )
     }
 }
 

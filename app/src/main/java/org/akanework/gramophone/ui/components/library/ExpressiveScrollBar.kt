@@ -1,8 +1,10 @@
 package org.akanework.gramophone.ui.components.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -38,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -57,9 +58,11 @@ fun ExpressiveScrollBar(
     listState: LazyListState,
     itemCount: Int,
     labelProvider: ((Int) -> String)? = null,
+    onScrollToPosition: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    thumbMinHeight: Dp = 48.dp,
-    thumbThickness: Dp = 6.dp
+    bottomPadding: Dp = 0.dp,
+    thumbMinHeight: Dp = 44.dp,
+    thumbThickness: Dp = 4.dp
 ) {
     if (itemCount <= 0) return
 
@@ -68,7 +71,7 @@ fun ExpressiveScrollBar(
     val density = LocalDensity.current
 
     var isDragging by remember { mutableStateOf(false) }
-    var dragProgress by remember { mutableFloatStateOf(0f) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     var currentLabel by remember { mutableStateOf("") }
     var lastHapticLabel by remember { mutableStateOf("") }
 
@@ -78,21 +81,27 @@ fun ExpressiveScrollBar(
     LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isDragging) {
         isThumbVisible = true
         if (!isDragging) {
-            delay(1800)
+            delay(1600)
             isThumbVisible = false
         }
     }
 
     val animatedThumbAlpha by animateFloatAsState(
         targetValue = if (isThumbVisible || isDragging) 1f else 0f,
-        animationSpec = tween(durationMillis = 250),
+        animationSpec = tween(durationMillis = 200),
         label = "scrollThumbAlpha"
     )
 
     val animatedThumbThickness by animateDpAsState(
         targetValue = if (isDragging) 10.dp else thumbThickness,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "thumbThickness"
+    )
+
+    val animatedThumbHeight by animateDpAsState(
+        targetValue = if (isDragging) 56.dp else thumbMinHeight,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "thumbHeight"
     )
 
     val scrollProgress by remember(itemCount) {
@@ -110,36 +119,46 @@ fun ExpressiveScrollBar(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxHeight()
-            .width(60.dp)
-            .padding(end = 4.dp),
+            .padding(bottom = bottomPadding)
+            .width(52.dp),
         contentAlignment = Alignment.CenterEnd
     ) {
         val totalTrackHeightPx = constraints.maxHeight.toFloat()
-        val thumbHeightPx = with(density) { thumbMinHeight.toPx() }
+        val thumbHeightPx = with(density) { animatedThumbHeight.toPx() }
         val maxScrollRange = (totalTrackHeightPx - thumbHeightPx).coerceAtLeast(1f)
 
-        val activeProgress = if (isDragging) dragProgress else scrollProgress
-        val thumbTopOffsetPx = activeProgress * maxScrollRange
+        val targetOffsetPx = if (isDragging) dragOffsetPx else scrollProgress * maxScrollRange
+
+        // Плавное физическое следование бегунка за жестом
+        val animatedOffsetPx by animateFloatAsState(
+            targetValue = targetOffsetPx,
+            animationSpec = if (isDragging) {
+                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+            } else {
+                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+            },
+            label = "thumbOffsetPx"
+        )
 
         // Всплывающий индикатор буквы/метки при перетаскивании (Pill Bubble)
         AnimatedVisibility(
             visible = isDragging && currentLabel.isNotBlank(),
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            enter = fadeIn(spring(stiffness = Spring.StiffnessHigh)) + scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150)),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset {
                     IntOffset(
-                        x = -with(density) { 36.dp.roundToPx() },
-                        y = (thumbTopOffsetPx - with(density) { 8.dp.toPx() }).roundToInt()
+                        x = -with(density) { 38.dp.roundToPx() },
+                        y = (animatedOffsetPx - with(density) { 6.dp.toPx() }).roundToInt()
                     )
                 }
         ) {
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.primary,
                 shadowElevation = 8.dp,
-                modifier = Modifier.size(52.dp, 44.dp)
+                modifier = Modifier.size(56.dp, 46.dp)
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -148,8 +167,8 @@ fun ExpressiveScrollBar(
                     Text(
                         text = currentLabel,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp
                         ),
                         color = MaterialTheme.colorScheme.onPrimary
                     )
@@ -157,27 +176,20 @@ fun ExpressiveScrollBar(
             }
         }
 
-        // Ползунок скроллбара (Thumb)
+        // Область перетаскивания и сам бегунок
         if (animatedThumbAlpha > 0.01f) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset { IntOffset(0, thumbTopOffsetPx.roundToInt()) }
-                    .height(thumbMinHeight)
-                    .width(animatedThumbThickness)
-                    .clip(CircleShape)
-                    .background(
-                        if (isDragging) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f * animatedThumbAlpha)
-                    )
-                    .pointerInput(itemCount, labelProvider) {
+                    .fillMaxSize()
+                    .pointerInput(itemCount, maxScrollRange, labelProvider, onScrollToPosition) {
                         detectVerticalDragGestures(
                             onDragStart = { offset ->
                                 isDragging = true
-                                val startY = (offset.y + thumbTopOffsetPx).coerceIn(0f, totalTrackHeightPx)
-                                dragProgress = (startY / totalTrackHeightPx).coerceIn(0f, 1f)
+                                val startY = offset.y.coerceIn(0f, maxScrollRange)
+                                dragOffsetPx = startY
+                                val fraction = (startY / maxScrollRange).coerceIn(0f, 1f)
 
-                                val targetIndex = ((dragProgress * (itemCount - 1)).roundToInt()).coerceIn(0, itemCount - 1)
+                                val targetIndex = ((fraction * (itemCount - 1)).roundToInt()).coerceIn(0, itemCount - 1)
                                 if (labelProvider != null) {
                                     val label = labelProvider(targetIndex)
                                     currentLabel = label
@@ -187,8 +199,12 @@ fun ExpressiveScrollBar(
                                     }
                                 }
 
-                                coroutineScope.launch {
-                                    listState.scrollToItem(targetIndex)
+                                if (onScrollToPosition != null) {
+                                    onScrollToPosition(targetIndex)
+                                } else {
+                                    coroutineScope.launch {
+                                        listState.scrollToItem(targetIndex)
+                                    }
                                 }
                             },
                             onDragEnd = {
@@ -197,11 +213,12 @@ fun ExpressiveScrollBar(
                             onDragCancel = {
                                 isDragging = false
                             },
-                            onVerticalDrag = { change, _ ->
-                                val currentY = change.position.y + thumbTopOffsetPx
-                                dragProgress = (currentY / totalTrackHeightPx).coerceIn(0f, 1f)
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetPx = (dragOffsetPx + dragAmount).coerceIn(0f, maxScrollRange)
+                                val fraction = (dragOffsetPx / maxScrollRange).coerceIn(0f, 1f)
 
-                                val targetIndex = ((dragProgress * (itemCount - 1)).roundToInt()).coerceIn(0, itemCount - 1)
+                                val targetIndex = ((fraction * (itemCount - 1)).roundToInt()).coerceIn(0, itemCount - 1)
                                 if (labelProvider != null) {
                                     val label = labelProvider(targetIndex)
                                     currentLabel = label
@@ -211,13 +228,32 @@ fun ExpressiveScrollBar(
                                     }
                                 }
 
-                                coroutineScope.launch {
-                                    listState.scrollToItem(targetIndex)
+                                if (onScrollToPosition != null) {
+                                    onScrollToPosition(targetIndex)
+                                } else {
+                                    coroutineScope.launch {
+                                        listState.scrollToItem(targetIndex)
+                                    }
                                 }
                             }
                         )
                     }
-            )
+            ) {
+                // Визуальный бегунок (Thumb)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 4.dp)
+                        .offset { IntOffset(0, animatedOffsetPx.roundToInt()) }
+                        .height(animatedThumbHeight)
+                        .width(animatedThumbThickness)
+                        .clip(CircleShape)
+                        .background(
+                            if (isDragging) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f * animatedThumbAlpha)
+                        )
+                )
+            }
         }
     }
 }

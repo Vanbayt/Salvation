@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.api.Playlist // <-- Вот он, наш Плейлист!
@@ -67,11 +68,46 @@ fun PlaylistCover(
             // 3. Плейлист абсолютно пустой
             else -> {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_library), // Твоя иконка из AppTab
-                    contentDescription = "Empty Playlist",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    painter = painterResource(id = R.drawable.ic_library),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.size(48.dp)
                 )
+            }
+        }
+
+        // Золотистый угловой бейдж FLAC
+        val isFlac = org.akanework.gramophone.logic.lossless.LosslessStateManager.isPlaylistLossless(playlist.id)
+        if (isFlac) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = androidx.compose.ui.graphics.Color(0xFF1E1B18).copy(alpha = 0.88f),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, androidx.compose.ui.graphics.Color(0xFFD4AF37).copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_check_circle),
+                        contentDescription = null,
+                        tint = androidx.compose.ui.graphics.Color(0xFFD4AF37),
+                        modifier = Modifier.size(9.dp)
+                    )
+                    androidx.compose.material3.Text(
+                        text = "FLAC",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.5.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = androidx.compose.ui.graphics.Color(0xFFD4AF37)
+                    )
+                }
             }
         }
     }

@@ -56,6 +56,9 @@ enum class LibrarySortOption(
 fun LibrarySortBottomSheet(
     selectedOption: LibrarySortOption,
     onOptionSelected: (LibrarySortOption) -> Unit,
+    onlyFlac: Boolean = false,
+    onOnlyFlacToggle: (Boolean) -> Unit = {},
+    showFlacFilter: Boolean = false,
     onDismiss: () -> Unit,
     sheetState: SheetState = rememberModalBottomSheetState()
 ) {
@@ -163,6 +166,81 @@ fun LibrarySortBottomSheet(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
+                    }
+                }
+            }
+
+            if (showFlacFilter) {
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { onOnlyFlacToggle(!onlyFlac) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (onlyFlac) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f)
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (onlyFlac) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
+                                    contentDescription = null,
+                                    tint = if (onlyFlac) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column {
+                                Text(
+                                    text = "Только Lossless (FLAC)",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = if (onlyFlac) FontWeight.SemiBold else FontWeight.Normal
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Скрывать треки стандартного качества",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        androidx.compose.material3.Switch(
+                            checked = onlyFlac,
+                            onCheckedChange = { onOnlyFlacToggle(it) }
+                        )
                     }
                 }
             }

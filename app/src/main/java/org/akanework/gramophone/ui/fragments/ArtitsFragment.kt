@@ -278,14 +278,13 @@ fun ArtistDetailScreen(
         }
 
         if (shuffle) {
-            player.shuffleModeEnabled = true
-            player.setMediaItems(mediaItems, startIndex, 0)
+            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems)
         } else {
             player.shuffleModeEnabled = false
             player.setMediaItems(mediaItems, startIndex, 0)
+            player.prepare()
+            player.play()
         }
-        player.prepare()
-        player.play()
     }
 
     fun addTrackToQueueNext(track: Track) {
@@ -425,7 +424,7 @@ fun ArtistDetailScreen(
                 contentPadding = PaddingValues(bottom = 260.dp)
             ) {
                 // 1. ШАПКА АРТИСТА (КВАДРАТНАЯ ОБЛОЖКА 220dp СО СКРУГЛЕНИЕМ 32dp)
-                item {
+                item(key = "artist_hero_header") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -579,7 +578,7 @@ fun ArtistDetailScreen(
                 }
 
                 // 2. СКРУГЛЕННЫЙ КОНТЕЙНЕР СО ВКЛАДКАМИ В СТИЛЕ МЕДИАТЕКИ (PILL TABS)
-                item {
+                item(key = "artist_tabs_and_controls") {
                     Surface(
                         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -729,7 +728,7 @@ fun ArtistDetailScreen(
                 if (selectedTabIndex == 0) {
                     // ВКЛАДКА "ПОПУЛЯРНЫЕ ТРЕКИ" (ЛАКОНИЧНЫЙ ТОП-5 С ВОЗМОЖНОСТЬЮ РАЗВЕРНУТЬ)
                     if (displayedTracks.isEmpty()) {
-                        item {
+                        item(key = "artist_tracks_empty") {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                                 modifier = Modifier.fillMaxWidth()
@@ -802,7 +801,7 @@ fun ArtistDetailScreen(
 
                         // Кнопка развернуть / свернуть все треки
                         if (filteredTracks.size > 5 && filterQuery.isBlank()) {
-                            item {
+                            item(key = "artist_tracks_expand_button") {
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                                     modifier = Modifier.fillMaxWidth()
@@ -831,7 +830,7 @@ fun ArtistDetailScreen(
                 } else if (selectedTabIndex == 1) {
                     // ВКЛАДКА "РЕЛИЗЫ" (ТОП-4 СВЕЖИХ РЕЛИЗА + КНОПКА ДИСКОГРАФИИ)
                     if (albums.isEmpty()) {
-                        item {
+                        item(key = "artist_albums_empty") {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                                 modifier = Modifier.fillMaxWidth()
@@ -847,7 +846,7 @@ fun ArtistDetailScreen(
                             }
                         }
                     } else {
-                        item {
+                        item(key = "artist_albums_top4_and_discography") {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                                 modifier = Modifier.fillMaxWidth()
@@ -938,7 +937,7 @@ fun ArtistDetailScreen(
                     }
                 } else {
                     // ВКЛАДКА "ИНФО / ОБ АРТИСТЕ"
-                    item {
+                    item(key = "artist_info_tab_content") {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
                             modifier = Modifier.fillMaxWidth()
@@ -953,7 +952,7 @@ fun ArtistDetailScreen(
                 }
 
                 // Завершающая подложка
-                item {
+                item(key = "artist_bottom_spacer") {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         modifier = Modifier

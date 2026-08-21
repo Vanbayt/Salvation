@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +37,8 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +67,10 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.LibraryCacheManager
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.NetworkClient
@@ -130,8 +138,8 @@ fun LibraryAlbumsTab(
         loadAlbums()
     }
 
-    val filteredAlbums = remember(albums, searchQuery) {
-        if (searchQuery.isBlank()) albums
+    val filteredAlbums = remember(albums.toList(), searchQuery) {
+        if (searchQuery.isBlank()) albums.toList()
         else albums.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
             it.artistName.contains(searchQuery, ignoreCase = true)
@@ -160,7 +168,7 @@ fun LibraryAlbumsTab(
                         start = 14.dp,
                         end = 14.dp,
                         top = 14.dp,
-                        bottom = bottomPadding.calculateBottomPadding() + 120.dp
+                        bottom = bottomPadding.calculateBottomPadding() + 220.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -214,11 +222,11 @@ fun LibraryAlbumsTab(
                         }
                     }
 
-                    items(
+                    itemsIndexed(
                         items = filteredAlbums,
-                        key = { it.id },
-                        contentType = { "album_grid_item" }
-                    ) { album ->
+                        key = { index, album -> "album_grid_${album.id}_$index" },
+                        contentType = { _, _ -> "album_grid_item" }
+                    ) { index, album ->
                         AlbumGridCard(
                             album = album,
                             onClick = {
@@ -235,7 +243,7 @@ fun LibraryAlbumsTab(
                             start = 14.dp,
                             end = 14.dp,
                             top = 14.dp,
-                            bottom = bottomPadding.calculateBottomPadding() + 120.dp
+                            bottom = bottomPadding.calculateBottomPadding() + 220.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
@@ -287,11 +295,11 @@ fun LibraryAlbumsTab(
                             }
                         }
 
-                        items(
+                        itemsIndexed(
                             items = filteredAlbums,
-                            key = { it.id },
-                            contentType = { "album_list_item" }
-                        ) { album ->
+                            key = { index, album -> "album_list_${album.id}_$index" },
+                            contentType = { _, _ -> "album_list_item" }
+                        ) { index, album ->
                             AlbumListCard(
                                 album = album,
                                 onClick = {
@@ -304,10 +312,13 @@ fun LibraryAlbumsTab(
                     ExpressiveScrollBar(
                         listState = listState,
                         itemCount = filteredAlbums.size,
+                        bottomPadding = bottomPadding.calculateBottomPadding() + 200.dp,
                         labelProvider = { index ->
                             filteredAlbums.getOrNull(index)?.title?.firstOrNull()?.uppercase() ?: "#"
                         },
-                        modifier = Modifier.align(Alignment.CenterEnd)
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
                     )
                 }
             }
@@ -356,6 +367,41 @@ fun AlbumGridCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(48.dp)
                     )
+                }
+
+                // Золотистый угловой бейдж FLAC
+                val isFlac = album.hasFlac || org.akanework.gramophone.logic.lossless.LosslessStateManager.isAlbumLossless(album.id)
+                if (isFlac) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF1E1B18).copy(alpha = 0.88f),
+                        border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check_circle),
+                                contentDescription = null,
+                                tint = Color(0xFFD4AF37),
+                                modifier = Modifier.size(9.dp)
+                            )
+                            Text(
+                                text = "FLAC",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                color = Color(0xFFD4AF37)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -436,6 +482,30 @@ fun AlbumListCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(28.dp)
                     )
+                }
+
+                // Микро-бейдж FLAC на обложке
+                val isFlac = album.hasFlac || org.akanework.gramophone.logic.lossless.LosslessStateManager.isAlbumLossless(album.id)
+                if (isFlac) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(3.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF1E1B18).copy(alpha = 0.88f),
+                        border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.6f))
+                    ) {
+                        Text(
+                            text = "FLAC",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.4.sp
+                            ),
+                            color = Color(0xFFD4AF37),
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                        )
+                    }
                 }
             }
 

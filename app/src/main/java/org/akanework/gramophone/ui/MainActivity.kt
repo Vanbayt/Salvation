@@ -224,6 +224,7 @@ class MainActivity : BaseActivity() {
         Log.i("MainActivity", "onCreate($intent)")
         installSplashScreen().setKeepOnScreenCondition { !ready }
         super.onCreate(savedInstanceState)
+        org.akanework.gramophone.logic.lossless.FlacDownloadManager.init(this)
         lifecycle.addObserver(controllerViewModel)
         enableEdgeToEdgeProperly()
 
@@ -402,6 +403,14 @@ class MainActivity : BaseActivity() {
                     dynamicColors!!.fullPlayerGradientTop
                 } else fullColor
 
+                val targetGlowColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+                    dynamicColors!!.fullPlayerSecondaryGlow
+                } else fullColor
+
+                val targetBottomColor = if (isDynamicCoverColorEnabled && dynamicColors != null) {
+                    dynamicColors!!.fullPlayerGradientBottom
+                } else fullColor
+
                 val animatedMiniColor by androidx.compose.animation.animateColorAsState(
                     targetValue = targetMiniColor,
                     animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
@@ -412,6 +421,18 @@ class MainActivity : BaseActivity() {
                     targetValue = targetFullColor,
                     animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                     label = "fullPlayerColorAnim"
+                )
+
+                val animatedGlowColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetGlowColor,
+                    animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                    label = "fullPlayerGlowAnim"
+                )
+
+                val animatedBottomColor by androidx.compose.animation.animateColorAsState(
+                    targetValue = targetBottomColor,
+                    animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                    label = "fullPlayerBottomAnim"
                 )
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -475,7 +496,17 @@ class MainActivity : BaseActivity() {
                                     .drawBehind {
                                         drawRect(fullColor)
                                         if (isDynamicCoverColorEnabled) {
-                                            drawRect(animatedFullColor.copy(alpha = sheetProgress.coerceIn(0f, 1f)))
+                                            val gradientBrush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    animatedFullColor,
+                                                    animatedGlowColor,
+                                                    animatedBottomColor
+                                                )
+                                            )
+                                            drawRect(
+                                                brush = gradientBrush,
+                                                alpha = sheetProgress.coerceIn(0f, 1f)
+                                            )
                                         }
                                         drawRect(animatedMiniColor.copy(alpha = (1f - sheetProgress).coerceIn(0f, 1f)))
                                     }
@@ -484,6 +515,7 @@ class MainActivity : BaseActivity() {
                                     MorphingPlayerComposeBlock(
                                         fraction = fraction,
                                         auraColor = animatedMiniColor,
+                                        dynamicArtworkColors = if (isDynamicCoverColorEnabled) dynamicColors else null,
                                         onLyricsStateChange = { isLyricsOpenState = it },
                                         onClose = { coroutineScope.launch { scaffoldState.bottomSheetState.partialExpand() } },
                                         onExpand = { coroutineScope.launch { scaffoldState.bottomSheetState.expand() } }
@@ -694,6 +726,7 @@ class MainActivity : BaseActivity() {
     private fun MorphingPlayerComposeBlock(
         fraction: Float,
         auraColor: Color?,
+        dynamicArtworkColors: org.akanework.gramophone.ui.theme.DynamicArtworkTheme.ArtworkColors? = null,
         onLyricsStateChange: (Boolean) -> Unit,
         onClose: () -> Unit,
         onExpand: () -> Unit
@@ -850,22 +883,22 @@ class MainActivity : BaseActivity() {
         val bottomActionsHeight = 56.dp
         val actionsToControlsGap = 16.dp
         val mainControlsHeight = 76.dp
-        val controlsToTimeGap = 14.dp
+        val controlsToTimeGap = 12.dp
         val timeHeight = 16.dp
         val sliderHeight = 38.dp
-        val sliderToTextGap = 14.dp
-        val textBlockHeight = 60.dp
+        val symmetricGap = 18.dp
+        val textBlockHeight = 58.dp
 
-        val totalBottomStackHeight = bottomActionsHeight + actionsToControlsGap + mainControlsHeight + controlsToTimeGap + timeHeight + sliderHeight + sliderToTextGap + textBlockHeight
+        val totalBottomStackHeight = bottomActionsHeight + actionsToControlsGap + mainControlsHeight + controlsToTimeGap + timeHeight + sliderHeight + symmetricGap + textBlockHeight
 
         val fullTextY = screenHeightDp - fullBottomPadding - totalBottomStackHeight
-        val fullControlsY = fullTextY + textBlockHeight + sliderToTextGap
+        val fullControlsY = fullTextY + textBlockHeight + symmetricGap
 
-        val availableCoverHeight = fullTextY - fullHeaderBottom - 20.dp
+        val availableCoverHeight = fullTextY - fullHeaderBottom - symmetricGap
         val maxFullCoverSize = minOf(screenWidthDp - 44.dp, maxOf(200.dp, availableCoverHeight))
         val targetFullCoverSize = maxFullCoverSize * finalCoverScale
         val targetFullCoverX = (screenWidthDp - targetFullCoverSize) / 2
-        val targetFullCoverY = fullHeaderBottom + ((availableCoverHeight - targetFullCoverSize) / 2).coerceAtLeast(6.dp)
+        val targetFullCoverY = (fullHeaderBottom + (availableCoverHeight - targetFullCoverSize) / 2).coerceAtLeast(fullHeaderBottom + 4.dp)
         val fullCoverRadius = 28.dp
 
         val fullTextX = 24.dp
@@ -1314,11 +1347,58 @@ class MainActivity : BaseActivity() {
                             translationY = 60f * (1f - controlsProgress)
                         }
                 ) {
+                    // Интерактивный баннер следующего трека (Next Track Pill с динамическими цветами)
+                    AnimatedVisibility(
+                        visible = showNextTrack && nextTrackName.isNotEmpty(),
+                        enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 2 } + androidx.compose.animation.scaleIn(tween(350), initialScale = 0.92f),
+                        exit = fadeOut(tween(250)) + slideOutVertically(tween(250)) { it / 2 } + androidx.compose.animation.scaleOut(tween(250), targetScale = 0.92f)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    getPlayer()?.seekToNext()
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.SkipNext,
+                                    contentDescription = null,
+                                    tint = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "Далее: ",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                                    color = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = nextTrackName,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+
                     Box(modifier = Modifier.fillMaxWidth().height(sliderHeight).padding(horizontal = 8.dp)) {
                         SquigglySlider(
                             position = currentPosition,
                             duration = trackDuration,
                             isPlaying = isPlaying,
+                            activeColor = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary,
                             onValueChange = { newValue ->
                                 currentPosition = newValue
                                 progressHandler.removeCallbacks(progressRunnable)
@@ -1372,7 +1452,7 @@ class MainActivity : BaseActivity() {
                         )
                         Surface(
                             shape = RoundedCornerShape(32.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                            color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
                             modifier = Modifier
                                 .weight(prevWeight)
                                 .fillMaxHeight()
@@ -1384,18 +1464,24 @@ class MainActivity : BaseActivity() {
                                 }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.SkipPrevious, "Prev", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(
+                                    Icons.Rounded.SkipPrevious,
+                                    "Prev",
+                                    modifier = Modifier.size(32.dp),
+                                    tint = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
 
+                        // Экспрессивная кнопка Play/Pause (Морфинг круга в суперэллипс)
                         val playWeight by animateFloatAsState(
-                            targetValue = if (pressedAction == "PLAY") 1.35f else 1.25f,
+                            targetValue = if (pressedAction == "PLAY") 1.8f else 1.55f,
                             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                             label = "playWeight"
                         )
                         Surface(
                             shape = RoundedCornerShape(32.dp),
-                            color = MaterialTheme.colorScheme.primary,
+                            color = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .weight(playWeight)
                                 .fillMaxHeight()
@@ -1407,15 +1493,18 @@ class MainActivity : BaseActivity() {
                                 }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                androidx.compose.animation.AnimatedContent(
-                                    targetState = isPlaying,
-                                    transitionSpec = { androidx.compose.animation.fadeIn(tween(150)) togetherWith androidx.compose.animation.fadeOut(tween(150)) },
-                                    label = "PlayPauseIcon"
-                                ) { playing ->
+                                val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(34.dp),
+                                        color = dynamicArtworkColors?.playerOnPrimary ?: MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 3.5.dp
+                                    )
+                                } else {
                                     Icon(
-                                        imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                        contentDescription = if (playing) "Pause" else "Play",
-                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                                        contentDescription = "Play/Pause",
+                                        tint = dynamicArtworkColors?.playerOnPrimary ?: MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(38.dp)
                                     )
                                 }
@@ -1429,7 +1518,7 @@ class MainActivity : BaseActivity() {
                         )
                         Surface(
                             shape = RoundedCornerShape(32.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                            color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
                             modifier = Modifier
                                 .weight(nextWeight)
                                 .fillMaxHeight()
@@ -1441,7 +1530,12 @@ class MainActivity : BaseActivity() {
                                 }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(
+                                    Icons.Rounded.SkipNext,
+                                    "Next",
+                                    modifier = Modifier.size(32.dp),
+                                    tint = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }
@@ -1451,7 +1545,7 @@ class MainActivity : BaseActivity() {
                     // Нижняя сегментированная капсула 4 переключателей (PixelPlayer BottomToggleRow Style)
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
+                        color = dynamicArtworkColors?.playerContainer?.copy(alpha = 0.65f) ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
@@ -1467,8 +1561,8 @@ class MainActivity : BaseActivity() {
                             SegmentedCapsuleBtn(
                                 icon = Icons.Rounded.Shuffle,
                                 isActive = isShuffle,
-                                activeBg = MaterialTheme.colorScheme.primaryContainer,
-                                activeFg = MaterialTheme.colorScheme.onPrimaryContainer,
+                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     val p = getPlayer() ?: return@SegmentedCapsuleBtn
@@ -1479,13 +1573,13 @@ class MainActivity : BaseActivity() {
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // 2. Repeat
-                            val repeatIcon = if (repeatModeState == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
+                            // 2. Loop
+                            val currentRepeatMode = getPlayer()?.repeatMode ?: androidx.media3.common.Player.REPEAT_MODE_OFF
                             SegmentedCapsuleBtn(
-                                icon = repeatIcon,
+                                icon = if (currentRepeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                                 isActive = isLoop,
-                                activeBg = MaterialTheme.colorScheme.secondaryContainer,
-                                activeFg = MaterialTheme.colorScheme.onSecondaryContainer,
+                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.secondaryContainer,
+                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onSecondaryContainer,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     val p = getPlayer() ?: return@SegmentedCapsuleBtn
@@ -1503,8 +1597,8 @@ class MainActivity : BaseActivity() {
                             SegmentedCapsuleBtn(
                                 icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 isActive = isLiked,
-                                activeBg = MaterialTheme.colorScheme.tertiaryContainer,
-                                activeFg = MaterialTheme.colorScheme.onTertiaryContainer,
+                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.tertiaryContainer,
+                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onTertiaryContainer,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@SegmentedCapsuleBtn
@@ -1526,8 +1620,8 @@ class MainActivity : BaseActivity() {
                             SegmentedCapsuleBtn(
                                 icon = Icons.Rounded.Lyrics,
                                 isActive = showLyricsScreen,
-                                activeBg = MaterialTheme.colorScheme.primaryContainer,
-                                activeFg = MaterialTheme.colorScheme.onPrimaryContainer,
+                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     val targetState = !showLyricsScreen
@@ -1540,56 +1634,30 @@ class MainActivity : BaseActivity() {
                             )
                         }
                     }
-
-                    // Интерактивный баннер следующего трека (Next Track Pill)
-                    AnimatedVisibility(
-                        visible = showNextTrack && nextTrackName.isNotEmpty(),
-                        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 2 },
-                        exit = fadeOut(tween(300)) + slideOutVertically(tween(300)) { it / 2 }
-                    ) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    getPlayer()?.seekToNext()
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    "Далее: ",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = nextTrackName,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
                 }
             }
 
             // 6. LYRICS FULLSCREEN OVERLAY
             androidx.compose.animation.AnimatedVisibility(
                 visible = showLyricsScreen,
-                enter = androidx.compose.animation.fadeIn(tween(300)) +
-                        androidx.compose.animation.slideInVertically(tween(300)) { it },
-                exit = androidx.compose.animation.fadeOut(tween(300)) +
-                        androidx.compose.animation.slideOutVertically(tween(300)) { it }
+                enter = androidx.compose.animation.fadeIn(tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing)) +
+                        androidx.compose.animation.slideInVertically(
+                            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                            initialOffsetY = { it }
+                        ) +
+                        androidx.compose.animation.scaleIn(
+                            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                            initialScale = 0.92f
+                        ),
+                exit = androidx.compose.animation.fadeOut(tween(240, easing = androidx.compose.animation.core.FastOutLinearInEasing)) +
+                       androidx.compose.animation.slideOutVertically(
+                           animationSpec = tween(240, easing = androidx.compose.animation.core.FastOutLinearInEasing),
+                           targetOffsetY = { it }
+                       ) +
+                       androidx.compose.animation.scaleOut(
+                           animationSpec = tween(240, easing = androidx.compose.animation.core.FastOutLinearInEasing),
+                           targetScale = 0.92f
+                       )
             ) {
                 org.akanework.gramophone.ui.components.LyricsScreen(
                     trackTitle = trackTitle,
@@ -1600,6 +1668,7 @@ class MainActivity : BaseActivity() {
                     isLoading = isLyricsLoading,
                     currentPositionMs = currentPosition.toLong(),
                     selectedSource = selectedLyricsSource,
+                    dynamicArtworkColors = dynamicArtworkColors,
                     onSourceSelected = { newSource ->
                         selectedLyricsSource = newSource
                         loadLyrics(newSource)

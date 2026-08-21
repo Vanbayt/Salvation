@@ -120,6 +120,16 @@ fun SettingsScreen(onBackClick: () -> Unit) {
         mutableStateOf(defaultPrefs.getBoolean("lyrics_auto_translate", true))
     }
 
+    // Режим караоке (синхронизация и автоскролл)
+    var isKaraokeModeEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("lyrics_karaoke_mode", true))
+    }
+
+    // Подсветка активной строки
+    var isHighlightActiveLineEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("lyrics_highlight_active_line", true))
+    }
+
     // Динамический цвет фона под обложку трека
     var isDynamicCoverColorEnabled by remember {
         mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
@@ -284,6 +294,26 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 AnimatedListItem(index = 3) {
                     SettingsGroupCard(title = "Текст песен") {
                         SettingsSwitchRow(
+                            icon = Icons.Rounded.QueueMusic,
+                            title = "Режим караоке",
+                            subtitle = "Синхронизация по времени и автопрокрутка текста",
+                            checked = isKaraokeModeEnabled,
+                            onCheckedChange = { isChecked ->
+                                isKaraokeModeEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("lyrics_karaoke_mode", isChecked).apply()
+                            }
+                        )
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.Lightbulb,
+                            title = "Подсветка играющей строки",
+                            subtitle = "Выделять активную строку ярким акцентным цветом",
+                            checked = isHighlightActiveLineEnabled,
+                            onCheckedChange = { isChecked ->
+                                isHighlightActiveLineEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("lyrics_highlight_active_line", isChecked).apply()
+                            }
+                        )
+                        SettingsSwitchRow(
                             icon = Icons.Rounded.Translate,
                             title = "Автоперевод текста песен",
                             subtitle = "Отображать перевод под оригинальными строками (при наличии)",
@@ -389,12 +419,11 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                         TextButton(
                             onClick = {
                                 showSleepTimerDialog = false
-                                coroutineScope.launch {
-                                    Toast.makeText(context, "Музыка остановится через $minutes мин.", Toast.LENGTH_SHORT).show()
-                                    delay(minutes * 60 * 1000L)
-                                    val player = (context as? org.akanework.gramophone.ui.MainActivity)?.getPlayer()
-                                    player?.pause()
+                                val player = (context as? org.akanework.gramophone.ui.MainActivity)?.getPlayer()
+                                org.akanework.gramophone.logic.SleepTimerManager.startTimer(minutes, player) {
+                                    Toast.makeText(context, "Время вышло, музыка остановлена", Toast.LENGTH_SHORT).show()
                                 }
+                                Toast.makeText(context, "Музыка остановится через $minutes мин.", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {

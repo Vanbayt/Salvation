@@ -129,9 +129,81 @@ interface GramophoneApi {
 
     @GET("/api/v1/playlists/{id}")
     fun getPlaylist(@Path("id") id: Int): Call<Playlist>
+
+    @POST("/api/v1/stats/event")
+    fun sendStatsEvents(@Body events: List<PlaybackEventRequest>): Call<Map<String, Any>>
+
+    @GET("/api/v1/stats/summary")
+    fun getStatsSummary(@Query("period") period: String): Call<BackendStatsSummary>
+
+    // ================= FLAC / LOSSLESS =================
+
+    @POST("/api/v1/tracks/{track_id}/download_flac")
+    fun downloadTrackFlac(@Path("track_id") trackId: String): Call<DownloadFlacResponse>
+
+    @POST("/api/v1/albums/{album_id}/download_flac")
+    fun downloadAlbumFlac(@Path("album_id") albumId: String): Call<DownloadFlacResponse>
+
+    @POST("/api/v1/playlists/{playlist_id}/download_flac")
+    fun downloadPlaylistFlac(@Path("playlist_id") playlistId: Int): Call<DownloadFlacResponse>
+
+    @GET("/api/v1/albums/{album_id}/flac_status")
+    fun getAlbumFlacStatus(@Path("album_id") albumId: String): Call<AlbumFlacStatusResponse>
+
+    @GET("/api/v1/playlists/{playlist_id}/flac_status")
+    fun getPlaylistFlacStatus(@Path("playlist_id") playlistId: Int): Call<PlaylistFlacStatusResponse>
+
+    @GET("/api/v1/tracks/{track_id}/resolve_info")
+    fun getTrackResolveInfo(@Path("track_id") trackId: String): Call<TrackResolveInfoResponse>
 }
 
 // ================= СЕТЕВЫЕ МОДЕЛИ =================
+
+@Keep
+data class PlaybackEventRequest(
+    @SerializedName("track_id") val trackId: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("album") val album: String? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("duration_ms") val durationMs: Long,
+    @SerializedName("listened_ms") val listenedMs: Long,
+    @SerializedName("timestamp") val timestamp: Long,
+    @SerializedName("is_completed") val isCompleted: Boolean,
+    @SerializedName("context_source") val contextSource: String? = null
+)
+
+@Keep
+data class BackendStatsSummary(
+    @SerializedName("period") val period: String,
+    @SerializedName("total_listened_ms") val totalListenedMs: Long,
+    @SerializedName("total_plays_count") val totalPlaysCount: Long,
+    @SerializedName("unique_tracks_count") val uniqueTracksCount: Long,
+    @SerializedName("unique_artists_count") val uniqueArtistsCount: Long,
+    @SerializedName("top_tracks") val topTracks: List<BackendTopTrack>,
+    @SerializedName("top_artists") val topArtists: List<BackendTopArtist>,
+    @SerializedName("peak_hour") val peakHour: Int = 20,
+    @SerializedName("favorite_day_of_week") val favoriteDayOfWeek: String = "Пятница"
+)
+
+@Keep
+data class BackendTopTrack(
+    @SerializedName("track_id") val trackId: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("album") val album: String? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("play_count") val playCount: Long,
+    @SerializedName("total_listened_ms") val totalListenedMs: Long
+)
+
+@Keep
+data class BackendTopArtist(
+    @SerializedName("artist") val artist: String,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("play_count") val playCount: Long,
+    @SerializedName("total_listened_ms") val totalListenedMs: Long
+)
 
 @Keep
 data class LoginResponse(
@@ -197,4 +269,44 @@ data class AlbumLookupResponse(
     @SerializedName("artist_name") val artistName: String? = null,
     @SerializedName("artist_id") val artistId: String? = null,
     @SerializedName("cover") val cover: String? = null
+)
+
+// ================= FLAC DATA MODELS =================
+
+@Keep
+data class DownloadFlacResponse(
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("track_id") val trackId: Any? = null,
+    @SerializedName("album_id") val albumId: Any? = null,
+    @SerializedName("album_title") val albumTitle: String? = null,
+    @SerializedName("playlist_id") val playlistId: Any? = null,
+    @SerializedName("detail") val detail: String? = null
+)
+
+@Keep
+data class AlbumFlacStatusResponse(
+    @SerializedName("album_id") val albumId: String? = null,
+    @SerializedName("has_flac") val hasFlac: Boolean = false,
+    @SerializedName("total_tracks") val totalTracks: Int = 0,
+    @SerializedName("flac_tracks") val flacTracks: Int = 0,
+    @SerializedName("percent") val percent: Float = 0f,
+    @SerializedName("is_complete") val isComplete: Boolean = false
+)
+
+@Keep
+data class PlaylistFlacStatusResponse(
+    @SerializedName("playlist_id") val playlistId: Int? = null,
+    @SerializedName("total_tracks") val totalTracks: Int = 0,
+    @SerializedName("flac_tracks") val flacTracks: Int = 0,
+    @SerializedName("percent") val percent: Float = 0f,
+    @SerializedName("is_complete") val isComplete: Boolean = false
+)
+
+@Keep
+data class TrackResolveInfoResponse(
+    @SerializedName("track_id") val trackId: Any? = null,
+    @SerializedName("is_lossless") val isLossless: Boolean = false,
+    @SerializedName("has_local_flac") val hasLocalFlac: Boolean = false,
+    @SerializedName("bitrate") val bitrate: Int? = null,
+    @SerializedName("file_path") val filePath: String? = null
 )

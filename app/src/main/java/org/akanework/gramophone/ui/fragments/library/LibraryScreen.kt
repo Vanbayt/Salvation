@@ -188,6 +188,27 @@ fun LibraryScreen(
                         )
                     }
 
+                    // Кнопка статистики и итогов года
+                    if (!isSearchActive) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                activity?.startFragment(org.akanework.gramophone.ui.fragments.stats.StatsFragment.newInstance())
+                            },
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = org.akanework.gramophone.R.drawable.ic_equalizer),
+                                contentDescription = "Статистика",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
                     // Кнопка настроек (Большая с круглой плашкой)
                     if (!isSearchActive) {
                         FilledTonalIconButton(

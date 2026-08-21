@@ -717,6 +717,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         unregisterReceiver(btReceiver)
         try { unregisterReceiver(powerSaveReceiver) } catch (_: Exception) {}
         prefs.unregisterOnSharedPreferenceChangeListener(this)
+        org.akanework.gramophone.logic.stats.StatsTracker.flush(this)
         lastPlayedManager.save()
         scope.cancel()
         mediaSession!!.player.stop()
@@ -1250,6 +1251,13 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         lyrics = null
         scheduleSendingLyrics(true)
 
+        // 🔥 Интеллектуальный трекинг статистики без нагрузки на батарею
+        org.akanework.gramophone.logic.stats.StatsTracker.onMediaItemTransition(
+            this,
+            mediaItem,
+            endedWorkaroundPlayer?.isPlaying == true
+        )
+
         // 🔥 Мы полностью удалили пересоздание CircularShuffleOrder здесь,
         // чтобы не ломать наш физический App-Level Shuffle!
 
@@ -1266,6 +1274,11 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         scheduleSendingLyrics(false)
+        org.akanework.gramophone.logic.stats.StatsTracker.onPlayStateChanged(
+            this,
+            isPlaying,
+            endedWorkaroundPlayer?.currentMediaItem
+        )
         lastPlayedManager.save()
     }
 

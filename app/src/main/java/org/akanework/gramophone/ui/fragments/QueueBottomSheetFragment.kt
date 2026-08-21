@@ -559,7 +559,9 @@ private fun NowPlayingQueueCard(
     val title = meta.title?.toString() ?: "Неизвестный трек"
     val artist = meta.artist?.toString() ?: "Неизвестный артист"
     val album = meta.albumTitle?.toString() ?: ""
-    val isLossless = meta.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+    val trackId = meta.extras?.getString("TRACK_ID") ?: ""
+    val isLosslessExtra = meta.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(trackId, isLosslessExtra)
 
     val originalUri = meta.artworkUri?.toString() ?: ""
     val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
@@ -683,7 +685,9 @@ private fun QueueTrackItem(
     val title = meta.title?.toString() ?: "Неизвестный трек"
     val artist = meta.artist?.toString() ?: "Неизвестный артист"
     val album = meta.albumTitle?.toString() ?: ""
-    val isLossless = meta.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+    val trackId = mediaItem.mediaId.ifEmpty { meta.extras?.getString("TRACK_ID") ?: "" }
+    val isLosslessExtra = meta.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(trackId, isLosslessExtra)
 
     val originalUri = meta.artworkUri?.toString() ?: ""
     val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri

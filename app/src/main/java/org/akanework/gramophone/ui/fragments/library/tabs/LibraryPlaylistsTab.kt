@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -164,7 +165,7 @@ fun LibraryPlaylistsTab(
                     start = 14.dp,
                     end = 14.dp,
                     top = 14.dp,
-                    bottom = bottomPadding.calculateBottomPadding() + 120.dp
+                    bottom = bottomPadding.calculateBottomPadding() + 220.dp
                 ),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -202,7 +203,7 @@ fun LibraryPlaylistsTab(
                 }
 
                 // Карточка создания плейлиста (всегда первая)
-                item(contentType = "create_playlist_card") {
+                item(key = "create_playlist_card_item", contentType = "create_playlist_card") {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -248,11 +249,11 @@ fun LibraryPlaylistsTab(
                         }
                     }
 
-                    items(
+                    itemsIndexed(
                         items = filteredPlaylists,
-                        key = { it.id },
-                        contentType = { "playlist_grid_item" }
-                    ) { playlist ->
+                        key = { index, playlist -> "playlist_grid_${playlist.id}_$index" },
+                        contentType = { _, _ -> "playlist_grid_item" }
+                    ) { index, playlist ->
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()

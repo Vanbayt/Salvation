@@ -43,6 +43,7 @@ fun LibraryActionRow(
     showLocateButton: Boolean = false,
     itemCount: Int = 0,
     itemCountLabel: String? = null,
+    isFilterActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -137,8 +138,8 @@ fun LibraryActionRow(
                 onClick = onSortClick,
                 shape = CircleShape,
                 colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = colors.surfaceContainerHigh,
-                    contentColor = colors.onSurfaceVariant
+                    containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
+                    contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant
                 ),
                 modifier = Modifier.size(44.dp)
             ) {

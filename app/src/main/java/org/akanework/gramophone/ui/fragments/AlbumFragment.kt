@@ -158,10 +158,25 @@ fun AlbumDetailScreen(
     // BottomSheet детальных действий над треком (3 точки)
     var selectedTrackForMenu by remember { mutableStateOf<Track?>(null) }
     var showTrackActionSheet by remember { mutableStateOf(false) }
+    var showDownloadProgressSheet by remember { mutableStateOf(false) }
 
     // Состояние текущего трека в плеере
     var currentPlayingTrackId by remember { mutableStateOf<String?>(null) }
+    var currentPlayingTitle by remember { mutableStateOf<String?>(null) }
+    var currentPlayingArtist by remember { mutableStateOf<String?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+
+    // FLAC СТАТУСЫ
+    val albumStatuses by org.akanework.gramophone.logic.lossless.FlacDownloadManager.albumStatuses.collectAsState()
+    val flacStatus = albumStatuses[albumId]
+    val isAllFlac = (tracks.isNotEmpty() && tracks.all { org.akanework.gramophone.logic.lossless.LosslessStateManager.isTrackLossless(it.id, it.is_lossless) })
+        || flacStatus?.hasFlac == true
+        || flacStatus?.isComplete == true
+        || (flacStatus?.percent ?: 0f) >= 100f
+        || (flacStatus != null && flacStatus.totalTracks > 0 && flacStatus.flacTracks >= flacStatus.totalTracks)
+    val isFlacDownloading = !isAllFlac && (org.akanework.gramophone.logic.lossless.FlacDownloadManager.isAlbumDownloading(albumId)
+        || ((flacStatus?.percent ?: 0f) > 0f && (flacStatus?.percent ?: 0f) < 100f && flacStatus?.hasFlac != true && flacStatus?.isComplete != true))
+    val flacPercent = flacStatus?.percent ?: 0f
 
     // ДИНАМИЧЕСКИЕ ЦВЕТА ИЗ ОБЛОЖКИ
     var dynamicColors by remember { mutableStateOf<DynamicArtworkTheme.ArtworkColors?>(null) }
@@ -214,27 +229,35 @@ fun AlbumDetailScreen(
 
     val listState = rememberLazyListState()
 
-    // Подписка на плеер
-    DisposableEffect(activity) {
-        val player = activity?.getPlayer()
-        if (player != null) {
-            currentPlayingTrackId = player.currentMediaItem?.mediaId
-            isPlaying = player.isPlaying
-
-            val listener = object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    currentPlayingTrackId = mediaItem?.mediaId
-                }
-
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    isPlaying = playing
-                }
+    // Непрерывная синхронизация с плеером
+    LaunchedEffect(activity) {
+        while (true) {
+            val player = activity?.getPlayer()
+            if (player != null) {
+                val mediaItem = player.currentMediaItem
+                currentPlayingTrackId = mediaItem?.mediaId
+                currentPlayingTitle = mediaItem?.mediaMetadata?.title?.toString()
+                currentPlayingArtist = mediaItem?.mediaMetadata?.artist?.toString()
+                isPlaying = player.isPlaying
             }
-            player.addListener(listener)
-            onDispose { player.removeListener(listener) }
-        } else {
-            onDispose {}
+            kotlinx.coroutines.delay(400)
         }
+    }
+
+    fun isTrackMatching(track: Track, playingId: String?, playingTitle: String?, playingArtist: String?): Boolean {
+        if (!playingId.isNullOrBlank()) {
+            if (track.id == playingId) return true
+            if (!track.sourceId.isNullOrBlank() && track.sourceId == playingId) return true
+            if (playingId.startsWith("deezer_") && track.id == playingId.removePrefix("deezer_")) return true
+        }
+        if (!playingTitle.isNullOrBlank() && !playingArtist.isNullOrBlank()) {
+            val titleMatch = track.title.trim().equals(playingTitle.trim(), ignoreCase = true)
+            val artistMatch = track.artist.trim().equals(playingArtist.trim(), ignoreCase = true) ||
+                    track.artist.contains(playingArtist, ignoreCase = true) ||
+                    playingArtist.contains(track.artist, ignoreCase = true)
+            if (titleMatch && artistMatch) return true
+        }
+        return false
     }
 
     fun loadAlbumData() {
@@ -248,7 +271,12 @@ fun AlbumDetailScreen(
                         album = loadedAlbum
                         isLiked = loadedAlbum.isLiked
                         tracks.clear()
-                        loadedAlbum.tracks?.let { tracks.addAll(it) }
+                        val loadedTracks = loadedAlbum.tracks ?: emptyList()
+                        tracks.addAll(loadedTracks)
+                        if (loadedTracks.isNotEmpty()) {
+                            val losslessList = loadedTracks.filter { it.is_lossless }.map { it.id }
+                            org.akanework.gramophone.logic.lossless.LosslessStateManager.markLossless(context, losslessList)
+                        }
                     }
                 } else {
                     android.util.Log.e("GramoDebug", "Album error: ${response.code()} ${response.message()}")
@@ -260,7 +288,10 @@ fun AlbumDetailScreen(
         }
     }
 
-    LaunchedEffect(albumId) { loadAlbumData() }
+    LaunchedEffect(albumId) {
+        loadAlbumData()
+        org.akanework.gramophone.logic.lossless.FlacDownloadManager.fetchAlbumStatus(context, albumId)
+    }
 
     fun toggleLike() {
         coroutineScope.launch(Dispatchers.IO) {
@@ -329,14 +360,13 @@ fun AlbumDetailScreen(
         }
 
         if (shuffle) {
-            player.shuffleModeEnabled = true
-            player.setMediaItems(mediaItems, startIndex, 0)
+            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems)
         } else {
             player.shuffleModeEnabled = false
             player.setMediaItems(mediaItems, startIndex, 0)
+            player.prepare()
+            player.play()
         }
-        player.prepare()
-        player.play()
     }
 
     fun addTrackToQueueNext(track: Track) {
@@ -489,7 +519,7 @@ fun AlbumDetailScreen(
                 contentPadding = PaddingValues(bottom = 260.dp)
             ) {
                 // 1. ШАПКА АЛЬБОМА (КРУПНАЯ ОБЛОЖКА 250dp + ДИНАМИЧЕСКИЙ ГРАДИЕНТ)
-                item {
+                item(key = "album_hero_header") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -609,57 +639,111 @@ fun AlbumDetailScreen(
                             }
                         }
 
-                        // ПАНЕЛЬ ДЕЙСТВИЙ (СЛУШАТЬ / ПЕРЕМЕШАТЬ / ПЕРЕЙТИ К АРТИСТУ)
+                        // ПАНЕЛЬ ДЕЙСТВИЙ (СЛУШАТЬ / ПЕРЕМЕШАТЬ / СКАЧАТЬ FLAC / ПЕРЕЙТИ К АРТИСТУ)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 20.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            // 1. Главная акцентная кнопка «Слушать»
                             Button(
                                 onClick = { playTrackList(shuffle = false) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(52.dp),
                                 shape = RoundedCornerShape(18.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
+                                contentPadding = PaddingValues(horizontal = 14.dp)
                             ) {
-                                Icon(painterResource(R.drawable.ic_play), contentDescription = "Play", modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(painterResource(R.drawable.ic_play), contentDescription = "Play", modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Слушать",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
+                                    fontSize = 15.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
-                            FilledTonalButton(
+                            // 2. Компактная кнопка «Перемешать»
+                            FilledTonalIconButton(
                                 onClick = { playTrackList(shuffle = true) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(52.dp),
+                                modifier = Modifier.size(52.dp),
                                 shape = RoundedCornerShape(18.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Icon(painterResource(R.drawable.ic_shuffle), contentDescription = "Shuffle", modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Перемешать",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 )
+                            ) {
+                                Icon(painterResource(R.drawable.ic_shuffle), contentDescription = "Перемешать", modifier = Modifier.size(20.dp))
                             }
 
+                            // 3. Кнопка «Скачать FLAC» / Индикатор FLAC
+                            FilledTonalIconButton(
+                                onClick = {
+                                    if (!isAllFlac && !isFlacDownloading) {
+                                        org.akanework.gramophone.logic.lossless.FlacDownloadManager.downloadAlbum(
+                                            context = context,
+                                            albumId = albumId,
+                                            albumTitle = loadedAlbum?.title ?: "Альбом",
+                                            tracks = tracks
+                                        )
+                                    }
+                                    showDownloadProgressSheet = true
+                                },
+                                modifier = Modifier.size(52.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = if (isAllFlac) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = if (isAllFlac) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                when {
+                                    isFlacDownloading -> {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(
+                                                progress = { flacPercent / 100f },
+                                                modifier = Modifier.size(32.dp),
+                                                strokeWidth = 2.5.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "${flacPercent.toInt()}%",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Black
+                                                ),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    isAllFlac -> {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_check_circle),
+                                            contentDescription = "FLAC Lossless",
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    else -> {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_download),
+                                            contentDescription = "Скачать FLAC",
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 4. Кнопка «Артист» (если есть)
                             loadedAlbum?.artistId?.let { aId ->
                                 FilledTonalIconButton(
                                     onClick = { activity?.startFragment(ArtistFragment.newInstance(aId)) },
                                     modifier = Modifier.size(52.dp),
-                                    shape = RoundedCornerShape(18.dp)
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    )
                                 ) {
                                     Icon(painterResource(R.drawable.ic_person), contentDescription = "Артист", modifier = Modifier.size(20.dp))
                                 }
@@ -669,7 +753,7 @@ fun AlbumDetailScreen(
                 }
 
                 // 2. СКРУГЛЕННЫЙ КОНТЕЙНЕР СО ВКЛАДКАМИ (ТРЕКИ / ИНФОРМАЦИЯ)
-                item {
+                item(key = "album_tabs_and_controls") {
                     Surface(
                         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -822,7 +906,7 @@ fun AlbumDetailScreen(
                 if (selectedTabIndex == 0) {
                     // ВКЛАДКА "ТРЕКИ" (С РАЗДЕЛЕНИЕМ НА ДИСКИ)
                     if (filteredTracks.isEmpty()) {
-                        item {
+                        item(key = "album_tracks_empty_state") {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                                 modifier = Modifier.fillMaxWidth()
@@ -882,7 +966,7 @@ fun AlbumDetailScreen(
 
                             itemsIndexed(discTracks, key = { index, track -> "${track.id}_${discNum}_$index" }) { _, track ->
                                 val globalIndex = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-                                val isCurrentTrack = track.id == currentPlayingTrackId
+                                val isCurrentTrack = isTrackMatching(track, currentPlayingTrackId, currentPlayingTitle, currentPlayingArtist)
                                 val isSelected = selectedTrackIds.contains(track.id)
 
                                 Surface(
@@ -935,7 +1019,7 @@ fun AlbumDetailScreen(
                     }
                 } else {
                     // ВКЛАДКА "ИНФОРМАЦИЯ" (ОБОГАЩЕННЫЙ СТОРИТЕЛЛИНГ И BENTO СЕТКА)
-                    item {
+                    item(key = "album_info_tab_content") {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
                             modifier = Modifier.fillMaxWidth()
@@ -955,7 +1039,7 @@ fun AlbumDetailScreen(
                 }
 
                 // Завершающая подложка контейнера
-                item {
+                item(key = "album_bottom_spacer") {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         modifier = Modifier
@@ -1065,6 +1149,22 @@ fun AlbumDetailScreen(
                     isSelectionMode = false
                     selectedTrackIds.clear()
                 }
+            )
+        }
+
+        if (showDownloadProgressSheet) {
+            val currentAlbumTitle = album?.title ?: "Альбом"
+            val totalCount = flacStatus?.totalTracks?.takeIf { it > 0 } ?: tracks.size
+            val flacCount = flacStatus?.flacTracks ?: if (isAllFlac) tracks.size else tracks.count { org.akanework.gramophone.logic.lossless.LosslessStateManager.isTrackLossless(it.id, it.is_lossless) }
+            val currentPercent = if (isAllFlac) 100f else flacPercent
+
+            org.akanework.gramophone.ui.components.lossless.DownloadProgressBottomSheet(
+                title = currentAlbumTitle,
+                totalTracks = totalCount,
+                flacTracks = flacCount,
+                percent = currentPercent,
+                tracks = tracks,
+                onDismiss = { showDownloadProgressSheet = false }
             )
         }
     }

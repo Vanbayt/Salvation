@@ -123,82 +123,103 @@ fun SongActionBottomSheet(
                             modifier = Modifier.weight(1f, fill = false)
                         )
 
-                        if (track.is_lossless) {
-                            AudioQualityBadge(text = "FLAC")
-                        }
+                    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+                    if (isLossless) {
+                        AudioQualityBadge(text = "FLAC")
                     }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    Text(
-                        text = track.artist + (if (!track.album.isNullOrBlank()) " • ${track.album}" else ""),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = track.artist + (if (!track.album.isNullOrBlank()) " • ${track.album}" else ""),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        // Список действий в Expressive стиле
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            if (isLossless) {
+                SongActionItem(
+                    iconRes = org.akanework.gramophone.R.drawable.ic_check_circle,
+                    title = "Качество: Lossless FLAC ✓",
+                    onClick = {}
+                )
+            } else {
+                SongActionItem(
+                    iconRes = org.akanework.gramophone.R.drawable.ic_download,
+                    title = "Загрузить в FLAC",
+                    onClick = {
+                        onDismiss()
+                        org.akanework.gramophone.logic.lossless.FlacDownloadManager.downloadTrack(context, track.id, track.title)
+                    }
+                )
             }
 
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                modifier = Modifier.padding(bottom = 12.dp)
+            SongActionItem(
+                icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                title = "Включить следующим",
+                onClick = {
+                    onDismiss()
+                    onPlayNext()
+                }
             )
 
-            // Список действий в Expressive стиле
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                SongActionItem(
-                    icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                    title = "Включить следующим",
-                    onClick = {
-                        onDismiss()
-                        onPlayNext()
-                    }
-                )
-
-                SongActionItem(
-                    icon = Icons.Rounded.PlayArrow,
-                    title = "Добавить в очередь",
-                    onClick = {
-                        onDismiss()
-                        onAddToQueue()
-                    }
-                )
-
-                SongActionItem(
-                    icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-                    title = "Добавить в плейлист",
-                    onClick = {
-                        onDismiss()
-                        onAddToPlaylist()
-                    }
-                )
-
-                if (!track.artistId.isNullOrBlank()) {
-                    SongActionItem(
-                        icon = Icons.Rounded.Person,
-                        title = "Перейти к исполнителю",
-                        onClick = {
-                            onDismiss()
-                            onGoToArtist()
-                        }
-                    )
+            SongActionItem(
+                icon = Icons.Rounded.PlayArrow,
+                title = "Добавить в очередь",
+                onClick = {
+                    onDismiss()
+                    onAddToQueue()
                 }
+            )
 
-                if (!track.albumId.isNullOrBlank()) {
-                    SongActionItem(
-                        icon = Icons.Rounded.Album,
-                        title = "Перейти к альбому",
-                        onClick = {
-                            onDismiss()
-                            onGoToAlbum()
-                        }
-                    )
+            SongActionItem(
+                icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                title = "Добавить в плейлист",
+                onClick = {
+                    onDismiss()
+                    onAddToPlaylist()
                 }
+            )
+
+            if (!track.artistId.isNullOrBlank()) {
+                SongActionItem(
+                    icon = Icons.Rounded.Person,
+                    title = "Перейти к исполнителю",
+                    onClick = {
+                        onDismiss()
+                        onGoToArtist()
+                    }
+                )
             }
+
+            if (!track.albumId.isNullOrBlank()) {
+                SongActionItem(
+                    icon = Icons.Rounded.Album,
+                    title = "Перейти к альбому",
+                    onClick = {
+                        onDismiss()
+                        onGoToAlbum()
+                    }
+                )
+            }
+        }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -207,10 +228,11 @@ fun SongActionBottomSheet(
 
 @Composable
 private fun SongActionItem(
-    icon: ImageVector,
     title: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    iconRes: Int? = null
 ) {
     Surface(
         modifier = modifier
@@ -233,12 +255,21 @@ private fun SongActionItem(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else if (iconRes != null) {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(iconRes),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(14.dp))

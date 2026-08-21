@@ -32,6 +32,7 @@ fun SquigglySlider(
     position: Float,
     duration: Float,
     isPlaying: Boolean,
+    activeColor: Color? = null,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit
 ) {
@@ -72,7 +73,7 @@ fun SquigglySlider(
     )
 
     // Выносим цвета НАРУЖУ из Canvas
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryColor = activeColor ?: MaterialTheme.colorScheme.primary
     val inactiveColor = primaryColor.copy(alpha = 0.24f)
 
     Slider(

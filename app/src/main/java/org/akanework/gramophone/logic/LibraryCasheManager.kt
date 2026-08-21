@@ -15,17 +15,32 @@ object LibraryCacheManager {
 
     private val gson = Gson()
     private const val PREFS_NAME = "SalvationLibraryCache"
+    private val memoryTracksCache = java.util.concurrent.ConcurrentHashMap<String, List<Track>>()
+
+    fun getMemoryTracks(sortMode: String): List<Track>? = memoryTracksCache[sortMode]
+
+    fun setMemoryTracks(sortMode: String, tracks: List<Track>) {
+        memoryTracksCache[sortMode] = tracks
+    }
 
     // ==========================================
     // UI КЭШ: ПЕРВЫЕ СТРАНИЦЫ (SharedPreferences)
     // ==========================================
 
     fun loadCachedTracks(context: Context, sortMode: String): List<Track> {
+        val inMem = memoryTracksCache[sortMode]
+        if (!inMem.isNullOrEmpty()) return inMem
+
         val json = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("tracks_$sortMode", null) ?: return emptyList()
-        return try { gson.fromJson(json, object : TypeToken<List<Track>>() {}.type) } catch (e: Exception) { emptyList() }
+        val loaded = try { gson.fromJson<List<Track>>(json, object : TypeToken<List<Track>>() {}.type) ?: emptyList() } catch (e: Exception) { emptyList() }
+        if (loaded.isNotEmpty()) {
+            memoryTracksCache[sortMode] = loaded
+        }
+        return loaded
     }
 
     fun saveCachedTracks(context: Context, sortMode: String, data: List<Track>) {
+        memoryTracksCache[sortMode] = data
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString("tracks_$sortMode", gson.toJson(data)).apply()
     }
 

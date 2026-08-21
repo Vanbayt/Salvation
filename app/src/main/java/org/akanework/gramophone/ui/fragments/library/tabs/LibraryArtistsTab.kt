@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -143,7 +144,7 @@ fun LibraryArtistsTab(
                             start = 14.dp,
                             end = 14.dp,
                             top = 14.dp,
-                            bottom = bottomPadding.calculateBottomPadding() + 120.dp
+                            bottom = bottomPadding.calculateBottomPadding() + 220.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
@@ -178,11 +179,11 @@ fun LibraryArtistsTab(
                             }
                         }
 
-                        items(
+                        itemsIndexed(
                             items = filteredArtists,
-                            key = { it.id },
-                            contentType = { "artist_item" }
-                        ) { artist ->
+                            key = { index, artist -> "artist_${artist.id}_$index" },
+                            contentType = { _, _ -> "artist_item" }
+                        ) { index, artist ->
                             ArtistListItem(
                                 artist = artist,
                                 onClick = {
@@ -195,6 +196,7 @@ fun LibraryArtistsTab(
                     ExpressiveScrollBar(
                         listState = listState,
                         itemCount = filteredArtists.size,
+                        bottomPadding = bottomPadding.calculateBottomPadding() + 200.dp,
                         labelProvider = { index ->
                             filteredArtists.getOrNull(index)?.name?.firstOrNull()?.uppercase() ?: "#"
                         },

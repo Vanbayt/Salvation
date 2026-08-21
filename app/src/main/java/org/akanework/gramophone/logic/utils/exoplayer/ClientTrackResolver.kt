@@ -172,7 +172,9 @@ object ClientTrackResolver {
         val title: String,
         val artist: String,
         val album: String,
-        val duration: Int
+        val duration: Int,
+        val isLossless: Boolean = false,
+        val hasLocalFlac: Boolean = false
     )
 
     data class CandidateV2(
@@ -224,9 +226,47 @@ object ClientTrackResolver {
             PoTokenProvider.initAsync(context)
             // 1. Fetch Track Metadata from Backend
             val info = fetchTrackInfo(trackIdStr) ?: return rawUri
-            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId})")
+            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId}, Lossless: ${info.isLossless || info.hasLocalFlac})")
+
+            // 1.1. ПРЯМОЙ FLAC-СТРИМ С СЕРВЕРА
+            // Если трек уже подтвержден как Lossless/FLAC или скачан на сервере, немедленно отдаем прямой URL к /stream/{id}
+            if (info.isLossless || info.hasLocalFlac) {
+                Log.i(TAG, "🎵 [FLAC_DIRECT_STREAM] Track ${info.trackId} has Lossless FLAC on server! Streaming directly from server: $rawUri")
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log("FLAC_DIRECT", "Playing direct Lossless FLAC stream for ${info.artist} - ${info.title}")
+                org.akanework.gramophone.logic.lossless.LosslessStateManager.markLossless(context, info.trackId.toString())
+                return rawUri
+            }
 
             org.akanework.gramophone.logic.utils.SmartPlaybackManager.onTrackRequested("${info.artist} - ${info.title}")
+
+            // 1.2. ПРИОРИТЕТ ТОЧНОГО ИЗВЕСТНОГО SOURCE_ID
+            // Если в базе уже привязан валидный студийный YouTube VideoID (например 'B_HSa1dEL9s'), сразу извлекаем его!
+            val rawSourceId = info.sourceId.trim()
+            if (rawSourceId.length == 11 && !rawSourceId.startsWith("deezer_") && !rawSourceId.contains(" ")) {
+                val directSourceUrl = extractPlayerStreamUrl(rawSourceId, info.duration)
+                if (!directSourceUrl.isNullOrEmpty()) {
+                    sendTelemetry(
+                        type = "SUCCESS",
+                        trackId = info.trackId,
+                        candidateId = rawSourceId,
+                        streamUrl = directSourceUrl,
+                        duration = info.duration,
+                        score = 10000,
+                        isrc = info.isrc,
+                        artist = info.artist,
+                        title = info.title,
+                        source = "Database Studio SourceID",
+                        elapsedTimeMs = 0
+                    )
+                    directStreamCache[info.trackId] = directSourceUrl
+                    uriToTrackIdMap[directSourceUrl] = info.trackId.toString()
+                    val proxyUrl = "$BACKEND_BASE_URL/stream/${info.trackId}"
+                    uriToTrackIdMap[proxyUrl] = info.trackId.toString()
+                    resolvedCache.put(info.trackId, Pair(directSourceUrl, System.currentTimeMillis()))
+                    Log.i(TAG, "⚡ [STUDIO_SOURCE_ID_HIT] Track ${info.trackId} resolved directly via verified SourceID: $rawSourceId")
+                    return Uri.parse(directSourceUrl)
+                }
+            }
 
             // 2. Send START Telemetry
             sendTelemetry(
@@ -423,7 +463,9 @@ object ClientTrackResolver {
                 title = json.optString("title"),
                 artist = json.optString("artist"),
                 album = json.optString("album"),
-                duration = json.optInt("duration")
+                duration = json.optInt("duration"),
+                isLossless = json.optBoolean("is_lossless", false),
+                hasLocalFlac = json.optBoolean("has_local_flac", false)
             )
             resolveInfoCache[trackIdStr] = info
             return info
