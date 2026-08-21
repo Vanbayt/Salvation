@@ -201,13 +201,43 @@ object ClientTrackResolver {
         invalidateCache(trackId)
     }
 
-    fun resolveStreamUrl(context: Context, rawUri: Uri, forceRefresh: Boolean = false): Uri {
+    fun resolveStreamUrl(
+        context: Context,
+        rawUri: Uri,
+        forceRefresh: Boolean = false,
+        isForDownload: Boolean = false
+    ): Uri {
         val path = rawUri.path ?: ""
         if (!path.contains("/stream/")) {
             return rawUri
         }
         val trackIdStr = rawUri.lastPathSegment ?: return rawUri
         val trackIdLong = trackIdStr.toLongOrNull()
+
+        // 0. ПРОВЕРКА ЛОКАЛЬНОГО ОФФЛАЙН ХРАНИЛИЩА (0ms задержки, полный оффлайн)
+        if (!forceRefresh) {
+            try {
+                val localPath = org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context).getLocalPath(trackIdStr)
+                if (!localPath.isNullOrEmpty()) {
+                    val localFile = java.io.File(localPath)
+                    if (localFile.exists() && localFile.length() > 0) {
+                        Log.i(TAG, "⚡ [OFFLINE_STORAGE_HIT] Track $trackIdStr found on device storage ($localPath)! Playing offline.")
+                        org.akanework.gramophone.logic.utils.PlaybackLogger.log("OFFLINE_PLAY", "⚡ [OFFLINE_HIT] Playing local offline file for track $trackIdStr ($localPath)")
+                        return Uri.fromFile(localFile)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Offline storage check failed for $trackIdStr: ${e.message}")
+            }
+        }
+
+        // 0.1. РЕЖИМ «ТОЛЬКО ОФФЛАЙН» (Блокировка обращений к сети)
+        val isOfflineOnly = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("offline_only_mode", false)
+        if (isOfflineOnly && !isForDownload) {
+            Log.w(TAG, "🚫 [OFFLINE_ONLY_MODE] Track $trackIdStr is not downloaded locally and offline-only mode is active.")
+            org.akanework.gramophone.logic.utils.PlaybackLogger.log("OFFLINE_ONLY", "Track $trackIdStr is not downloaded locally (Offline-Only Mode Active)")
+            return rawUri
+        }
 
         if (forceRefresh && trackIdLong != null) {
             invalidateCache(trackIdLong)
@@ -237,7 +267,9 @@ object ClientTrackResolver {
                 return rawUri
             }
 
-            org.akanework.gramophone.logic.utils.SmartPlaybackManager.onTrackRequested("${info.artist} - ${info.title}")
+            if (!isForDownload) {
+                org.akanework.gramophone.logic.utils.SmartPlaybackManager.onTrackRequested("${info.artist} - ${info.title}")
+            }
 
             // 1.2. ПРИОРИТЕТ ТОЧНОГО ИЗВЕСТНОГО SOURCE_ID
             // Если в базе уже привязан валидный студийный YouTube VideoID (например 'B_HSa1dEL9s'), сразу извлекаем его!

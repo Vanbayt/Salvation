@@ -135,6 +135,13 @@ fun SettingsScreen(onBackClick: () -> Unit) {
         mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
     }
 
+    // --- ОФФЛАЙН РЕЖИМ И ПАМЯТЬ ---
+    var isOfflineOnlyModeEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("offline_only_mode", false))
+    }
+    var offlineDownloadsSize by remember { mutableStateOf("0 Б") }
+    var offlineTracksCount by remember { mutableIntStateOf(0) }
+
     // --- КЭШ ---
     var imageCacheSize by remember { mutableStateOf("Вычисление...") }
     var dataCacheSize by remember { mutableStateOf("Вычисление...") }
@@ -147,9 +154,15 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             val filesDir = context.filesDir
             val dataSize = if (filesDir.exists()) getDirSize(filesDir) else 0L
 
+            val downloadsDir = File(context.filesDir, "salvation_downloads")
+            val dlSize = if (downloadsDir.exists()) getDirSize(downloadsDir) else 0L
+            val dbTracksCount = org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context).getAllDownloadedTrackIds().size
+
             withContext(Dispatchers.Main) {
                 imageCacheSize = formatSize(imgSize)
                 dataCacheSize = formatSize(dataSize)
+                offlineDownloadsSize = formatSize(dlSize)
+                offlineTracksCount = dbTracksCount
             }
         }
     }
@@ -327,9 +340,58 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 5. ДАННЫЕ И КЭШ
+            // 5. ОФФЛАЙН МУЗЫКА
             item {
                 AnimatedListItem(index = 4) {
+                    SettingsGroupCard(title = "Оффлайн музыка") {
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.DownloadDone,
+                            title = "Режим «Только оффлайн»",
+                            subtitle = "Воспроизводить только скачанные треки без обращения к сети",
+                            checked = isOfflineOnlyModeEnabled,
+                            onCheckedChange = { isChecked ->
+                                isOfflineOnlyModeEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("offline_only_mode", isChecked).apply()
+                                Toast.makeText(
+                                    context,
+                                    if (isChecked) "Включен режим только оффлайн" else "Оффлайн режим выключен",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        SettingsRow(
+                            icon = Icons.Rounded.Storage,
+                            title = "Скачанные треки",
+                            subtitle = "$offlineTracksCount треков на устройстве • Занято: $offlineDownloadsSize",
+                            onClick = {}
+                        )
+                        SettingsRow(
+                            icon = Icons.Rounded.DeleteSweep,
+                            title = "Удалить все скачанные треки",
+                            subtitle = "Очистить память от оффлайн музыки",
+                            onClick = {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    val downloadsDir = File(context.filesDir, "salvation_downloads")
+                                    downloadsDir.deleteRecursively()
+                                    val allIds = org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context).getAllDownloadedTrackIds()
+                                    allIds.forEach { id ->
+                                        org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context).removeTrack(id)
+                                        org.akanework.gramophone.logic.offline.OfflineStateManager.markRemoved(id)
+                                    }
+                                    calculateCacheSizes()
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "Все скачанные треки удалены", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 6. ДАННЫЕ И КЭШ
+            item {
+                AnimatedListItem(index = 5) {
                     SettingsGroupCard(title = "Данные и кэш") {
                         SettingsRow(
                             icon = Icons.Rounded.Image,

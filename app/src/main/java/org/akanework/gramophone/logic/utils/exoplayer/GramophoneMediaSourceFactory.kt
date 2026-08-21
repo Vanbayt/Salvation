@@ -425,7 +425,7 @@ private val streamingOkHttpClient: okhttp3.OkHttpClient by lazy {
         .build()
 }
 
-private class AuthenticatedDataSourceFactory(
+internal class AuthenticatedDataSourceFactory(
     private val context: android.content.Context
 ) : DataSource.Factory {
 
@@ -439,7 +439,7 @@ private class AuthenticatedDataSourceFactory(
     }
 }
 
-private class AuthenticatedDataSource(
+internal class AuthenticatedDataSource(
     private val context: android.content.Context,
     private val dataSourceFactory: DataSource.Factory
 ) : DataSource {

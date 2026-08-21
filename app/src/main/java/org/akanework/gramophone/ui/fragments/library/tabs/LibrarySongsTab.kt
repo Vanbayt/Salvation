@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -100,6 +101,12 @@ fun LibrarySongsTab(
     var currentSortOption by remember { mutableStateOf(LibrarySortOption.NEWEST) }
     var showSortSheet by remember { mutableStateOf(false) }
     var onlyFlacFilter by remember { mutableStateOf(false) }
+
+    // Оффлайн загрузка медиатеки
+    val libraryDownloadStatus by org.akanework.gramophone.logic.offline.OfflineDownloadManager.libraryStatus.collectAsState()
+    val fullOfflineLibraryTracks by org.akanework.gramophone.logic.offline.OfflineDownloadManager.libraryTracks.collectAsState()
+    val downloadedTrackIds by org.akanework.gramophone.logic.offline.OfflineStateManager.downloadedTracksState.collectAsState()
+    var showDownloadProgressSheet by remember { mutableStateOf(false) }
 
     // Multi-Select состояние
     val selectedTrackIds = remember { mutableStateListOf<String>() }
@@ -259,6 +266,32 @@ fun LibrarySongsTab(
         if (refresh) isRefreshing = true
 
         coroutineScope.launch(Dispatchers.IO) {
+            val isOfflineOnly = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("offline_only_mode", false)
+            if (isOfflineOnly) {
+                val offlineDb = org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context)
+                val offlineRecords = offlineDb.getAllDownloadedTracks()
+                val offlineTracksList = offlineRecords.map { rec ->
+                    Track(
+                        id = rec.trackId,
+                        title = rec.title,
+                        artist = rec.artist,
+                        album = rec.album,
+                        duration = (rec.durationMs / 1000).toInt(),
+                        cover = rec.coverPath,
+                        is_lossless = rec.isLossless
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    tracks.clear()
+                    tracks.addAll(offlineTracksList)
+                    totalTrackCount = offlineTracksList.size
+                    isLoading = false
+                    isRefreshing = false
+                    isLastPage = true
+                }
+                return@launch
+            }
+
             val skip = if (isInitial || refresh) 0 else tracks.size
 
             if (isInitial && searchQuery.isBlank()) {
@@ -565,7 +598,16 @@ fun LibrarySongsTab(
                                     showLocateButton = isTrackPlaying,
                                     itemCount = if (onlyFlacFilter) displayedTracks.size else totalTrackCount,
                                     itemCountLabel = if (onlyFlacFilter) formatTrackCountLabel(displayedTracks.size) else formatTrackCountLabel(totalTrackCount),
-                                    isFilterActive = onlyFlacFilter
+                                    isFilterActive = onlyFlacFilter,
+                                    onDownloadClick = {
+                                        if (!libraryDownloadStatus.isDownloading) {
+                                            org.akanework.gramophone.logic.offline.OfflineDownloadManager.downloadLibrary(context)
+                                        }
+                                        showDownloadProgressSheet = true
+                                    },
+                                    isDownloading = libraryDownloadStatus.isDownloading,
+                                    isAllDownloaded = libraryDownloadStatus.isComplete || (totalTrackCount > 0 && downloadedTrackIds.size >= totalTrackCount),
+                                    downloadPercent = if (libraryDownloadStatus.isComplete) 100f else libraryDownloadStatus.percent
                                 )
                             }
 
@@ -787,6 +829,25 @@ fun LibrarySongsTab(
                     isSelectionMode = false
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        if (showDownloadProgressSheet) {
+            val displayList = if (fullOfflineLibraryTracks.isNotEmpty()) fullOfflineLibraryTracks else tracks
+            val totalCount = if (libraryDownloadStatus.totalTracks > 0) libraryDownloadStatus.totalTracks else if (totalTrackCount > 0) totalTrackCount else displayList.size
+            val isAllDone = libraryDownloadStatus.isComplete || (totalTrackCount > 0 && downloadedTrackIds.size >= totalTrackCount)
+            val doneCount = if (isAllDone) totalCount else if (libraryDownloadStatus.downloadedTracks > 0) libraryDownloadStatus.downloadedTracks else displayList.count { downloadedTrackIds.contains(it.id) }
+            val displayPercent = if (isAllDone) 100f else if (libraryDownloadStatus.percent > 0f) libraryDownloadStatus.percent else if (totalCount > 0) (doneCount.toFloat() / totalCount.toFloat()) * 100f else 0f
+
+            org.akanework.gramophone.ui.components.lossless.DownloadProgressBottomSheet(
+                title = "Медиатека",
+                headerTitle = "Скачивание медиатеки",
+                totalTracks = totalCount,
+                flacTracks = doneCount,
+                percent = displayPercent,
+                tracks = displayList,
+                isOfflineMode = true,
+                onDismiss = { showDownloadProgressSheet = false }
             )
         }
     }

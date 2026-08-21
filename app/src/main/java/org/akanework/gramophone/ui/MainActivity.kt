@@ -225,6 +225,7 @@ class MainActivity : BaseActivity() {
         installSplashScreen().setKeepOnScreenCondition { !ready }
         super.onCreate(savedInstanceState)
         org.akanework.gramophone.logic.lossless.FlacDownloadManager.init(this)
+        org.akanework.gramophone.logic.offline.OfflineDownloadManager.init(this)
         lifecycle.addObserver(controllerViewModel)
         enableEdgeToEdgeProperly()
 

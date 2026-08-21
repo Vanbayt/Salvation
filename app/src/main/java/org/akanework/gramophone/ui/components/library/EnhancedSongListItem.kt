@@ -224,6 +224,7 @@ fun EnhancedSongListItem(
 
             // Текстовая информация о треке
             val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+            val isDownloaded = org.akanework.gramophone.logic.offline.OfflineStateManager.rememberIsTrackDownloaded(track.id)
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -244,6 +245,24 @@ fun EnhancedSongListItem(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
+
+                    // Бейдж скачанного трека
+                    if (isDownloaded) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isCurrentTrack) colors.onPrimaryContainer.copy(alpha = 0.15f) else colors.primaryContainer.copy(alpha = 0.75f),
+                            modifier = Modifier.size(17.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
+                                    contentDescription = "Скачан",
+                                    tint = if (isCurrentTrack) colors.onPrimaryContainer else colors.primary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
 
                     // Бейдж качества аудио (Lossless / FLAC)
                     if (isLossless) {

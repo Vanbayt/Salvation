@@ -11,7 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +26,9 @@ import androidx.compose.ui.unit.sp
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.api.Track
 import org.akanework.gramophone.logic.lossless.LosslessStateManager
+import org.akanework.gramophone.logic.offline.OfflineDownloadManager
+import org.akanework.gramophone.logic.offline.OfflineStateManager
+import org.akanework.gramophone.logic.offline.TrackDownloadState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +38,8 @@ fun DownloadProgressBottomSheet(
     flacTracks: Int,
     percent: Float,
     tracks: List<Track>,
+    headerTitle: String = "Загрузка в Lossless FLAC",
+    isOfflineMode: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -66,7 +73,7 @@ fun DownloadProgressBottomSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Загрузка в Lossless FLAC",
+                        text = headerTitle,
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
@@ -110,7 +117,44 @@ fun DownloadProgressBottomSheet(
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            val libraryDownloadStatus by OfflineDownloadManager.libraryStatus.collectAsState()
+            val etaSec = libraryDownloadStatus.estimatedSecondsRemaining
+            val speedTpm = libraryDownloadStatus.tracksPerMinute
+
+            if (isOfflineMode && libraryDownloadStatus.isDownloading && etaSec > 0) {
+                val etaFormatted = if (etaSec >= 3600) {
+                    val hrs = etaSec / 3600
+                    val mins = (etaSec % 3600) / 60
+                    "~$hrs ч. $mins мин."
+                } else if (etaSec >= 60) {
+                    val mins = etaSec / 60
+                    val secs = etaSec % 60
+                    "~$mins мин. $secs сек."
+                } else {
+                    "~$etaSec сек."
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Осталось: $etaFormatted",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (speedTpm > 0f) {
+                        Text(
+                            text = "~${speedTpm.toInt()} треков/мин",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "Список треков",
@@ -123,6 +167,9 @@ fun DownloadProgressBottomSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val offlineStates by OfflineDownloadManager.trackStates.collectAsState()
+            val activeTrackStates: Map<String, TrackDownloadState> = if (isOfflineMode) offlineStates else emptyMap()
+
             // Потрековый список статусов
             LazyColumn(
                 modifier = Modifier
@@ -131,7 +178,12 @@ fun DownloadProgressBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 itemsIndexed(tracks, key = { index, track -> "dl_track_${track.id}_$index" }) { index, track ->
-                    val isLossless = LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+                    val isDownloaded = if (isOfflineMode) {
+                        org.akanework.gramophone.logic.offline.OfflineStateManager.rememberIsTrackDownloaded(track.id)
+                    } else {
+                        LosslessStateManager.rememberIsTrackLossless(track.id, track.is_lossless)
+                    }
+                    val currentTrackState = activeTrackStates[track.id]
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -149,7 +201,7 @@ fun DownloadProgressBottomSheet(
                                 text = "${index + 1}",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier.width(20.dp)
+                                modifier = Modifier.width(24.dp)
                             )
 
                             Column(modifier = Modifier.weight(1f)) {
@@ -169,46 +221,91 @@ fun DownloadProgressBottomSheet(
                                 )
                             }
 
-                            if (isLossless) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            when {
+                                isDownloaded || currentTrackState == org.akanework.gramophone.logic.offline.TrackDownloadState.COMPLETED -> {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
                                     ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_check_circle),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(10.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_check_circle),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                text = "Готово",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                                currentTrackState == org.akanework.gramophone.logic.offline.TrackDownloadState.DOWNLOADING -> {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(8.dp),
+                                                strokeWidth = 1.5.dp,
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                                            )
+                                            Text(
+                                                text = "Скачивание",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                                currentTrackState == org.akanework.gramophone.logic.offline.TrackDownloadState.FAILED -> {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer
+                                    ) {
                                         Text(
-                                            text = "Готово",
+                                            text = "Ошибка",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.Bold
+                                                fontWeight = FontWeight.Medium
                                             ),
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                         )
                                     }
                                 }
-                            } else {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    Text(
-                                        text = "В очереди",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                    )
+                                else -> {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        Text(
+                                            text = "В очереди",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Medium
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

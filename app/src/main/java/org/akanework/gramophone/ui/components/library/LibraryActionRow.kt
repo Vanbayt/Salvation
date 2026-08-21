@@ -35,6 +35,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.CircularProgressIndicator
+
 @Composable
 fun LibraryActionRow(
     onShuffleClick: () -> Unit,
@@ -44,6 +47,10 @@ fun LibraryActionRow(
     itemCount: Int = 0,
     itemCountLabel: String? = null,
     isFilterActive: Boolean = false,
+    onDownloadClick: (() -> Unit)? = null,
+    isDownloading: Boolean = false,
+    isAllDownloaded: Boolean = false,
+    downloadPercent: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -51,14 +58,15 @@ fun LibraryActionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Левая группа: Кнопка Shuffle и Счетчик
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1f, fill = false)
         ) {
             FilledTonalButton(
                 onClick = onShuffleClick,
@@ -67,21 +75,22 @@ fun LibraryActionRow(
                     containerColor = colors.tertiaryContainer,
                     contentColor = colors.onTertiaryContainer
                 ),
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                modifier = Modifier.height(42.dp)
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                modifier = Modifier.height(38.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Shuffle,
                     contentDescription = "Shuffle Play",
-                    modifier = Modifier.size(19.dp)
+                    modifier = Modifier.size(17.dp)
                 )
-                Spacer(modifier = Modifier.width(7.dp))
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = "Перемешать",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp
-                    )
+                        fontSize = 12.5.sp
+                    ),
+                    maxLines = 1
                 )
             }
 
@@ -94,21 +103,21 @@ fun LibraryActionRow(
                         text = itemCountLabel,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.5.sp
+                            fontSize = 11.5.sp
                         ),
                         color = colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                     )
                 }
             }
         }
 
-        // Правая группа: Кнопка сортировки и Кнопка прыжка к играющему треку
+        // Правая группа: Кнопка сортировки, прыжка к треку и скачивания
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Кнопка быстрого перехода к играющему треку
             AnimatedVisibility(
@@ -123,12 +132,12 @@ fun LibraryActionRow(
                         containerColor = colors.primaryContainer,
                         contentColor = colors.onPrimaryContainer
                     ),
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MyLocation,
                         contentDescription = "Locate Playing Track",
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -141,13 +150,63 @@ fun LibraryActionRow(
                     containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
                     contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant
                 ),
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Sort,
                     contentDescription = "Sort Options",
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(19.dp)
                 )
+            }
+
+            // Кнопка скачивания медиатеки (FLAC-style индикатор / Загрузка)
+            if (onDownloadClick != null) {
+                FilledTonalIconButton(
+                    onClick = onDownloadClick,
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isAllDownloaded) colors.primaryContainer else colors.surfaceContainerHigh,
+                        contentColor = if (isAllDownloaded) colors.primary else colors.onSurfaceVariant
+                    ),
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    when {
+                        isDownloading -> {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    progress = { downloadPercent / 100f },
+                                    modifier = Modifier.size(26.dp),
+                                    strokeWidth = 2.5.dp,
+                                    color = colors.primary
+                                )
+                                Text(
+                                    text = "${downloadPercent.toInt()}%",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 7.5.sp,
+                                        fontWeight = FontWeight.Black
+                                    ),
+                                    color = colors.primary
+                                )
+                            }
+                        }
+                        isAllDownloaded -> {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
+                                contentDescription = "Медиатека скачана",
+                                tint = colors.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        else -> {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_download),
+                                contentDescription = "Скачать медиатеку",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
