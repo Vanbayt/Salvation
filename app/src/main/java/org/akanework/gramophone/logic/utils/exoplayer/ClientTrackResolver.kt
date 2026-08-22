@@ -312,7 +312,43 @@ object ClientTrackResolver {
             )
 
             // 3. Search YTM & Standard YT from Client IP
-            val primaryArtist = info.artist.split(";")[0].split(",")[0].trim()
+            var effectiveArtist = info.artist
+            var effectiveAlbum = info.album
+            var effectiveIsrc = info.isrc
+            var effectiveDuration = info.duration
+
+            if (effectiveArtist == "Unknown Artist" || effectiveArtist.isBlank()) {
+                val cleanDeezerId = info.sourceId.replace("deezer_", "").replace("dz_", "").trim()
+                if (cleanDeezerId.isNotEmpty() && cleanDeezerId.all { it.isDigit() }) {
+                    try {
+                        val dzReq = Request.Builder().url("https://api.deezer.com/track/$cleanDeezerId").get().build()
+                        httpClient.newCall(dzReq).execute().use { dzResp ->
+                            if (dzResp.isSuccessful) {
+                                val dzJson = JSONObject(dzResp.body?.string() ?: "{}")
+                                val artObj = dzJson.optJSONObject("artist")
+                                val albObj = dzJson.optJSONObject("album")
+                                if (artObj != null && artObj.has("name")) {
+                                    effectiveArtist = artObj.getString("name")
+                                }
+                                if (albObj != null && albObj.has("title") && effectiveAlbum.isBlank()) {
+                                    effectiveAlbum = albObj.getString("title")
+                                }
+                                if (effectiveIsrc.isBlank() && dzJson.has("isrc")) {
+                                    effectiveIsrc = dzJson.getString("isrc")
+                                }
+                                if (effectiveDuration == 0 && dzJson.has("duration")) {
+                                    effectiveDuration = dzJson.getInt("duration")
+                                }
+                                Log.i(TAG, "🩺 [CLIENT_SELF_HEAL] Successfully resolved orphan metadata via direct Deezer fallback: $effectiveArtist - ${info.title}")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Client direct Deezer fallback failed: ${e.message}")
+                    }
+                }
+            }
+
+            val primaryArtist = effectiveArtist.split(";")[0].split(",")[0].trim()
             val cleanTitle = info.title
                 .replace(Regex("(?i)[-\\(\\[]\\s*remaster(ed)?\\s*(\\d{4})?\\s*[\\)\\]]?"), "")
                 .replace(Regex("(?i)[-\\(\\[]\\s*\\d{4}\\s*remaster(ed)?\\s*[\\)\\]]?"), "")
@@ -324,7 +360,7 @@ object ClientTrackResolver {
                 .replace(Regex("(?i)\\b(back\\s+to\\s+the\\s+beginning|original\\s+motion\\s+picture\\s+soundtrack|original\\s+soundtrack|ost)\\b"), "")
                 .trim()
 
-            val cleanAlbum = info.album
+            val cleanAlbum = effectiveAlbum
                 .replace(Regex("(?i)[-\\(\\[]\\s*remaster(ed)?\\s*(\\d{4})?\\s*[\\)\\]]?"), "")
                 .replace(Regex("(?i)[-\\(\\[]\\s*\\d{4}\\s*remaster(ed)?\\s*[\\)\\]]?"), "")
                 .replace(Regex("(?i)[-\\(\\[]\\s*deluxe\\s*(edition)?\\s*[\\)\\]]?"), "")
@@ -333,17 +369,32 @@ object ClientTrackResolver {
                 .trim()
 
             val targetQueries = mutableListOf<String>()
-            if (cleanAlbum.isNotEmpty() && cleanAlbum.lowercase() != cleanTitle.lowercase()) {
+            if (cleanAlbum.isNotEmpty() && cleanAlbum.lowercase() != cleanTitle.lowercase() && primaryArtist != "Unknown Artist") {
                 targetQueries.add("$primaryArtist $cleanTitle $cleanAlbum")
             }
-            targetQueries.add("$primaryArtist $cleanTitle")
-            if (info.title != cleanTitle) {
-                targetQueries.add("$primaryArtist ${info.title}")
+            if (primaryArtist != "Unknown Artist") {
+                targetQueries.add("$primaryArtist $cleanTitle")
+                if (info.title != cleanTitle) {
+                    targetQueries.add("$primaryArtist ${info.title}")
+                }
+            } else {
+                targetQueries.add(cleanTitle)
             }
             val cyrArtist = transliterateToCyrillic(primaryArtist)
             val cyrTitle = transliterateToCyrillic(info.title)
             if (cyrArtist != primaryArtist || cyrTitle != info.title) {
                 targetQueries.add("$cyrArtist $cyrTitle")
+            }
+
+            val effectiveInfo = if (effectiveArtist != info.artist || effectiveIsrc != info.isrc || effectiveDuration != info.duration) {
+                info.copy(
+                    artist = effectiveArtist,
+                    album = effectiveAlbum,
+                    isrc = effectiveIsrc,
+                    duration = effectiveDuration
+                )
+            } else {
+                info
             }
 
             val scoredCandidates = mutableListOf<Pair<CandidateV2, Int>>()
@@ -352,7 +403,7 @@ object ClientTrackResolver {
             val executor = java.util.concurrent.Executors.newFixedThreadPool(targetQueries.size.coerceAtLeast(1))
             val futures = targetQueries.map { q ->
                 executor.submit(java.util.concurrent.Callable {
-                    searchYTM(q, info, isIsrcMatch = false)
+                    searchYTM(q, effectiveInfo, isIsrcMatch = false)
                 })
             }
 
@@ -363,7 +414,7 @@ object ClientTrackResolver {
                         if (seenCandidateIds.contains(c.id)) continue
                         seenCandidateIds.add(c.id)
 
-                        val score = scoreCandidate(c, info)
+                        val score = scoreCandidate(c, effectiveInfo)
                         scoredCandidates.add(Pair(c, score))
                     }
                 } catch (e: Exception) {
@@ -375,16 +426,16 @@ object ClientTrackResolver {
             // 3.1. Standard YouTube WEB fallback if YTM yielded no high-confidence official studio candidate (>= 7000)
             if (scoredCandidates.none { it.second >= 7000 }) {
                 val stdQueries = listOf(
-                    if (primaryArtist.isNotEmpty()) "$primaryArtist ${info.title} Official Audio" else "${info.title} Official Audio",
-                    if (primaryArtist.isNotEmpty()) "$primaryArtist ${info.title}" else info.title
+                    if (primaryArtist.isNotEmpty() && primaryArtist != "Unknown Artist") "$primaryArtist ${effectiveInfo.title} Official Audio" else "${effectiveInfo.title} Official Audio",
+                    if (primaryArtist.isNotEmpty() && primaryArtist != "Unknown Artist") "$primaryArtist ${effectiveInfo.title}" else effectiveInfo.title
                 )
                 for (stdQuery in stdQueries) {
-                    val stdCandidates = searchYTStandard(stdQuery, info)
+                    val stdCandidates = searchYTStandard(stdQuery, effectiveInfo)
                     for (c in stdCandidates) {
                         if (seenCandidateIds.contains(c.id)) continue
                         seenCandidateIds.add(c.id)
 
-                        val score = scoreCandidate(c, info)
+                        val score = scoreCandidate(c, effectiveInfo)
                         scoredCandidates.add(Pair(c, score))
                     }
                 }
