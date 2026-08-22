@@ -20,6 +20,7 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ContentResolver
 import android.content.ContentUris
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -179,6 +180,35 @@ class MainActivity : BaseActivity() {
     // 🔥 Ссылка на пейджер
     private lateinit var mainPager: ViewPager2
 
+    private val tabBackStacks: Map<AppTab, MutableList<String>> = mapOf(
+        AppTab.HOME to mutableListOf(),
+        AppTab.SEARCH to mutableListOf(),
+        AppTab.LIBRARY to mutableListOf()
+    )
+
+    fun popCurrentTabBackStack(): Boolean {
+        val stack = tabBackStacks[currentBottomTab] ?: return false
+        if (stack.isEmpty()) return false
+
+        val topTag = stack.removeAt(stack.lastIndex)
+        val topFrag = supportFragmentManager.findFragmentByTag(topTag)
+
+        supportFragmentManager.commit(allowStateLoss = true) {
+            setReorderingAllowed(true)
+            if (topFrag != null) {
+                remove(topFrag)
+            }
+            if (stack.isNotEmpty()) {
+                val prevTag = stack.last()
+                val prevFrag = supportFragmentManager.findFragmentByTag(prevTag)
+                if (prevFrag != null) {
+                    show(prevFrag)
+                }
+            }
+        }
+        return true
+    }
+
     private var collapsePlayerAction: (() -> Unit)? = null
 
     fun collapsePlayer() {
@@ -286,6 +316,21 @@ class MainActivity : BaseActivity() {
             override fun onPageSelected(position: Int) {
                 // Синхронизируем Compose-стейт с пейджером
                 currentBottomTab = AppTab.values()[position]
+            }
+        })
+
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (popCurrentTabBackStack()) {
+                    return
+                }
+                if (currentBottomTab != AppTab.HOME) {
+                    switchTab(AppTab.HOME)
+                    return
+                }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
             }
         })
 
@@ -450,6 +495,17 @@ class MainActivity : BaseActivity() {
                         }
                     }
 
+                    val isPlayerExpanded = fractionState.value > 0.05f || scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded
+                    BackHandler(enabled = isPlayerExpanded && !isLyricsOpenState) {
+                        coroutineScope.launch {
+                            try {
+                                scaffoldState.bottomSheetState.partialExpand()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+
                     BottomSheetScaffold(
                         scaffoldState = scaffoldState,
                         sheetSwipeEnabled = !isLyricsOpenState,
@@ -470,7 +526,7 @@ class MainActivity : BaseActivity() {
                                     .fillMaxSize()
                                     .graphicsLayer {
                                         val topRadius = 32.dp.toPx()
-                                        val bottomRadius = 12.dp.toPx() + (20.dp.toPx() * sheetProgress)
+                                        val bottomRadius = 16.dp.toPx() * (1f - sheetProgress)
                                         val hPad = 16.dp.toPx() * (1f - sheetProgress)
 
                                         val collapsedHeight = miniPlayerHeight.toPx()
@@ -515,6 +571,7 @@ class MainActivity : BaseActivity() {
                                 if (miniPlayerVisible) {
                                     MorphingPlayerComposeBlock(
                                         fraction = fraction,
+                                        staticPeekHeight = staticPeekHeight,
                                         auraColor = animatedMiniColor,
                                         dynamicArtworkColors = if (isDynamicCoverColorEnabled) dynamicColors else null,
                                         onLyricsStateChange = { isLyricsOpenState = it },
@@ -726,6 +783,7 @@ class MainActivity : BaseActivity() {
     @Composable
     private fun MorphingPlayerComposeBlock(
         fraction: Float,
+        staticPeekHeight: androidx.compose.ui.unit.Dp,
         auraColor: Color?,
         dynamicArtworkColors: org.akanework.gramophone.ui.theme.DynamicArtworkTheme.ArtworkColors? = null,
         onLyricsStateChange: (Boolean) -> Unit,
@@ -738,6 +796,28 @@ class MainActivity : BaseActivity() {
         var showLyricsScreen by remember { mutableStateOf(false) }
         LaunchedEffect(showLyricsScreen) {
             onLyricsStateChange(showLyricsScreen)
+        }
+
+        var showAudioFidelitySheet by remember { mutableStateOf(false) }
+        if (showAudioFidelitySheet) {
+            val currentItem = getPlayer()?.currentMediaItem
+            val isLosslessExtra = currentItem?.mediaMetadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+            val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(currentItem?.mediaId, isLosslessExtra)
+
+            org.akanework.gramophone.ui.components.player.AudioFidelityBottomSheet(
+                trackTitle = trackTitle,
+                artistName = trackArtist,
+                isLossless = isLossless,
+                onDismiss = { showAudioFidelitySheet = false }
+            )
+        }
+
+        BackHandler(enabled = showLyricsScreen || showAudioFidelitySheet) {
+            if (showAudioFidelitySheet) {
+                showAudioFidelitySheet = false
+            } else if (showLyricsScreen) {
+                showLyricsScreen = false
+            }
         }
 
         var currentLyricsResult by remember { mutableStateOf<org.akanework.gramophone.logic.utils.LyricsResult?>(null) }
@@ -912,28 +992,23 @@ class MainActivity : BaseActivity() {
         val miniCoverY = 12.dp
 
         val miniTextX = miniCoverX + miniCoverSize + 12.dp // 88.dp
-        val miniTextY = 15.dp
+        val miniTextY = 16.dp
         val miniTextWidth = maxOf(0.dp, screenWidthDp - miniTextX - 116.dp)
 
-        // 3. Expressive Motion Curves (Душа анимации)
-        val emphasizedDecelerate = remember { androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f) }
-        val emphasizedSpring = remember { androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) }
+        // 3. Smooth Physical Motion Curve
+        val motionProgress = androidx.compose.animation.core.FastOutSlowInEasing.transform(fraction)
 
-        val coverProgress = emphasizedDecelerate.transform(fraction)
-        val textProgress = emphasizedSpring.transform(((fraction - 0.03f) / 0.97f).coerceIn(0f, 1f))
-        val controlsProgress = androidx.compose.animation.core.FastOutSlowInEasing.transform(((fraction - 0.12f) / 0.88f).coerceIn(0f, 1f))
+        // Interpolated local positions:
+        val curCoverX = androidx.compose.ui.unit.lerp(miniCoverX, targetFullCoverX, motionProgress)
+        val curCoverY = androidx.compose.ui.unit.lerp(miniCoverY, targetFullCoverY, motionProgress)
+        val curCoverSize = androidx.compose.ui.unit.lerp(miniCoverSize, targetFullCoverSize, motionProgress)
+        
+        // Exact Circle (curCoverSize / 2f = 24.dp) in miniplayer -> Rounded rectangle (28.dp) in full player
+        val curCoverRadius = androidx.compose.ui.unit.lerp(curCoverSize / 2f, fullCoverRadius, motionProgress)
 
-        // Current interpolated values:
-        val curCoverSize = miniCoverSize + (targetFullCoverSize - miniCoverSize) * coverProgress
-        val curCoverX = miniCoverX + (targetFullCoverX - miniCoverX) * coverProgress
-        val curCoverY = miniCoverY + (targetFullCoverY - miniCoverY) * coverProgress
-
-        val circleRadius = curCoverSize / 2f
-        val curCoverRadius = androidx.compose.ui.unit.lerp(circleRadius, fullCoverRadius, coverProgress)
-
-        val curTextX = miniTextX + (fullTextX - miniTextX) * textProgress
-        val curTextY = miniTextY + (fullTextY - miniTextY) * textProgress
-        val curTextWidth = miniTextWidth + (fullTextWidth - miniTextWidth) * textProgress
+        val curTextX = androidx.compose.ui.unit.lerp(miniTextX, fullTextX, motionProgress)
+        val curTextY = androidx.compose.ui.unit.lerp(miniTextY, fullTextY, motionProgress)
+        val curTextWidth = androidx.compose.ui.unit.lerp(miniTextWidth, fullTextWidth, motionProgress)
 
         val shouldAnimateAura = isPlaying && isForeground
         val infiniteTransition = rememberInfiniteTransition(label = "aura")
@@ -976,7 +1051,8 @@ class MainActivity : BaseActivity() {
                 )
         ) {
             // 1. FULL HEADER (Close, Playing From Source, Menu)
-            if (fraction > 0.1f) {
+            val headerAlpha = ((fraction - 0.2f) / 0.8f).coerceIn(0f, 1f)
+            if (headerAlpha > 0f) {
                 val playingFrom = remember(trackTitle, trackArtist) {
                     val meta = getPlayer()?.currentMediaItem?.mediaMetadata
                     val fromExtra = meta?.extras?.getString("PLAYING_FROM")
@@ -992,8 +1068,8 @@ class MainActivity : BaseActivity() {
                         .fillMaxWidth()
                         .padding(top = fullHeaderTop, start = 16.dp, end = 16.dp)
                         .graphicsLayer {
-                            alpha = ((fraction - 0.4f) / 0.6f).coerceIn(0f, 1f)
-                            translationY = -30f * (1f - coverProgress)
+                            alpha = headerAlpha
+                            translationY = -24f * (1f - headerAlpha)
                         },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -1077,20 +1153,21 @@ class MainActivity : BaseActivity() {
             }
 
             // 2. MINI CONTROLS (Play/Pause, Next)
-            if (fraction < 0.6f) {
+            val miniControlsAlpha = (1f - fraction * 2.8f).coerceIn(0f, 1f)
+            if (miniControlsAlpha > 0f) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 14.dp, end = 28.dp)
+                        .padding(top = miniTextY - 3.dp, end = 28.dp)
                         .graphicsLayer {
-                            alpha = (1f - fraction * 2.8f).coerceIn(0f, 1f)
-                            translationX = fraction * 30f
+                            alpha = miniControlsAlpha
+                            translationX = fraction * 20f
                         }
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .clickable {
@@ -1102,7 +1179,7 @@ class MainActivity : BaseActivity() {
                         val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
                         if (isLoading) {
                             androidx.compose.material3.CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 strokeWidth = 2.5.dp
                             )
@@ -1111,25 +1188,25 @@ class MainActivity : BaseActivity() {
                                 painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                                 contentDescription = "Play/Pause",
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
 
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             getPlayer()?.seekToNext()
                         },
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(42.dp)
                     ) {
                         Icon(
                             painterResource(id = R.drawable.ic_skip_next),
                             contentDescription = "Next",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
@@ -1176,14 +1253,14 @@ class MainActivity : BaseActivity() {
                 contentAlignment = Alignment.Center
             ) {
                 // Aura (visible in mini state)
-                if (auraColor != null && fraction < 0.5f) {
+                if (auraColor != null && fraction < 0.4f) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .scale(auraPulse)
                             .graphicsLayer {
                                 rotationZ = auraRotation
-                                alpha = (1f - fraction * 2f).coerceIn(0f, 1f)
+                                alpha = (1f - fraction * 2.5f).coerceIn(0f, 1f)
                             }
                             .drawBehind {
                                 val brush = Brush.radialGradient(
@@ -1201,13 +1278,13 @@ class MainActivity : BaseActivity() {
                 }
 
                 // Full Player Ambient Album Glow (PixelPlayer style)
-                if (auraColor != null && fraction > 0.6f && isPlaying) {
+                if (auraColor != null && fraction > 0.5f && isPlaying) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .scale(1.18f)
                             .graphicsLayer {
-                                alpha = ((fraction - 0.6f) / 0.4f) * 0.42f
+                                alpha = ((fraction - 0.5f) / 0.5f) * 0.42f
                             }
                             .drawBehind {
                                 val brush = Brush.radialGradient(
@@ -1295,26 +1372,71 @@ class MainActivity : BaseActivity() {
                     .offset(x = curTextX, y = curTextY)
                     .width(curTextWidth)
             ) {
-                val titleFontSize = androidx.compose.ui.unit.lerp(15.sp, 24.sp, textProgress)
-                val titleLineHeight = androidx.compose.ui.unit.lerp(20.sp, 28.sp, textProgress)
-                val artistFontSize = androidx.compose.ui.unit.lerp(13.sp, 16.sp, textProgress)
-                val artistLineHeight = androidx.compose.ui.unit.lerp(16.sp, 22.sp, textProgress)
-                val textSpacing = androidx.compose.ui.unit.lerp(2.dp, 6.dp, textProgress)
+                val titleFontSize = androidx.compose.ui.unit.lerp(15.sp, 24.sp, motionProgress)
+                val titleLineHeight = androidx.compose.ui.unit.lerp(20.sp, 28.sp, motionProgress)
+                val artistFontSize = androidx.compose.ui.unit.lerp(13.sp, 16.sp, motionProgress)
+                val artistLineHeight = androidx.compose.ui.unit.lerp(16.sp, 22.sp, motionProgress)
+                val textSpacing = androidx.compose.ui.unit.lerp(2.dp, 6.dp, motionProgress)
 
-                Text(
-                    text = trackTitle.ifEmpty { "Загрузка..." },
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = titleFontSize,
-                        lineHeight = titleLineHeight,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.3).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.basicMarquee(),
-                    textAlign = TextAlign.Start
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = trackTitle.ifEmpty { "Загрузка..." },
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = titleFontSize,
+                            lineHeight = titleLineHeight,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.3).sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false).basicMarquee(),
+                        textAlign = TextAlign.Start
+                    )
+
+                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId
+                    val isLosslessExtra = getPlayer()?.currentMediaItem?.mediaMetadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+                    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(currentTrackId, isLosslessExtra)
+
+                    if (isLossless && fraction > 0.4f) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier
+                                .graphicsLayer { alpha = ((fraction - 0.4f) / 0.6f).coerceIn(0f, 1f) }
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { showAudioFidelitySheet = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_check_circle),
+                                    contentDescription = "Hi-Res FLAC",
+                                    modifier = Modifier.size(10.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "FLAC",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.6.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(textSpacing))
+
                 Text(
                     text = trackArtist.ifEmpty { "Ожидание" },
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -1337,15 +1459,16 @@ class MainActivity : BaseActivity() {
             }
 
             // 5. FULL PLAYER CONTROLS (Slider, Play/Pause, Shuffle, Loop, Like, Lyrics)
-            if (fraction > 0.12f) {
+            val controlsProgress = ((fraction - 0.12f) / 0.88f).coerceIn(0f, 1f)
+            if (controlsProgress > 0f) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .offset(y = fullControlsY)
                         .padding(horizontal = 16.dp)
                         .graphicsLayer {
-                            alpha = ((fraction - 0.25f) / 0.75f).coerceIn(0f, 1f)
-                            translationY = 60f * (1f - controlsProgress)
+                            alpha = controlsProgress
+                            translationY = 28f * (1f - controlsProgress)
                         }
                 ) {
                     // Интерактивный баннер следующего трека (Next Track Pill с динамическими цветами)
@@ -1737,44 +1860,70 @@ class MainActivity : BaseActivity() {
         return String.format("%d:%02d", minutes, seconds)
     }
 
-    // 🔥 ИЗМЕНЕНА ЛОГИКА ПЕРЕКЛЮЧЕНИЯ
+    // 🔥 НАВИГАЦИЯ МЕЖДУ ВКЛАДКАМИ С СОХРАНЕНИЕМ НЕЗАВИСИМЫХ СТЕКОВ
     fun switchTab(tab: AppTab) {
+        if (currentBottomTab == tab) {
+            // Если повторно нажали на ту же вкладку — возвращаемся к корню этой вкладки
+            val stack = tabBackStacks[tab]
+            if (!stack.isNullOrEmpty()) {
+                supportFragmentManager.commit(allowStateLoss = true) {
+                    setReorderingAllowed(true)
+                    stack.forEach { tag ->
+                        supportFragmentManager.findFragmentByTag(tag)?.let { remove(it) }
+                    }
+                }
+                stack.clear()
+            }
+            return
+        }
+
+        val nextStack = tabBackStacks[tab]
+
+        supportFragmentManager.commit(allowStateLoss = true) {
+            setReorderingAllowed(true)
+            // Прячем все фрагменты оверлей-контейнера, чтобы не перекрывать экран
+            supportFragmentManager.fragments.forEach { frag ->
+                if (frag.id == R.id.container && frag.isVisible) {
+                    hide(frag)
+                }
+            }
+            // Показываем верхний экран целевой вкладки (если он был открыт)
+            if (!nextStack.isNullOrEmpty()) {
+                supportFragmentManager.findFragmentByTag(nextStack.last())?.let { show(it) }
+            }
+        }
+
         currentBottomTab = tab
 
-        // Перелистываем ViewPager
         if (mainPager.currentItem != tab.ordinal) {
             mainPager.setCurrentItem(tab.ordinal, true)
         }
-
-        // Если у нас открыты альбомы, настройки или другие фрагменты поверх — закрываем их
-        if (supportFragmentManager.backStackEntryCount > 0) {
-            supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
-        }
     }
 
-    // 🔥 ФУНКЦИЯ startFragment ТЕПЕРЬ ВСЕГДА КЛАДЕТ ФРАГМЕНТ В ПРОЗРАЧНЫЙ СЛОЙ @+id/container С ИММЕРСИВНЫМИ АНИМАЦИЯМИ
+    // 🔥 ФУНКЦИЯ startFragment КЛАДЕТ ФРАГМЕНТ В СТЕК ТЕКУЩЕЙ ВКЛАДКИ
     fun startFragment(frag: Fragment, sharedView: View? = null, transName: String? = null, args: (Bundle.() -> Unit)? = null) {
+        val currentTab = currentBottomTab
+        val stack = tabBackStacks[currentTab] ?: mutableListOf()
+        val tag = "tab_${currentTab.name}_${System.currentTimeMillis()}_${stack.size}"
+
         supportFragmentManager.commit(allowStateLoss = true) {
             setReorderingAllowed(true)
-            val currentFragment = supportFragmentManager.fragments.lastOrNull { it.isVisible && it.id == R.id.container }
+            frag.enterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 300 }
+            frag.returnTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 300 }
 
-            frag.enterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 350 }
-            frag.returnTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 350 }
-
-            if (sharedView != null && transName != null && !sharedView.transitionName.isNullOrEmpty()) {
-                currentFragment?.exitTransition = MaterialElevationScale(false).apply { duration = 350 }
-                currentFragment?.reenterTransition = MaterialElevationScale(true).apply { duration = 350 }
-                addSharedElement(sharedView, transName)
-                addToBackStack(System.currentTimeMillis().toString())
-                replace(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } })
-            } else {
-                currentFragment?.exitTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 350 }
-                currentFragment?.reenterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 350 }
-                addToBackStack(System.currentTimeMillis().toString())
-                if (currentFragment != null) hide(currentFragment)
-                add(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } })
+            if (stack.isNotEmpty()) {
+                val prevTag = stack.last()
+                val prevFrag = supportFragmentManager.findFragmentByTag(prevTag)
+                if (prevFrag != null) {
+                    prevFrag.exitTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, true).apply { duration = 300 }
+                    prevFrag.reenterTransition = com.google.android.material.transition.MaterialSharedAxis(com.google.android.material.transition.MaterialSharedAxis.Z, false).apply { duration = 300 }
+                    hide(prevFrag)
+                }
             }
+
+            add(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } }, tag)
         }
+        stack.add(tag)
     }
 
     @OptIn(FlowPreview::class)

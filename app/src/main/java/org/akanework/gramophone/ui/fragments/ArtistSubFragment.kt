@@ -94,7 +94,7 @@ class ArtistSubFragment : BaseFragment(true), PopupTextProvider {
         recyclerView!!.fastScroll(this, ih)
 
         topAppBar.setNavigationOnClickListener {
-            requireActivity().supportFragmentManager.popBackStack()
+            requireActivity().onBackPressedDispatcher.onBackPressed()
         }
         val title = item.map { it?.title ?: requireContext().getString(R.string.unknown_artist) }
         lifecycleScope.launch(Dispatchers.Default) {

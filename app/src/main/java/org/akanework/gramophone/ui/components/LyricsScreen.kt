@@ -294,26 +294,36 @@ fun LyricsScreen(
                 )
             }
 
-            // Top Floating Header Card (PixelPlayer Inspired)
+            // Top Floating Header Card (Mini-Player Shape & Artwork Colored)
+            val headerCardColor = dynamicArtworkColors?.miniPlayerContainer
+                ?: dynamicArtworkColors?.playerContainer
+                ?: MaterialTheme.colorScheme.surfaceContainerHigh
+            val headerOnCardColor = dynamicArtworkColors?.playerOnContainer
+                ?: MaterialTheme.colorScheme.onSurface
+            val headerPrimaryColor = dynamicArtworkColors?.playerPrimary
+                ?: MaterialTheme.colorScheme.primary
+            val headerOnPrimaryColor = dynamicArtworkColors?.playerOnPrimary
+                ?: MaterialTheme.colorScheme.onPrimary
+
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+                color = headerCardColor,
                 tonalElevation = 6.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Track Cover Image
+                    // Track Cover Image (Circular to match mini-player)
                     Box(
                         modifier = Modifier
                             .size(46.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
@@ -324,13 +334,13 @@ fun LyricsScreen(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(CircleShape)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.MusicNote,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = headerOnCardColor.copy(alpha = 0.7f),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -345,7 +355,7 @@ fun LyricsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = headerOnCardColor,
                             maxLines = 1,
                             modifier = Modifier.basicMarquee()
                         )
@@ -354,7 +364,7 @@ fun LyricsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = headerOnCardColor.copy(alpha = 0.75f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -373,7 +383,7 @@ fun LyricsScreen(
                         Icon(
                             imageVector = Icons.Rounded.Translate,
                             contentDescription = "Translate",
-                            tint = if (isAutoTranslateEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            tint = if (isAutoTranslateEnabled) headerPrimaryColor else headerOnCardColor.copy(alpha = 0.45f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -386,8 +396,8 @@ fun LyricsScreen(
                         },
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            containerColor = headerPrimaryColor,
+                            contentColor = headerOnPrimaryColor
                         ),
                         modifier = Modifier.size(38.dp)
                     ) {

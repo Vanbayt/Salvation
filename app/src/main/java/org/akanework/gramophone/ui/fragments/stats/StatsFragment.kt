@@ -43,7 +43,7 @@ class StatsFragment : BaseFragment(false) {
                     ) {
                         StatsScreen(
                             onBackPressed = {
-                                (activity as? MainActivity)?.supportFragmentManager?.popBackStack()
+                                (activity as? MainActivity)?.onBackPressedDispatcher?.onBackPressed()
                             }
                         )
                     }
