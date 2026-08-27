@@ -242,6 +242,28 @@ object SmartPlaybackManager {
     }
 
     /**
+     * Вызывается при старте сетевого открытия аудиопотока с CDN (STREAM_OPEN).
+     * Отменяет таймер поиска трека и выделяет независимое окно 15 секунд на соединение с CDN и рукопожатие.
+     */
+    fun onStreamConnecting(trackTitle: String = "") {
+        val token = requestToken.get()
+        mainHandler.post {
+            if (token != requestToken.get() || isSkipping.get()) return@post
+            if (currentPlayer?.playbackState == Player.STATE_READY) return@post
+
+            PlaybackLogger.log("SMART_MGR", "Stream connecting for '$trackTitle' [token=$token]. Refreshing connection timeout (15s).")
+            cancelTimeoutTimer()
+            currentTimeoutJob = managerScope.launch {
+                delay(ACTIVE_SEARCH_TIMEOUT_MS) // 15 секунд на сетевое открытие потока
+                if (token == requestToken.get() && !isSkipping.get() && currentPlayer?.playbackState != Player.STATE_READY) {
+                    PlaybackLogger.log("SMART_TIMEOUT", "Stream connection timed out after 15s for '$trackTitle' [token=$token]. Skipping!")
+                    triggerAutoSkip(trackTitle, "Таймаут соединения с аудиопотоком", token)
+                }
+            }
+        }
+    }
+
+    /**
      * Динамическое продление тайм-аута при успешном открытии сетевого потока (STREAM_SUCCESS).
      * Дает ExoPlayer еще 8 секунд на заполнение начального аудио-буфера до STATE_READY.
      */

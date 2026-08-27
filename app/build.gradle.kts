@@ -102,8 +102,8 @@ android {
         // keep support for it for a while.
         minSdk = 23
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.0.0-beta07"
+        versionCode = 28
+        versionName = "1.0.0-beta08"
         ndk {
             abiFilters.add("arm64-v8a")
         }

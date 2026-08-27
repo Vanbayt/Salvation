@@ -528,6 +528,7 @@ internal class AuthenticatedDataSource(
             "STREAM_OPEN",
             "Opening stream for track '$trackIdStr' | Host: $targetHost | Position: ${dataSpec.position} | Length: ${dataSpec.length} | Chunked: $isChunkedMode"
         )
+        org.akanework.gramophone.logic.utils.SmartPlaybackManager.onStreamConnecting(trackIdStr)
 
         var attempt = 0
         val maxRetries = 2

@@ -81,9 +81,9 @@ object ClientTrackResolver {
 
     data class ExtractorProfile(
         val name: String,
-        val version: String,
-        val uaPlayer: String,
-        val uaDownload: String,
+        val version: String = "1.20240101.01.00",
+        val uaPlayer: String = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        val uaDownload: String = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         val deviceMake: String = "",
         val deviceModel: String = "",
         val sdkVersion: Int = 0,
@@ -92,15 +92,70 @@ object ClientTrackResolver {
         val clientNameHeader: String = ""
     )
 
+    val PROFILES = listOf(
+        ExtractorProfile(
+            name = "VISIONOS",
+            version = "1.02",
+            uaPlayer = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+            uaDownload = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+            deviceMake = "Apple",
+            deviceModel = "RealityDevice17,1",
+            osName = "visionOS",
+            osVersion = "26.5.23O471",
+            clientNameHeader = "101"
+        ),
+        ExtractorProfile(
+            name = "WEB_REMIX",
+            version = "1.20241021.01.00",
+            uaPlayer = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+            uaDownload = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        ),
+        ExtractorProfile(
+            name = "ANDROID_VR",
+            version = "1.65.10",
+            uaPlayer = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+            uaDownload = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)",
+            deviceMake = "Oculus",
+            deviceModel = "Quest 3",
+            sdkVersion = 32,
+            osName = "Android",
+            osVersion = "12L"
+        ),
+        ExtractorProfile(
+            name = "IOS",
+            version = "19.29.1",
+            uaPlayer = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
+            uaDownload = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
+            deviceMake = "Apple",
+            deviceModel = "iPhone16,2",
+            osName = "iOS",
+            osVersion = "17.5.1"
+        )
+    )
+
     private val profileVisitorDataMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private var resolverAppContext: Context? = null
 
-    fun getOrFetchVisitorData(prof: ExtractorProfile? = null): String {
-        val clientKey = prof?.name ?: "WEB_REMIX"
-        val cached = profileVisitorDataMap[clientKey]
-        if (!cached.isNullOrEmpty()) return cached
+    fun setContext(context: Context) {
+        resolverAppContext = context.applicationContext
+    }
 
-        val clientVersion = prof?.version ?: "1.20240101.01.00"
-        val clientUA = prof?.uaPlayer ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    fun setVisitorData(clientKey: String, visitorData: String) {
+        if (visitorData.isNotEmpty()) {
+            profileVisitorDataMap[clientKey] = visitorData
+            lastVisitorData = visitorData
+        }
+    }
+
+    fun fetchVisitorDataDirect(clientKey: String): String {
+        val prof = PROFILES.find { it.name == clientKey } ?: ExtractorProfile(name = clientKey)
+        return fetchVisitorDataNetwork(prof)
+    }
+
+    private fun fetchVisitorDataNetwork(prof: ExtractorProfile): String {
+        val clientKey = prof.name
+        val clientVersion = if (prof.version.isNotEmpty()) prof.version else "1.20240101.01.00"
+        val clientUA = if (prof.uaPlayer.isNotEmpty()) prof.uaPlayer else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 
         try {
             val reqBody = JSONObject().apply {
@@ -110,13 +165,11 @@ object ClientTrackResolver {
                         put("clientVersion", clientVersion)
                         put("hl", "en")
                         put("gl", "US")
-                        if (prof != null) {
-                            if (prof.deviceMake.isNotEmpty()) put("deviceMake", prof.deviceMake)
-                            if (prof.deviceModel.isNotEmpty()) put("deviceModel", prof.deviceModel)
-                            if (prof.sdkVersion > 0) put("androidSdkVersion", prof.sdkVersion)
-                            if (prof.osName.isNotEmpty()) put("osName", prof.osName)
-                            if (prof.osVersion.isNotEmpty()) put("osVersion", prof.osVersion)
-                        }
+                        if (prof.deviceMake.isNotEmpty()) put("deviceMake", prof.deviceMake)
+                        if (prof.deviceModel.isNotEmpty()) put("deviceModel", prof.deviceModel)
+                        if (prof.sdkVersion > 0) put("androidSdkVersion", prof.sdkVersion)
+                        if (prof.osName.isNotEmpty()) put("osName", prof.osName)
+                        if (prof.osVersion.isNotEmpty()) put("osVersion", prof.osVersion)
                     })
                 })
             }
@@ -163,6 +216,29 @@ object ClientTrackResolver {
             Log.w(TAG, "HTML visitorData bootstrap failed: ${e.message}")
         }
         return lastVisitorData
+    }
+
+    fun getOrFetchVisitorData(prof: ExtractorProfile? = null): String {
+        val clientKey = prof?.name ?: "WEB_REMIX"
+        val cached = profileVisitorDataMap[clientKey]
+        if (!cached.isNullOrEmpty()) return cached
+
+        val ctx = resolverAppContext
+        if (ctx != null) {
+            val persisted = PoTokenProvider.getPersistedVisitorData(ctx, clientKey)
+            if (!persisted.isNullOrEmpty()) {
+                profileVisitorDataMap[clientKey] = persisted
+                lastVisitorData = persisted
+                return persisted
+            }
+        }
+
+        val targetProf = prof ?: ExtractorProfile(name = clientKey)
+        val fetched = fetchVisitorDataNetwork(targetProf)
+        if (fetched.isNotEmpty() && ctx != null) {
+            PoTokenProvider.saveVisitorData(ctx, clientKey, fetched)
+        }
+        return fetched
     }
 
     data class TrackResolveInfo(
@@ -1196,46 +1272,7 @@ object ClientTrackResolver {
     private fun extractPlayerStreamUrl(videoId: String, targetDurationSec: Int = 0): String? {
         val sts = currentSignatureTimestamp
 
-        val profiles = listOf(
-            ExtractorProfile(
-                name = "VISIONOS",
-                version = "1.02",
-                uaPlayer = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
-                uaDownload = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
-                deviceMake = "Apple",
-                deviceModel = "RealityDevice17,1",
-                osName = "visionOS",
-                osVersion = "26.5.23O471",
-                clientNameHeader = "101"
-            ),
-            ExtractorProfile(
-                name = "WEB_REMIX",
-                version = "1.20241021.01.00",
-                uaPlayer = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-                uaDownload = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-            ),
-            ExtractorProfile(
-                name = "ANDROID_VR",
-                version = "1.65.10",
-                uaPlayer = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
-                uaDownload = "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)",
-                deviceMake = "Oculus",
-                deviceModel = "Quest 3",
-                sdkVersion = 32,
-                osName = "Android",
-                osVersion = "12L"
-            ),
-            ExtractorProfile(
-                name = "IOS",
-                version = "19.29.1",
-                uaPlayer = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
-                uaDownload = "com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X; en_US)",
-                deviceMake = "Apple",
-                deviceModel = "iPhone16,2",
-                osName = "iOS",
-                osVersion = "17.5.1"
-            )
-        )
+        val profiles = PROFILES
 
         for (prof in profiles) {
             try {
