@@ -88,8 +88,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import android.content.res.Configuration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -372,151 +374,108 @@ fun FullPlayerScreen(
                 )
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 22.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // 1. Верхний Top Bar (Большой круглый Chevron + Заголовок + Бейдж + 3 точки)
+        val configuration = LocalConfiguration.current
+        val isWideScreen = configuration.screenWidthDp >= 640 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        if (isWideScreen) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalIconButton(
-                    onClick = onDismiss,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.KeyboardArrowDown,
-                        contentDescription = "Dismiss",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
+                // Левая панель: Top Bar + Обложка + Название/Артист + Слайдер + Управление + Капсула
                 Column(
+                    modifier = Modifier
+                        .weight(1.05f)
+                        .fillMaxHeight(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "СЕЙЧАС ИГРАЕТ",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp,
-                            fontSize = 11.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                    )
-
-                    if (isLossless) {
-                        Spacer(modifier = Modifier.height(3.dp))
-                        AudioQualityBadge(text = "FLAC • Lossless")
-                    }
-                }
-
-                FilledTonalIconButton(
-                    onClick = {
-                        if (fragmentManager != null) {
-                            PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
+                    // 1. Верхний Top Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = onDismiss,
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = "Dismiss",
+                                modifier = Modifier.size(26.dp)
+                            )
                         }
-                    },
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Options",
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
 
-            // 2. Центральная область (Большая Обложка со скруглением 32.dp ИЛИ Караоке)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                AnimatedContent(
-                    targetState = isLyricsVisible,
-                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
-                    label = "CoverOrLyrics"
-                ) { lyricsMode ->
-                    if (lyricsMode) {
-                        LyricsScreen(
-                            trackTitle = title,
-                            artistName = artist,
-                            coverUrl = coverUrl ?: "",
-                            isPlaying = isPlaying,
-                            lyricsResult = currentLyricsResult,
-                            isLoading = isLyricsLoading,
-                            currentPositionMs = currentPositionMs,
-                            selectedSource = selectedLyricsSource,
-                            onSourceSelected = { newSource ->
-                                selectedLyricsSource = newSource
-                                loadLyrics(newSource)
-                            },
-                            onPlayPauseToggle = {
-                                val p = player ?: return@LyricsScreen
-                                if (p.playWhenReady) p.pause() else p.play()
-                            },
-                            onSkipNext = {
-                                player?.seekToNext()
-                            },
-                            onSeekTo = { pos -> player?.seekTo(pos) },
-                            onDismiss = { isLyricsVisible = false },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        val animatedOffsetX by animateFloatAsState(
-                            targetValue = dragOffsetX,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "coverDragOffset"
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                text = "СЕЙЧАС ИГРАЕТ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.5.sp,
+                                    fontSize = 11.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
 
+                            if (isLossless) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                AudioQualityBadge(text = "FLAC • Lossless")
+                            }
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                if (fragmentManager != null) {
+                                    PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
+                                }
+                            },
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Options",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // 2. Обложка
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Surface(
                             modifier = Modifier
-                                .fillMaxWidth(0.96f)
+                                .fillMaxHeight(0.92f)
                                 .aspectRatio(1f)
-                                .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
                                 .scale(coverScale)
-                                .shadow(elevation = if (isPlaying) 24.dp else 8.dp, shape = RoundedCornerShape(32.dp))
-                                .clip(RoundedCornerShape(32.dp))
-                                .pointerInput(Unit) {
-                                    detectHorizontalDragGestures(
-                                        onDragEnd = {
-                                            if (dragOffsetX < -120f) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                player?.seekToNext()
-                                            } else if (dragOffsetX > 120f) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                player?.seekToPrevious()
-                                            }
-                                            dragOffsetX = 0f
-                                        },
-                                        onHorizontalDrag = { _, dragAmount ->
-                                            dragOffsetX = (dragOffsetX + dragAmount).coerceIn(-260f, 260f)
-                                        }
-                                    )
-                                },
-                            shape = RoundedCornerShape(32.dp),
+                                .shadow(elevation = if (isPlaying) 20.dp else 6.dp, shape = RoundedCornerShape(28.dp))
+                                .clip(RoundedCornerShape(28.dp)),
+                            shape = RoundedCornerShape(28.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             if (!coverUrl.isNullOrEmpty()) {
@@ -535,227 +494,618 @@ fun FullPlayerScreen(
                                         imageVector = Icons.Rounded.MusicNote,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(72.dp)
+                                        modifier = Modifier.size(64.dp)
                                     )
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // 3. Секция Названия и Исполнителя (Expressive Typography)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center
-                ) {
+                    // 3. Секция Названия и Исполнителя
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 24.sp,
-                                letterSpacing = (-0.3).sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .basicMarquee()
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 20.sp,
+                                        letterSpacing = (-0.3).sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .basicMarquee()
+                                )
+
+                                if (isLossless) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { showAudioFidelitySheet = true },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFFD4AF37).copy(alpha = 0.22f),
+                                        border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.5f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_check_circle),
+                                                contentDescription = "Hi-Res FLAC",
+                                                modifier = Modifier.size(10.dp),
+                                                tint = Color(0xFFD4AF37)
+                                            )
+                                            Text(
+                                                text = "FLAC",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    letterSpacing = 0.6.sp
+                                                ),
+                                                color = Color(0xFFD4AF37)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable {
+                                    val artistId = currentItem?.mediaMetadata?.extras?.getString("ARTIST_ID")
+                                    if (!artistId.isNullOrBlank()) {
+                                        activity?.startFragment(ArtistFragment.newInstance(artistId))
+                                        onDismiss()
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    // 4. Слайдер
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp)
+                    ) {
+                        SquigglySlider(
+                            position = currentPositionMs.toFloat(),
+                            duration = durationMs.toFloat(),
+                            isPlaying = isPlaying,
+                            onValueChange = { newPos -> currentPositionMs = newPos.toLong() },
+                            onValueChangeFinished = { player?.seekTo(currentPositionMs) }
                         )
 
-                        if (isLossless) {
-                            Surface(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable { showAudioFidelitySheet = true },
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFFD4AF37).copy(alpha = 0.22f),
-                                border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.5f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_check_circle),
-                                        contentDescription = "Hi-Res FLAC",
-                                        modifier = Modifier.size(10.dp),
-                                        tint = Color(0xFFD4AF37)
-                                    )
-                                    Text(
-                                        text = "FLAC",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 0.6.sp
-                                        ),
-                                        color = Color(0xFFD4AF37)
-                                    )
-                                }
-                            }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(formatTime(currentPositionMs), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.5.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(formatTime(durationMs), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.5.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    // 5. Контроллеры воспроизведения
+                    ExpressivePlaybackControlsRow(
+                        isPlaying = isPlaying,
+                        onPrevious = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            player?.seekToPrevious()
+                        },
+                        onPlayPause = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val p = player ?: return@ExpressivePlaybackControlsRow
+                            if (p.playWhenReady) p.pause() else p.play()
+                        },
+                        onNext = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            player?.seekToNext()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    )
 
-                    Text(
-                        text = artist,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable {
-                            val artistId = currentItem?.mediaMetadata?.extras?.getString("ARTIST_ID")
-                            if (!artistId.isNullOrBlank()) {
-                                activity?.startFragment(ArtistFragment.newInstance(artistId))
-                                onDismiss()
+                    // 6. Капсула
+                    BottomSegmentedCapsuleRow(
+                        isShuffleEnabled = shuffleEnabled,
+                        onShuffleToggle = {
+                            val p = player ?: return@BottomSegmentedCapsuleRow
+                            val nextShuffle = !p.shuffleModeEnabled
+                            p.shuffleModeEnabled = nextShuffle
+                            shuffleEnabled = nextShuffle
+                            if (nextShuffle) org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
+                        },
+                        repeatMode = repeatMode,
+                        onRepeatToggle = {
+                            val p = player ?: return@BottomSegmentedCapsuleRow
+                            val nextMode = when (p.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                                else -> Player.REPEAT_MODE_OFF
                             }
-                        }
+                            p.repeatMode = nextMode
+                            repeatMode = nextMode
+                        },
+                        isFavorite = isLiked,
+                        onFavoriteToggle = {
+                            val newLiked = !isLiked
+                            isLiked = newLiked
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (newLiked) {
+                                LikeCache.add(trackId, title = title, artist = artist)
+                                api.likeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                    override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                    override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                        LikeCache.remove(trackId, title = title, artist = artist)
+                                        isLiked = false
+                                    }
+                                })
+                            } else {
+                                LikeCache.remove(trackId, title = title, artist = artist)
+                                api.unlikeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                    override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                    override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                        LikeCache.add(trackId, title = title, artist = artist)
+                                        isLiked = true
+                                    }
+                                })
+                            }
+                        },
+                        isLyricsActive = isLyricsVisible,
+                        onLyricsToggle = { isLyricsVisible = !isLyricsVisible },
+                        onQueueClick = {
+                            if (fragmentManager != null) {
+                                PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp, top = 2.dp)
+                    )
+                }
+
+                // Правая панель: Караоке текст (Lyrics)
+                Surface(
+                    modifier = Modifier
+                        .weight(0.95f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(28.dp)),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(28.dp)
+                ) {
+                    LyricsScreen(
+                        trackTitle = title,
+                        artistName = artist,
+                        coverUrl = coverUrl ?: "",
+                        isPlaying = isPlaying,
+                        lyricsResult = currentLyricsResult,
+                        isLoading = isLyricsLoading,
+                        currentPositionMs = currentPositionMs,
+                        selectedSource = selectedLyricsSource,
+                        onSourceSelected = { newSource ->
+                            selectedLyricsSource = newSource
+                            loadLyrics(newSource)
+                        },
+                        onPlayPauseToggle = {
+                            val p = player ?: return@LyricsScreen
+                            if (p.playWhenReady) p.pause() else p.play()
+                        },
+                        onSkipNext = { player?.seekToNext() },
+                        onSeekTo = { pos -> player?.seekTo(pos) },
+                        onDismiss = { isLyricsVisible = false },
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
-
-            // 4. Волнистый слайдер прогресса (SquigglySlider)
+        } else {
+            // Стандартный мобильный макет в 1 колонку
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 22.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                SquigglySlider(
-                    position = currentPositionMs.toFloat(),
-                    duration = durationMs.toFloat(),
-                    isPlaying = isPlaying,
-                    onValueChange = { newPos ->
-                        currentPositionMs = newPos.toLong()
-                    },
-                    onValueChangeFinished = {
-                        player?.seekTo(currentPositionMs)
-                    }
-                )
-
+                // 1. Верхний Top Bar (Большой круглый Chevron + Заголовок + Бейдж + 3 точки)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 6.dp),
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = formatTime(currentPositionMs),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp
+                    FilledTonalIconButton(
+                        onClick = onDismiss,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
 
-                    Text(
-                        text = formatTime(durationMs),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = "СЕЙЧАС ИГРАЕТ",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp,
+                                fontSize = 11.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+
+                        if (isLossless) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            AudioQualityBadge(text = "FLAC • Lossless")
+                        }
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            if (fragmentManager != null) {
+                                PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
+                            }
+                        },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "Options",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
+
+                // 2. Центральная область (Большая Обложка со скруглением 32.dp ИЛИ Караоке)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(
+                        targetState = isLyricsVisible,
+                        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                        label = "CoverOrLyrics"
+                    ) { lyricsMode ->
+                        if (lyricsMode) {
+                            LyricsScreen(
+                                trackTitle = title,
+                                artistName = artist,
+                                coverUrl = coverUrl ?: "",
+                                isPlaying = isPlaying,
+                                lyricsResult = currentLyricsResult,
+                                isLoading = isLyricsLoading,
+                                currentPositionMs = currentPositionMs,
+                                selectedSource = selectedLyricsSource,
+                                onSourceSelected = { newSource ->
+                                    selectedLyricsSource = newSource
+                                    loadLyrics(newSource)
+                                },
+                                onPlayPauseToggle = {
+                                    val p = player ?: return@LyricsScreen
+                                    if (p.playWhenReady) p.pause() else p.play()
+                                },
+                                onSkipNext = {
+                                    player?.seekToNext()
+                                },
+                                onSeekTo = { pos -> player?.seekTo(pos) },
+                                onDismiss = { isLyricsVisible = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            val animatedOffsetX by animateFloatAsState(
+                                targetValue = dragOffsetX,
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                label = "coverDragOffset"
+                            )
+
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.96f)
+                                    .aspectRatio(1f)
+                                    .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
+                                    .scale(coverScale)
+                                    .shadow(elevation = if (isPlaying) 24.dp else 8.dp, shape = RoundedCornerShape(32.dp))
+                                    .clip(RoundedCornerShape(32.dp))
+                                    .pointerInput(Unit) {
+                                        detectHorizontalDragGestures(
+                                            onDragEnd = {
+                                                if (dragOffsetX < -120f) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    player?.seekToNext()
+                                                } else if (dragOffsetX > 120f) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    player?.seekToPrevious()
+                                                }
+                                                dragOffsetX = 0f
+                                            },
+                                            onHorizontalDrag = { _, dragAmount ->
+                                                dragOffsetX = (dragOffsetX + dragAmount).coerceIn(-260f, 260f)
+                                            }
+                                        )
+                                    },
+                                shape = RoundedCornerShape(32.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                if (!coverUrl.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = coverUrl,
+                                        contentDescription = title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MusicNote,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(72.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Секция Названия и Исполнителя (Expressive Typography)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 24.sp,
+                                    letterSpacing = (-0.3).sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .basicMarquee()
+                            )
+
+                            if (isLossless) {
+                                Surface(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { showAudioFidelitySheet = true },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFD4AF37).copy(alpha = 0.22f),
+                                    border = BorderStroke(0.5.dp, Color(0xFFD4AF37).copy(alpha = 0.5f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_check_circle),
+                                            contentDescription = "Hi-Res FLAC",
+                                            modifier = Modifier.size(10.dp),
+                                            tint = Color(0xFFD4AF37)
+                                        )
+                                        Text(
+                                            text = "FLAC",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Black,
+                                                letterSpacing = 0.6.sp
+                                            ),
+                                            color = Color(0xFFD4AF37)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = artist,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable {
+                                val artistId = currentItem?.mediaMetadata?.extras?.getString("ARTIST_ID")
+                                if (!artistId.isNullOrBlank()) {
+                                    activity?.startFragment(ArtistFragment.newInstance(artistId))
+                                    onDismiss()
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // 4. Волнистый слайдер прогресса (SquigglySlider)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    SquigglySlider(
+                        position = currentPositionMs.toFloat(),
+                        duration = durationMs.toFloat(),
+                        isPlaying = isPlaying,
+                        onValueChange = { newPos ->
+                            currentPositionMs = newPos.toLong()
+                        },
+                        onValueChangeFinished = {
+                            player?.seekTo(currentPositionMs)
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = formatTime(currentPositionMs),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Text(
+                            text = formatTime(durationMs),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // 5. Экспрессивный блок кнопок управления воспроизведением (PixelPlayer Animated Controls)
+                ExpressivePlaybackControlsRow(
+                    isPlaying = isPlaying,
+                    onPrevious = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        player?.seekToPrevious()
+                    },
+                    onPlayPause = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val p = player ?: return@ExpressivePlaybackControlsRow
+                        if (p.playWhenReady) p.pause() else p.play()
+                    },
+                    onNext = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        player?.seekToNext()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
+
+                // 6. Нижняя сегментированная капсула (PixelPlayer BottomToggleRow Capsule)
+                BottomSegmentedCapsuleRow(
+                    isShuffleEnabled = shuffleEnabled,
+                    onShuffleToggle = {
+                        val p = player ?: return@BottomSegmentedCapsuleRow
+                        val nextShuffle = !p.shuffleModeEnabled
+                        p.shuffleModeEnabled = nextShuffle
+                        shuffleEnabled = nextShuffle
+                        if (nextShuffle) {
+                            org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
+                        }
+                    },
+                    repeatMode = repeatMode,
+                    onRepeatToggle = {
+                        val p = player ?: return@BottomSegmentedCapsuleRow
+                        val nextMode = when (p.repeatMode) {
+                            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                            else -> Player.REPEAT_MODE_OFF
+                        }
+                        p.repeatMode = nextMode
+                        repeatMode = nextMode
+                    },
+                    isFavorite = isLiked,
+                    onFavoriteToggle = {
+                        val newLiked = !isLiked
+                        isLiked = newLiked
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                        if (newLiked) {
+                            LikeCache.add(trackId, title = title, artist = artist)
+                            api.likeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                    LikeCache.remove(trackId, title = title, artist = artist)
+                                    isLiked = false
+                                }
+                            })
+                        } else {
+                            LikeCache.remove(trackId, title = title, artist = artist)
+                            api.unlikeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                    LikeCache.add(trackId, title = title, artist = artist)
+                                    isLiked = true
+                                }
+                            })
+                        }
+                    },
+                    isLyricsActive = isLyricsVisible,
+                    onLyricsToggle = { isLyricsVisible = !isLyricsVisible },
+                    onQueueClick = {
+                        if (fragmentManager != null) {
+                            PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp, top = 4.dp)
+                )
             }
-
-            // 5. Экспрессивный блок кнопок управления воспроизведением (PixelPlayer Animated Controls)
-            ExpressivePlaybackControlsRow(
-                isPlaying = isPlaying,
-                onPrevious = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    player?.seekToPrevious()
-                },
-                onPlayPause = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    val p = player ?: return@ExpressivePlaybackControlsRow
-                    if (p.playWhenReady) p.pause() else p.play()
-                },
-                onNext = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    player?.seekToNext()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            )
-
-            // 6. Нижняя сегментированная капсула (PixelPlayer BottomToggleRow Capsule)
-            BottomSegmentedCapsuleRow(
-                isShuffleEnabled = shuffleEnabled,
-                onShuffleToggle = {
-                    val p = player ?: return@BottomSegmentedCapsuleRow
-                    val nextShuffle = !p.shuffleModeEnabled
-                    p.shuffleModeEnabled = nextShuffle
-                    shuffleEnabled = nextShuffle
-                    if (nextShuffle) {
-                        org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
-                    }
-                },
-                repeatMode = repeatMode,
-                onRepeatToggle = {
-                    val p = player ?: return@BottomSegmentedCapsuleRow
-                    val nextMode = when (p.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                    p.repeatMode = nextMode
-                    repeatMode = nextMode
-                },
-                isFavorite = isLiked,
-                onFavoriteToggle = {
-                    val newLiked = !isLiked
-                    isLiked = newLiked
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                    if (newLiked) {
-                        LikeCache.add(trackId, title = title, artist = artist)
-                        api.likeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
-                            override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
-                            override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
-                                LikeCache.remove(trackId, title = title, artist = artist)
-                                isLiked = false
-                            }
-                        })
-                    } else {
-                        LikeCache.remove(trackId, title = title, artist = artist)
-                        api.unlikeTrack(trackId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
-                            override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
-                            override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
-                                LikeCache.add(trackId, title = title, artist = artist)
-                                isLiked = true
-                            }
-                        })
-                    }
-                },
-                isLyricsActive = isLyricsVisible,
-                onLyricsToggle = { isLyricsVisible = !isLyricsVisible },
-                onQueueClick = {
-                    if (fragmentManager != null) {
-                        PlayerMenuBottomSheet().show(fragmentManager, "PLAYER_MENU_SHEET")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp, top = 4.dp)
-            )
         }
     }
 

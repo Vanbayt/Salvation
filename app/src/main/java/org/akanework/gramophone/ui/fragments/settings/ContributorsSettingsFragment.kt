@@ -174,34 +174,12 @@ class ContributorsSettingsActivity : BaseComposeActivity() {
             ) {
                 itemsIndexed(Contributors.LIST) { i, contributor ->
                     val top = if (i == 0) CornerSize(16.dp) else CornerSize(8.dp)
-                    val bottom = CornerSize(8.dp)
+                    val bottom = if (i == Contributors.LIST.lastIndex) CornerSize(16.dp) else CornerSize(8.dp)
                     ContributorCard(
                         RoundedCornerShape(
                             top, top, bottom, bottom
                         ), contributor
                     )
-                }
-                item {
-                    val top = CornerSize(8.dp)
-                    val bottom = CornerSize(16.dp)
-                    SimpleCard(
-                        shape = RoundedCornerShape(
-                            top, top, bottom, bottom
-                        ),
-                        url = "https://hosted.weblate.org/engage/gramophone/",
-                        icon = {
-                            AsyncImage(
-                                model = R.drawable.outline_translate_24,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .padding(6.dp)
-                            )
-                        },
-                        name = stringResource(R.string.translators),
-                        login = null,
-                        subtitle = remember { Contributors.TRANSLATORS.joinToString() })
                 }
             }
         }

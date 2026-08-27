@@ -110,6 +110,14 @@ object StatsTracker {
         val artist = activeArtist
         val listened = accumulatedListenedMs
 
+        if (!trackId.isNullOrBlank() && !title.isNullOrBlank() && !artist.isNullOrBlank()) {
+            if (listened in 1000L..25000L && !isCompleted) {
+                org.akanework.gramophone.logic.recommendation.ContextManager.recordSkip()
+            } else if (listened >= 30000L) {
+                org.akanework.gramophone.logic.recommendation.ContextManager.resetSkips()
+            }
+        }
+
         // Логируем в базу только если трек играл более 5 секунд (отсекаем случайные миссклики)
         if (!trackId.isNullOrBlank() && !title.isNullOrBlank() && !artist.isNullOrBlank() && listened >= 5000L) {
             val event = PlaybackEvent(

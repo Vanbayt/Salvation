@@ -63,6 +63,8 @@ fun DownloadProgressBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .widthIn(max = 560.dp)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)
         ) {

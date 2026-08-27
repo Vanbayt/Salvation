@@ -261,7 +261,7 @@
     <string name="spk_encoding_ac3">AC-3</string>
     <string name="spk_encoding_e_ac3_joc">E-AC-3-JOC</string>
     <string name="device_type_line_analog">Entrada analógica</string>
-    <string name="open_in_gramophone">Abrir en Gramophone</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="settings_lyrics_no_animation_summary">Desactivar todas las animaciones de transición de línea en las letras de canciones</string>
     <string name="bitrate_format">%1$d kbps</string>
     <string name="bitrate_unknown">Tasa de bits desconocida</string>
@@ -285,7 +285,7 @@
     <string name="spk_channel_out_front_right">Frontal Derecho</string>
     <string name="spk_encoding_dts">DTS</string>
     <string name="spk_encoding_opus">Opus</string>
-    <string name="package_type_explainer">Los archivos de instalación APK de Gramophone pueden ser creados por cualquiera porque Gramophone es de código abierto. Para ayudarte a recordar de dónde viene un paquete de instalación Gramophone provee el tipo de paquete\n\nEl tipo más común es \"Release\", que puede ser obtenido de F-Droid, Google Play, GitHub o IzzyOnDroid.\nEl tipo CI se refiere a compilaciones automáticas hechas para cada versión de código en GitHub. Estas versiones pueden ser inestables.\nPara otros tipos de paquetes, el nombre debería dar una idea razonable de su origen.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="spk_encoding_aac_he_v2">HE-AAC v2</string>
     <string name="spk_encoding_ac4">AC-4</string>
     <string name="spk_channel_out_front_center">Frontal Central</string>
@@ -361,9 +361,9 @@
     <string name="spk_encoding_alac">ALAC</string>
     <string name="spk_encoding_aac_adts_lc">AAC-LC en ADTS</string>
     <string name="send_email">Enviar un correo</string>
-    <string name="send_email_manually">Por favor, envía el registro a nift4dev@gmail.com - No se encontró una aplicación de correo</string>
+    <string name="send_email_manually">Por favor, envía el registro a  - No se encontró una aplicación de correo</string>
     <string name="settings_contributors_click">%s (¡clic para más!)</string>
-    <string name="app_name">Gramophone</string>
+    <string name="app_name">Salvation</string>
     <plurals name="folders_plural">
         <item quantity="one">%d Carpeta</item>
         <item quantity="many">%d Carpetas</item>
@@ -371,7 +371,7 @@
     </plurals>
     <string name="timer_expiry_eos">El temporizador pausará la música cuando finalice la reproducción de la canción en %s</string>
     <string name="timer_expiry_end_of_this_song">El temporizador pausará la música al final de esta canción</string>
-    <string name="what_were_you_doing">¿Qué estabas haciendo en Gramophone cuando ocurrió este fallo? Agrega tantos detalles como sea posible para que sea mas fácil solucionar el problema.\n\nTenga en cuenta que se prefiere el inglés para los informes de errores, pero intentaré utilizar la traducción automática si envía informes de errores en otro idioma.</string>
+    <string name="what_were_you_doing">¿Qué estabas haciendo en Salvation cuando ocurrió este fallo? Agrega tantos detalles como sea posible para que sea mas fácil solucionar el problema.\n\nTenga en cuenta que se prefiere el inglés para los informes de errores, pero intentaré utilizar la traducción automática si envía informes de errores en otro idioma.</string>
     <string name="settings_translation_auto_word_summary">Aplicar un degradado lineal a las líneas de traducción en las letras sincronizadas si las traducciones no tienen metadatos de sincronización de palabras</string>
     <string name="refreshing_wait">Actualizando, por favor espere…</string>
     <string name="settings_cookie_summary">Portada de álbum en forma de galleta</string>
@@ -381,16 +381,8 @@
     <string name="sort_by_album_year">Año del álbum</string>
     <string name="playlist_editing_pref_desc">Permite agregar canciones a listas de reproducción (mover/eliminar aún no está implementado)</string>
     <string name="no_app_found">No se encontró ninguna aplicación que pueda hacer esto</string>
-    <string name="contributors_nift4">Mantenedor / Desarrollador líder</string>
-    <string name="contributors_123duo3">Diseñador principal</string>
-    <string name="contributors_akanetan">Creador original, desarrollador retirado</string>
     <string name="contributors_developer">Desarrollador</string>
-    <string name="contributors_wstxda">Diseñó una variación del ícono de la aplicación</string>
-    <string name="contributors_pxeemo">Ayuda y Tester de las nuevas letras</string>
-    <string name="contributors_lambada10">Proporciona muestras de letras y SongSync</string>
     <string name="contributors_code_contributions">Contribuciones al código</string>
-    <string name="contributors_yuyuko1024">Barra de progreso ondulada</string>
-    <string name="contributors_ghhccghk">Letras en la barra de estado y otras mejoras</string>
     <string name="home_menu_quick_refresh">Escaneo rápido</string>
     <string name="add_to_queue">Añadir a la cola</string>
     <string name="disabled">Deshabilitado</string>
@@ -418,7 +410,7 @@
     <string name="album_gain">Preservar la dinamica del album</string>
     <string name="smart">Inteligente</string>
     <string name="scroll_to_playing">Ir a la canción actual</string>
-    <string name="gramophone_crashed_explainer2">Gramophone se detuvo :(\n\n¡Por favor, envía un informe de error para que los fallos como este puedan solucionarse!\n\nCada situación es tan única como la música; sin tu ayuda, es probable que este error <b>NO</b> se solucione</string>
+    <string name="gramophone_crashed_explainer2">Salvation se detuvo :(\n\n¡Por favor, envía un informe de error para que los fallos como este puedan solucionarse!\n\nCada situación es tan única como la música; sin tu ayuda, es probable que este error <b>NO</b> se solucione</string>
     <string name="failed_to_parse_lyric">Error al analizar la letra</string>
     <string name="audio_not_initialized">El sistema de reproducción de audio no está inicializado. ¡Intenta reproducir algo!</string>
     <string name="enter_msg_for_dev_here">Escriba aquí el mensaje para el desarrollador</string>
@@ -427,7 +419,7 @@
     <string name="settings_replaygain">ReplayGain</string>
     <string name="duration_queue">%1$s restante, %2$s total</string>
     <string name="edit_playlist_failed">Fallo al editar la playlist: %s</string>
-    <string name="refresh_did_you_know">Gramophone solicita una lista de canciones actualizada cada vez que se inicia la aplicación y, mientras está en ejecución, también detectará automáticamente el nuevo contenido multimedia. Este botón de \"Actualizar\" no recarga los archivos dentro de Gramophone; en su lugar, solicita al sistema que vuelva a escanear todos los archivos de todos los dispositivos de almacenamiento permanente conectados (por eso tarda un poco). Esto significa que, a menos que el sistema u otras aplicaciones fallen, nunca necesitarás usar esta función.\n\n¿Faltan algunas canciones? Asegúrate de revisar Ajustes &gt; Comportamiento para verificar el filtro de duración mínima y la lista negra de carpetas, y confirma que estos parámetros tengan los valores esperados. Para conocer otros motivos posibles, consulta nuestras Preguntas Frecuentes (FAQ).</string>
+    <string name="refresh_did_you_know">Salvation solicita una lista de canciones actualizada cada vez que se inicia la aplicación y, mientras está en ejecución, también detectará automáticamente el nuevo contenido multimedia. Este botón de \"Actualizar\" no recarga los archivos dentro de Salvation; en su lugar, solicita al sistema que vuelva a escanear todos los archivos de todos los dispositivos de almacenamiento permanente conectados (por eso tarda un poco). Esto significa que, a menos que el sistema u otras aplicaciones fallen, nunca necesitarás usar esta función.\n\n¿Faltan algunas canciones? Asegúrate de revisar Ajustes &gt; Comportamiento para verificar el filtro de duración mínima y la lista negra de carpetas, y confirma que estos parámetros tengan los valores esperados. Para conocer otros motivos posibles, consulta nuestras Preguntas Frecuentes (FAQ).</string>
     <string name="settings_replaygain_mode_desc">El modo \"Inteligente\" preserva automáticamente la dinámica del álbum solo cuando las canciones se reproducen de forma consecutiva.</string>
     <string name="settings_replaygain_boost_desc">"\"Boost\" emitirá tanto el contenido con ReplayGain como el resto de la música a un volumen superior al configurado en tu dispositivo. (Si el volumen del dispositivo está cerca del 100%, Boost no aumentará el sonido). Con Boost, puedes disfrutar de la música con una intensidad similar a la de otras aplicaciones, como los juegos. Ten en cuenta que esta función es experimental y podría interferir con ecualizadores externos. Boost no funciona con auriculares Bluetooth. En caso de presentar problemas con el volumen, desactiva Boost configurándolo en 0dB. "</string>
     <string name="settings_replaygain_no_rg_amp_desc">Reducir el volumen de canciones con sonido alto que no tengan etiquetas ReplayGain</string>

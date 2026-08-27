@@ -8,6 +8,14 @@
     <item name="folders" type="id" />
     <item name="detailed_folders" type="id" />
     <item name="playlists" type="id" />
+    <item name="playlist" type="id" />
+    <item name="edit" type="id" />
+    <item name="genre" type="id" />
+    <item name="date" type="id" />
+    <item name="album" type="id" />
+    <item name="artist" type="id" />
+    <item name="album_artist" type="id" />
+    <item name="search" type="id" />
     <item name="fade_out_animation" type="id" />
     <item name="fade_in_animation" type="id" />
 </resources>

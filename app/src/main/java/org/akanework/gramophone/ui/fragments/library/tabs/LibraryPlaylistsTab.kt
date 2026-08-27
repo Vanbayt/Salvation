@@ -160,7 +160,7 @@ fun LibraryPlaylistsTab(
             modifier = Modifier.fillMaxSize()
         ) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(minSize = 165.dp),
                 contentPadding = PaddingValues(
                     start = 14.dp,
                     end = 14.dp,

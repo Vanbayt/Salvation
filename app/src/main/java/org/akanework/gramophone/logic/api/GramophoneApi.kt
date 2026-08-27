@@ -73,6 +73,36 @@ interface GramophoneApi {
     @GET("/api/v1/me/favorite_artists")
     fun getFavoriteArtists(): retrofit2.Call<List<Artist>>
 
+    @GET("/api/v1/recommendations/presets")
+    fun getContextPresets(
+        @Query("device_type") deviceType: String? = null,
+        @Query("latitude") latitude: Double? = null,
+        @Query("longitude") longitude: Double? = null,
+        @Query("recent_skip_count") recentSkipCount: Int = 0
+    ): Call<List<PresetCard>>
+
+    @GET("/api/v1/recommendations/presets/{preset_id}/tracks")
+    fun getPresetTracks(
+        @retrofit2.http.Path("preset_id") presetId: String,
+        @Query("limit") limit: Int = 25,
+        @Query("offset") offset: Int = 0,
+        @Query("wave") wave: Boolean = false
+    ): Call<RadioResponse>
+
+    @GET("/api/v1/recommendations/radio")
+    fun getRadio(
+        @Query("seed_track_id") seedTrackId: Long? = null,
+        @Query("source_id") sourceId: String? = null,
+        @Query("artist") artist: String? = null,
+        @Query("title") title: String? = null,
+        @Query("limit") limit: Int = 25
+    ): Call<RadioResponse>
+
+    @POST("/api/v1/recommendations/feedback")
+    fun submitFeedback(
+        @Body payload: RecommendationFeedbackRequest
+    ): Call<ResponseBody>
+
     @GET("/api/v1/me/favorite_albums")
     fun getFavoriteAlbums(): retrofit2.Call<List<Album>>
 

@@ -352,6 +352,7 @@ class MainActivity : BaseActivity() {
                 val coroutineScope = rememberCoroutineScope()
                 val density = LocalDensity.current
                 val configuration = LocalConfiguration.current
+                val isExpandedScreen = configuration.screenWidthDp >= 840
 
                 val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -360,8 +361,24 @@ class MainActivity : BaseActivity() {
                 val gap = 4.dp
                 val miniPlayerHeight = 72.dp
 
-                val collapsedBottomSpace = navBarBottom + navBarOffset + navBarHeight + gap
+                val collapsedBottomSpace = if (isExpandedScreen) {
+                    navBarBottom + 16.dp
+                } else {
+                    navBarBottom + navBarOffset + navBarHeight + gap
+                }
                 val staticPeekHeight = collapsedBottomSpace + miniPlayerHeight
+
+                var isDesktopLyricsOpen by remember { mutableStateOf(false) }
+                var isDesktopQueueOpen by remember { mutableStateOf(false) }
+                var desktopRightTab by remember { mutableStateOf(org.akanework.gramophone.ui.components.desktop.DesktopRightPanelTab.LYRICS) }
+
+                LaunchedEffect(configuration.screenWidthDp, isDesktopLyricsOpen, isDesktopQueueOpen, miniPlayerVisible) {
+                    val railWidthPx = if (isExpandedScreen) (84 * density.density).toInt() else 0
+                    val rightPanelWidthPx = if (isExpandedScreen && (isDesktopLyricsOpen || isDesktopQueueOpen)) (380 * density.density).toInt() else 0
+                    val bottomBarHeightPx = if (isExpandedScreen && miniPlayerVisible) (86 * density.density).toInt() + with(density) { navBarBottom.roundToPx() } else 0
+                    findViewById<View>(R.id.main_pager)?.setPadding(railWidthPx, 0, rightPanelWidthPx, bottomBarHeightPx)
+                    findViewById<View>(R.id.container)?.setPadding(railWidthPx, 0, rightPanelWidthPx, bottomBarHeightPx)
+                }
 
                 val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
                 val peekPx = with(density) { staticPeekHeight.toPx() }
@@ -509,7 +526,8 @@ class MainActivity : BaseActivity() {
                     BottomSheetScaffold(
                         scaffoldState = scaffoldState,
                         sheetSwipeEnabled = !isLyricsOpenState,
-                        sheetPeekHeight = if (miniPlayerVisible && isGlobalUiVisible) staticPeekHeight else 0.dp,
+                        sheetPeekHeight = if (!isExpandedScreen && miniPlayerVisible && isGlobalUiVisible) staticPeekHeight else 0.dp,
+                        sheetMaxWidth = androidx.compose.ui.unit.Dp.Unspecified,
                         sheetShape = androidx.compose.ui.graphics.RectangleShape,
                         sheetContainerColor = Color.Transparent,
                         sheetTonalElevation = 0.dp,
@@ -525,9 +543,15 @@ class MainActivity : BaseActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        val topRadius = 32.dp.toPx()
+                                        val isWide = size.width > 600.dp.toPx()
+                                        val miniWidth = if (isWide) minOf(size.width - 32.dp.toPx(), 520.dp.toPx()) else size.width - 32.dp.toPx()
+                                        val miniStart = (size.width - miniWidth) / 2f
+
+                                        val curLeft = androidx.compose.ui.util.lerp(miniStart, 0f, sheetProgress)
+                                        val curRight = androidx.compose.ui.util.lerp(miniStart + miniWidth, size.width, sheetProgress)
+
+                                        val topRadius = 32.dp.toPx() * (1f - sheetProgress)
                                         val bottomRadius = 16.dp.toPx() * (1f - sheetProgress)
-                                        val hPad = 16.dp.toPx() * (1f - sheetProgress)
 
                                         val collapsedHeight = miniPlayerHeight.toPx()
                                         val currentHeight = collapsedHeight + (size.height - collapsedHeight) * sheetProgress
@@ -536,9 +560,9 @@ class MainActivity : BaseActivity() {
                                             override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
                                                 return androidx.compose.ui.graphics.Outline.Rounded(
                                                     androidx.compose.ui.geometry.RoundRect(
-                                                        left = hPad,
+                                                        left = curLeft,
                                                         top = 0f,
-                                                        right = size.width - hPad,
+                                                        right = curRight,
                                                         bottom = currentHeight,
                                                         topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(topRadius),
                                                         topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(topRadius),
@@ -583,22 +607,141 @@ class MainActivity : BaseActivity() {
                         }
                     )
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isGlobalUiVisible,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
-                        exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
-                    ) {
-                        BottomNavComposeBlock(
-                            modifier = Modifier
-                                .padding(bottom = navBarBottom + navBarOffset)
-                                .padding(horizontal = 16.dp)
-                                .graphicsLayer {
-                                    val fraction = fractionState.value
-                                    alpha = (1f - fraction * 2.2f).coerceIn(0f, 1f)
-                                    translationY = fraction * 200f
+                    if (isExpandedScreen) {
+                        // 1. Сайдбар слева
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isGlobalUiVisible && fractionState.value <= 0.05f,
+                            modifier = Modifier.align(Alignment.CenterStart),
+                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it }),
+                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it })
+                        ) {
+                            DesktopNavigationRail(
+                                onSettingsClick = {
+                                    startFragment(org.akanework.gramophone.ui.fragments.SettingsFragment())
                                 }
-                        )
+                            )
+                        }
+
+                        // 2. Десктопный нижний плеер во всю ширину
+                        if (miniPlayerVisible) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isGlobalUiVisible && fractionState.value <= 0.05f,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .navigationBarsPadding(),
+                                enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+                                exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+                            ) {
+                                val player = getPlayer()
+                                val currentMediaItem = player?.currentMediaItem
+                                val trackTitle = currentMediaItem?.mediaMetadata?.title?.toString() ?: ""
+                                val trackArtist = currentMediaItem?.mediaMetadata?.artist?.toString() ?: ""
+                                val coverUri = currentMediaItem?.mediaMetadata?.artworkUri
+                                val trackId = currentMediaItem?.mediaId
+
+                                var isPlaying by remember { mutableStateOf(player?.isPlaying == true) }
+                                var currentPositionMs by remember { mutableLongStateOf(player?.currentPosition ?: 0L) }
+                                var durationMs by remember { mutableLongStateOf(player?.duration?.coerceAtLeast(0L) ?: 0L) }
+                                var repeatMode by remember { mutableIntStateOf(player?.repeatMode ?: androidx.media3.common.Player.REPEAT_MODE_OFF) }
+
+                                LaunchedEffect(player) {
+                                    if (player == null) return@LaunchedEffect
+                                    while (true) {
+                                        isPlaying = player.isPlaying
+                                        currentPositionMs = player.currentPosition
+                                        durationMs = player.duration.coerceAtLeast(0L)
+                                        repeatMode = player.repeatMode
+                                        kotlinx.coroutines.delay(250)
+                                    }
+                                }
+
+                                org.akanework.gramophone.ui.components.desktop.DesktopBottomPlayerBar(
+                                    mainActivity = this@MainActivity,
+                                    trackTitle = trackTitle,
+                                    trackArtist = trackArtist,
+                                    coverUri = coverUri,
+                                    trackId = trackId,
+                                    isPlaying = isPlaying,
+                                    positionMs = currentPositionMs,
+                                    durationMs = durationMs,
+                                    repeatMode = repeatMode,
+                                    isLyricsOpen = isDesktopLyricsOpen,
+                                    isQueueOpen = isDesktopQueueOpen,
+                                    onToggleLyrics = {
+                                        if (isDesktopLyricsOpen) {
+                                            isDesktopLyricsOpen = false
+                                        } else {
+                                            isDesktopLyricsOpen = true
+                                            isDesktopQueueOpen = false
+                                            desktopRightTab = org.akanework.gramophone.ui.components.desktop.DesktopRightPanelTab.LYRICS
+                                        }
+                                    },
+                                    onToggleQueue = {
+                                        if (isDesktopQueueOpen) {
+                                            isDesktopQueueOpen = false
+                                        } else {
+                                            isDesktopQueueOpen = true
+                                            isDesktopLyricsOpen = false
+                                            desktopRightTab = org.akanework.gramophone.ui.components.desktop.DesktopRightPanelTab.QUEUE
+                                        }
+                                    },
+                                    onOpenFullPlayer = {
+                                        coroutineScope.launch { scaffoldState.bottomSheetState.expand() }
+                                    },
+                                    onOpenMenu = {
+                                        org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(supportFragmentManager, "PLAYER_MENU_SHEET")
+                                    }
+                                )
+                            }
+                        }
+
+                        // 3. Правый сайдбар (Текст караоке / Очередь)
+                        if (isDesktopLyricsOpen || isDesktopQueueOpen) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isGlobalUiVisible && fractionState.value <= 0.05f,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .navigationBarsPadding(),
+                                enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }),
+                                exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it })
+                            ) {
+                                org.akanework.gramophone.ui.components.desktop.DesktopRightSidePanel(
+                                    mainActivity = this@MainActivity,
+                                    selectedTab = desktopRightTab,
+                                    onTabSelected = { tab ->
+                                        desktopRightTab = tab
+                                        if (tab == org.akanework.gramophone.ui.components.desktop.DesktopRightPanelTab.LYRICS) {
+                                            isDesktopLyricsOpen = true
+                                            isDesktopQueueOpen = false
+                                        } else {
+                                            isDesktopQueueOpen = true
+                                            isDesktopLyricsOpen = false
+                                        }
+                                    },
+                                    onClose = {
+                                        isDesktopLyricsOpen = false
+                                        isDesktopQueueOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isGlobalUiVisible,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+                            exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+                        ) {
+                            BottomNavComposeBlock(
+                                modifier = Modifier
+                                    .padding(bottom = navBarBottom + navBarOffset)
+                                    .graphicsLayer {
+                                        val fraction = fractionState.value
+                                        alpha = (1f - fraction * 2.2f).coerceIn(0f, 1f)
+                                        translationY = fraction * 200f
+                                    }
+                            )
+                        }
                     }
                 }
             }
@@ -665,14 +808,127 @@ class MainActivity : BaseActivity() {
     }
 
     @Composable
+    private fun DesktopNavigationRail(
+        modifier: Modifier = Modifier,
+        onSettingsClick: () -> Unit
+    ) {
+        val haptic = LocalHapticFeedback.current
+        val colors = MaterialTheme.colorScheme
+
+        Surface(
+            modifier = modifier
+                .width(84.dp)
+                .fillMaxHeight(),
+            color = colors.surfaceContainerLow,
+            tonalElevation = 3.dp,
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, colors.outlineVariant.copy(alpha = 0.25f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top: Brand / App Logo
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(colors.primaryContainer, colors.tertiaryContainer)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_gramophone_monochrome),
+                        contentDescription = "Salvation",
+                        tint = colors.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Middle: Nav Items
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    AppTab.values().forEach { tab ->
+                        val isSelected = currentBottomTab == tab
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    switchTab(tab)
+                                }
+                                .padding(horizontal = 6.dp, vertical = 6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(56.dp)
+                                    .height(32.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        if (isSelected) colors.primary else Color.Transparent
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = tab.iconRes),
+                                    contentDescription = tab.title,
+                                    tint = if (isSelected) colors.onPrimary else colors.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = tab.title,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 11.5.sp
+                                ),
+                                color = if (isSelected) colors.onSurface else colors.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Bottom: Settings
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onSettingsClick()
+                    },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "Настройки",
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
     private fun BottomNavComposeBlock(modifier: Modifier = Modifier) {
         val isDarkTheme = isSystemInDarkTheme()
         val haptic = LocalHapticFeedback.current // 🔥 Haptic
+        val configuration = LocalConfiguration.current
+        val miniContainerWidth = minOf(configuration.screenWidthDp.dp - 32.dp, 520.dp)
 
         Box(
             modifier = modifier
-                .fillMaxWidth()
-                .height(80.dp)
+                .width(miniContainerWidth)
+                .height(76.dp)
                 .graphicsLayer {
                     shadowElevation = 24.dp.toPx()
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 32.dp, bottomEnd = 32.dp)
@@ -985,15 +1241,18 @@ class MainActivity : BaseActivity() {
         val fullTextX = 24.dp
         val fullTextWidth = screenWidthDp - 48.dp
 
-        // 2. Mini Player Geometry
-        val miniHPad = 16.dp
+        // 2. Mini Player Geometry (Centered on wide screens)
+        val isWideScreen = screenWidthDp > 600.dp
+        val miniContainerWidth = if (isWideScreen) minOf(screenWidthDp - 32.dp, 520.dp) else screenWidthDp - 32.dp
+        val miniStartX = (screenWidthDp - miniContainerWidth) / 2
+
         val miniCoverSize = 48.dp
-        val miniCoverX = miniHPad + 12.dp // 28.dp
+        val miniCoverX = miniStartX + 12.dp
         val miniCoverY = 12.dp
 
-        val miniTextX = miniCoverX + miniCoverSize + 12.dp // 88.dp
+        val miniTextX = miniCoverX + miniCoverSize + 12.dp
         val miniTextY = 16.dp
-        val miniTextWidth = maxOf(0.dp, screenWidthDp - miniTextX - 116.dp)
+        val miniTextWidth = maxOf(0.dp, miniContainerWidth - miniCoverSize - 120.dp)
 
         // 3. Smooth Physical Motion Curve
         val motionProgress = androidx.compose.animation.core.FastOutSlowInEasing.transform(fraction)
@@ -1050,9 +1309,9 @@ class MainActivity : BaseActivity() {
                     } else Modifier
                 )
         ) {
-            // 1. FULL HEADER (Close, Playing From Source, Menu)
-            val headerAlpha = ((fraction - 0.2f) / 0.8f).coerceIn(0f, 1f)
-            if (headerAlpha > 0f) {
+            val isLandscapeLayout = (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp >= 600) && fraction > 0.5f
+
+            if (isLandscapeLayout) {
                 val playingFrom = remember(trackTitle, trackArtist) {
                     val meta = getPlayer()?.currentMediaItem?.mediaMetadata
                     val fromExtra = meta?.extras?.getString("PLAYING_FROM")
@@ -1062,6 +1321,468 @@ class MainActivity : BaseActivity() {
                         else -> "Медиатека"
                     }
                 }
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .widthIn(max = 1050.dp)
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 28.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(36.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                    // ЛЕВАЯ ПАНЕЛЬ: Close button + Обложка
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        horizontalAlignment = Alignment.Start,
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Верхняя строка левой панели: Кнопка закрытия
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = onClose,
+                                shape = CircleShape,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.size(42.dp)
+                            ) {
+                                Icon(Icons.Rounded.KeyboardArrowDown, "Close", modifier = Modifier.size(26.dp))
+                            }
+                        }
+
+                        // Обложка альбома (по центру)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (auraColor != null && isPlaying) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight(0.92f)
+                                        .aspectRatio(1f)
+                                        .scale(1.15f)
+                                        .drawBehind {
+                                            val brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    auraColor.copy(alpha = 0.35f),
+                                                    auraColor.copy(alpha = 0.10f),
+                                                    Color.Transparent
+                                                ),
+                                                center = Offset(size.width * 0.5f, size.height * 0.5f),
+                                                radius = size.width / 1.5f
+                                            )
+                                            drawCircle(brush)
+                                        }
+                                )
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxHeight(0.92f)
+                                    .aspectRatio(1f)
+                                    .scale(finalCoverScale)
+                                    .shadow(elevation = if (visuallyPlaying) 16.dp else 4.dp, shape = RoundedCornerShape(24.dp))
+                                    .clip(RoundedCornerShape(24.dp)),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                AsyncImage(
+                                    model = currentImageRequest,
+                                    contentDescription = "Cover",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+
+                    // ПРАВАЯ ПАНЕЛЬ: Header (Chip + 3 dots) + Управление (или Текст Караоке)
+                    if (showLyricsScreen) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(24.dp)),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            org.akanework.gramophone.ui.components.LyricsScreen(
+                                trackTitle = trackTitle,
+                                artistName = trackArtist,
+                                coverUrl = coverUrl,
+                                isPlaying = isPlaying,
+                                lyricsResult = currentLyricsResult,
+                                isLoading = isLyricsLoading,
+                                currentPositionMs = currentPosition.toLong(),
+                                selectedSource = selectedLyricsSource,
+                                dynamicArtworkColors = dynamicArtworkColors,
+                                onSourceSelected = { newSource ->
+                                    selectedLyricsSource = newSource
+                                    loadLyrics(newSource)
+                                },
+                                onPlayPauseToggle = {
+                                    getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                                },
+                                onSkipNext = { getPlayer()?.seekToNext() },
+                                onSeekTo = { pos -> getPlayer()?.seekTo(pos) },
+                                onDismiss = { showLyricsScreen = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.SpaceBetween,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Верхняя строка правой панели: Чип источника + 3-точки меню (на одном уровне с Close)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            org.akanework.gramophone.ui.fragments.QueueBottomSheetFragment().show(this@MainActivity.supportFragmentManager, "QUEUE_SHEET")
+                                        }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_library),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = playingFrom,
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 11.5.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                FilledTonalIconButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
+                                    },
+                                    shape = CircleShape,
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Icon(Icons.Rounded.MoreVert, "Menu", modifier = Modifier.size(20.dp))
+                                }
+                            }
+
+                            // 1. Название и Артист
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = trackTitle.ifEmpty { "Загрузка..." },
+                                        style = MaterialTheme.typography.headlineMedium.copy(
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = (-0.3).sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f, fill = false).basicMarquee()
+                                    )
+
+                                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId
+                                    val isLosslessExtra = getPlayer()?.currentMediaItem?.mediaMetadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
+                                    val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(currentTrackId, isLosslessExtra)
+
+                                    if (isLossless) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { showAudioFidelitySheet = true }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_check_circle),
+                                                    contentDescription = "Hi-Res FLAC",
+                                                    modifier = Modifier.size(10.dp),
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Text(
+                                                    text = "FLAC",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Black),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Text(
+                                    text = trackArtist.ifEmpty { "Ожидание" },
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // 2. Слайдер
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                SquigglySlider(
+                                    position = currentPosition,
+                                    duration = trackDuration,
+                                    isPlaying = isPlaying,
+                                    activeColor = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary,
+                                    onValueChange = { newValue ->
+                                        currentPosition = newValue
+                                        progressHandler.removeCallbacks(progressRunnable)
+                                    },
+                                    onValueChangeFinished = {
+                                        getPlayer()?.seekTo(currentPosition.toLong())
+                                        if (isPlaying) progressHandler.post(progressRunnable)
+                                    }
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(formatTime(currentPosition.toLong()), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(formatTime(trackDuration.toLong()), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+
+                            // 3. Кнопки воспроизведения (Prev, Play/Pause, Next)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(60.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                                    modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        getPlayer()?.seekToPrevious()
+                                    }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Rounded.SkipPrevious, "Prev", modifier = Modifier.size(28.dp), tint = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = dynamicArtworkColors?.accentColor ?: MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1.3f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                                    }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                                            contentDescription = "Play/Pause",
+                                            tint = dynamicArtworkColors?.playerOnPrimary ?: MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(30.dp)
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                                    modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        getPlayer()?.seekToNext()
+                                    }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(28.dp), tint = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+
+                            // 4. Сегментированная капсула
+                            Surface(
+                                shape = CircleShape,
+                                color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    SegmentedCapsuleBtn(
+                                        icon = Icons.Rounded.Shuffle,
+                                        isActive = isShuffle,
+                                        activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                        activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            getPlayer()?.let { p ->
+                                                val next = !p.shuffleModeEnabled
+                                                p.shuffleModeEnabled = next
+                                                isShuffle = next
+                                                if (next) org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    SegmentedCapsuleBtn(
+                                        icon = if (repeatModeState == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                        isActive = repeatModeState != Player.REPEAT_MODE_OFF,
+                                        activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                        activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            getPlayer()?.let { p ->
+                                                val next = when (p.repeatMode) {
+                                                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                                    Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                                                    else -> Player.REPEAT_MODE_OFF
+                                                }
+                                                p.repeatMode = next
+                                                repeatModeState = next
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    SegmentedCapsuleBtn(
+                                        icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                        isActive = isLiked,
+                                        activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                        activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            val curId = getPlayer()?.currentMediaItem?.mediaId
+                                            if (!curId.isNullOrBlank()) {
+                                                val newLiked = !isLiked
+                                                isLiked = newLiked
+                                                val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
+                                                if (newLiked) {
+                                                    LikeCache.add(curId, title = trackTitle, artist = trackArtist)
+                                                    api.likeTrack(curId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                                        override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                                        override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                                            LikeCache.remove(curId, title = trackTitle, artist = trackArtist)
+                                                            isLiked = false
+                                                        }
+                                                    })
+                                                } else {
+                                                    LikeCache.remove(curId, title = trackTitle, artist = trackArtist)
+                                                    api.unlikeTrack(curId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                                        override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                                        override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                                            LikeCache.add(curId, title = trackTitle, artist = trackArtist)
+                                                            isLiked = true
+                                                        }
+                                                    })
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    SegmentedCapsuleBtn(
+                                        icon = Icons.Rounded.Lyrics,
+                                        isActive = showLyricsScreen,
+                                        activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                        activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            val targetState = !showLyricsScreen
+                                            showLyricsScreen = targetState
+                                            if (targetState && currentLyricsResult == null && !isLyricsLoading) {
+                                                loadLyrics()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    SegmentedCapsuleBtn(
+                                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                                        isActive = false,
+                                        activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
+                                        activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            org.akanework.gramophone.ui.fragments.QueueBottomSheetFragment().show(this@MainActivity.supportFragmentManager, "QUEUE_SHEET")
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            } else {
+                // 1. FULL HEADER (Close, Playing From Source, Menu)
+                val headerAlpha = ((fraction - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                if (headerAlpha > 0f) {
+                    val playingFrom = remember(trackTitle, trackArtist) {
+                        val meta = getPlayer()?.currentMediaItem?.mediaMetadata
+                        val fromExtra = meta?.extras?.getString("PLAYING_FROM")
+                        when {
+                            !fromExtra.isNullOrBlank() -> fromExtra
+                            !meta?.albumTitle.isNullOrBlank() -> "Альбом: ${meta.albumTitle}"
+                            else -> "Медиатека"
+                        }
+                    }
 
                 Row(
                     modifier = Modifier
@@ -1155,11 +1876,12 @@ class MainActivity : BaseActivity() {
             // 2. MINI CONTROLS (Play/Pause, Next)
             val miniControlsAlpha = (1f - fraction * 2.8f).coerceIn(0f, 1f)
             if (miniControlsAlpha > 0f) {
+                val miniEndPadding = miniStartX + 12.dp
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = miniTextY - 3.dp, end = 28.dp)
+                        .padding(top = miniTextY - 3.dp, end = miniEndPadding)
                         .graphicsLayer {
                             alpha = miniControlsAlpha
                             translationX = fraction * 20f
@@ -1811,6 +2533,7 @@ class MainActivity : BaseActivity() {
                     }
                 )
             }
+            }
         }
     }
 
@@ -2210,5 +2933,52 @@ class MainActivity : BaseActivity() {
                 android.util.Log.e("SalvationLike", "Эксепшен при загрузке кэша лайков: ${e.message}", e)
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val player = getPlayer()
+        if (player != null) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_SPACE -> {
+                    if (currentFocus !is android.widget.EditText) {
+                        if (player.isPlaying) player.pause() else player.play()
+                        return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                    player.seekToNext()
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                    player.seekToPrevious()
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (event?.isCtrlPressed == true) {
+                        player.seekToNext()
+                        return true
+                    } else if (currentFocus !is android.widget.EditText) {
+                        val newPos = (player.currentPosition + 5000L).coerceAtMost(player.duration.coerceAtLeast(0L))
+                        player.seekTo(newPos)
+                        return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (event?.isCtrlPressed == true) {
+                        player.seekToPrevious()
+                        return true
+                    } else if (currentFocus !is android.widget.EditText) {
+                        val newPos = (player.currentPosition - 5000L).coerceAtLeast(0L)
+                        player.seekTo(newPos)
+                        return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_ESCAPE -> {
+                    collapsePlayer()
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }

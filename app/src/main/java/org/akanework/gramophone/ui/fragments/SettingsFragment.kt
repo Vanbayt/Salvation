@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import org.akanework.gramophone.BuildConfig
 import org.akanework.gramophone.ui.MainActivity
 import java.io.File
 import androidx.preference.PreferenceManager
@@ -446,7 +447,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                         SettingsRow(
                             icon = Icons.Rounded.Info,
                             title = "Salvation Music",
-                            subtitle = "[BETA] v.5",
+                            subtitle = "[BETA] v.${BuildConfig.VERSION_NAME}",
                             onClick = { Toast.makeText(context, "Вы используете новейшую версию", Toast.LENGTH_SHORT).show() }
                         )
                         // 🔥 КНОПКА ВЫХОДА ИЗ АККАУНТА

@@ -1258,8 +1258,18 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             endedWorkaroundPlayer?.isPlaying == true
         )
 
-        // 🔥 Мы полностью удалили пересоздание CircularShuffleOrder здесь,
-        // чтобы не ломать наш физический App-Level Shuffle!
+        // 🔥 Бесконечная волна (автодогрузка при приближении к концу очереди)
+        val currentIndex = endedWorkaroundPlayer?.currentMediaItemIndex ?: 0
+        val totalCount = endedWorkaroundPlayer?.mediaItemCount ?: 0
+        if (totalCount > 0 && currentIndex >= totalCount - 4) {
+            mediaItem?.let { item ->
+                org.akanework.gramophone.logic.utils.WaveManager.checkAndAppendNextWave(
+                    this,
+                    endedWorkaroundPlayer?.exoPlayer,
+                    item
+                )
+            }
+        }
 
         lastPlayedManager.save()
     }

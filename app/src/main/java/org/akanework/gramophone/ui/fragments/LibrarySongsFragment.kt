@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -140,6 +142,18 @@ class LibrarySongsFragment : BaseFragment(true) {
                             onPlayNext = { t ->
                                 menuExpanded.value = false
                                 addTrackToQueueNext(t)
+                            },
+                            onStartRadio = { t ->
+                                menuExpanded.value = false
+                                val player = (requireActivity() as org.akanework.gramophone.ui.MainActivity).getPlayer()
+                                org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                                    requireContext(),
+                                    player,
+                                    t.id,
+                                    t.artist,
+                                    t.title,
+                                    t.cover
+                                )
                             },
                             onGoToArtist = { t ->
                                 menuExpanded.value = false
@@ -552,12 +566,13 @@ class LibrarySongsFragment : BaseFragment(true) {
 
 @Composable
 fun TrackContextMenu(
-    expanded: Boolean, // 🔥 1. Добавили новый параметр
+    expanded: Boolean,
     track: Track,
     offset: DpOffset,
     onDismiss: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onPlayNext: (Track) -> Unit,
+    onStartRadio: (Track) -> Unit,
     onGoToArtist: (Track) -> Unit,
     onGoToAlbum: (Track) -> Unit
 ) {
@@ -566,13 +581,12 @@ fun TrackContextMenu(
     var isLiked by remember { mutableStateOf(LikeCache.isLiked(track.id)) }
 
     DropdownMenu(
-        expanded = expanded, // 🔥 2. Используем переменную вместо `true`
+        expanded = expanded,
         onDismissRequest = onDismiss,
         offset = offset,
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        // ... (внутренности DropdownMenuItem остаются без изменений)
         DropdownMenuItem(
             text = { Text(if (isLiked) "Удалить из избранного" else "Добавить в избранное") },
             leadingIcon = {
@@ -597,6 +611,12 @@ fun TrackContextMenu(
                 }
                 onDismiss()
             }
+        )
+
+        DropdownMenuItem(
+            text = { Text("Радио по треку") },
+            leadingIcon = { Icon(Icons.Rounded.Radio, null) },
+            onClick = { onStartRadio(track) }
         )
 
         DropdownMenuItem(

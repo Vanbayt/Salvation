@@ -81,7 +81,7 @@
     <string name="spk_encoding_aac_eld">AAC-ELD</string>
     <string name="device_type_unknown">ไม่ทราบ</string>
     <string name="device_type_hearing_aid">เครื่องช่วยฟัง</string>
-    <string name="open_in_gramophone">เปิดในแกรโมโฟน</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="device_type_aux_line">สาย AUX</string>
     <string name="device_type_line_analog">สายแอนะล็อก</string>
     <string name="settings_lyrics_no_animation">ปิดแอนิเมชัน</string>

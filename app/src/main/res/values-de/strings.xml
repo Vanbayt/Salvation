@@ -239,7 +239,7 @@
     <string name="device_type_dock_analog">Analoges Dock</string>
     <string name="spk_encoding_ac3">AC-3</string>
     <string name="spk_encoding_aac_xhe">xHE-AAC</string>
-    <string name="open_in_gramophone">In Gramophone öffnen</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="spk_channel_out_mono">Mono</string>
     <string name="spk_channel_out_quad">Quad</string>
     <string name="spk_channel_out_front_left_of_center">Vorne Links von Center</string>
@@ -277,14 +277,14 @@
     <string name="settings_open_source_licenses">Open Source Lizensen</string>
     <string name="oh_no">Oh nein!</string>
     <string name="send_email">E-Mail senden</string>
-    <string name="send_email_manually">Bitte schick das Protokoll an nift4dev@gmail.com - E-Mail-App wurde nicht gefunden</string>
+    <string name="send_email_manually">Bitte schick das Protokoll an  - E-Mail-App wurde nicht gefunden</string>
     <string name="spk_channel_out_top_front_right">Oben Vorne Rechts</string>
     <string name="device_type_ble_broadcast">Bluetooth LE Broadcast</string>
     <string name="spk_channel_out_bottom_front_center">Unten Vorne Center</string>
     <string name="spk_channel_out_top_front_center">Oben Vorne Mitte</string>
     <string name="settings_lyrics_no_animation_summary">Alle Zeilenübergangsanimationen deaktivieren</string>
     <string name="failed_to_parse_lyric">Analysieren des Liedtextes fehlgeschlagen</string>
-    <string name="package_type_explainer">Gramophone APKs können von jedem erstellt werden weil Gramophone open source ist. Um daran zu erinnern, woher eine APK kam gibt Gramophone den Pakettyp an.\n\nDer häufigste Typ ist Release, der bei F-Droid, Google Play, Github oder IzzyOnDroid erworben werden kann.\nDer CI Pakettyp weißt auf automatisierte APKs hin, die für jeden commit auf Github generiert werden. Diese Pakete können instabil sein.\nBei anderen Typen sollte die Bezeichnung des Pakettypen einen Hinweis darauf geben, woher die APK stammt.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="mix_port_flag_bit_perfect">Bit perfect</string>
     <string name="mix_port_flag_direct_pcm">Direct PCM</string>
     <string name="mix_port_flag_sync">Sync</string>
@@ -374,8 +374,8 @@
     <string name="crash_report">Absturzbericht</string>
     <string name="email_clipboard">E-Mail-Adresse und Text wurden in die Zwischenablage kopiert</string>
     <string name="settings_export_logs">App-Protokolle exportieren</string>
-    <string name="gramophone_crashed_explainer2">Gramophone ist abgestürzt :(\n\nBitte sende mir einen Fehlerbericht, sodass Probleme wie das, welches diesen Absturz verursacht hat, behoben werden können!\n\nJede Situation ist so einzigartig wie Musik, ohne deine Hilfe ist es wahrscheinlich, das dieser Fehler <b>NICHT</b> behoben wird!</string>
-    <string name="what_were_you_doing">Was hast du in Gramophone gemacht, bevor dieser Absturz passiert ist? Bitte erklär es so detailliert wie möglich, um die Chance zu erhöhen, dass ich das Problem beheben kann.\n\nEnglisch ist die bevorzugte Sprache für Fehlerberichte, aber ich werde versuchen, für andere Sprachen Maschinenübersetzung zu benutzen.</string>
+    <string name="gramophone_crashed_explainer2">Salvation ist abgestürzt :(\n\nBitte sende mir einen Fehlerbericht, sodass Probleme wie das, welches diesen Absturz verursacht hat, behoben werden können!\n\nJede Situation ist so einzigartig wie Musik, ohne deine Hilfe ist es wahrscheinlich, das dieser Fehler <b>NICHT</b> behoben wird!</string>
+    <string name="what_were_you_doing">Was hast du in Salvation gemacht, bevor dieser Absturz passiert ist? Bitte erklär es so detailliert wie möglich, um die Chance zu erhöhen, dass ich das Problem beheben kann.\n\nEnglisch ist die bevorzugte Sprache für Fehlerberichte, aber ich werde versuchen, für andere Sprachen Maschinenübersetzung zu benutzen.</string>
     <string name="settings_audio_quality_info">Audioqualität anzeigen</string>
     <string name="settings_audio_quality_info_summary">Informationen über Audioformat/-qualität im Player anzeigen</string>
     <string name="delete_failed_playlist">Löschen der Wiedergabeliste fehlgeschlagen: %s</string>
@@ -400,18 +400,12 @@
     <string name="add_to_playlist">Zur Wiedergabeliste hinzufügen</string>
     <string name="playlist_editing_pref_desc">Ermöglicht, Lieder zu Wiedergabelisten hinzuzufügen (bewegen/entfernen ist noch nicht implementiert)</string>
     <string name="no_app_found">Keine passende App gefunden</string>
-    <string name="contributors_nift4">Maintainer / Hauptentwickler</string>
-    <string name="contributors_123duo3">Hauptdesigner</string>
     <string name="contributors_developer">Entwickler</string>
-    <string name="contributors_wstxda">Hat eine Variation des App-Icon gestaltet</string>
-    <string name="contributors_pxeemo">Mithilfe &amp; Testen von neuen Liedtexten</string>
-    <string name="app_name">Gramophone</string>
+    <string name="app_name">Salvation</string>
     <string name="mix_port_flag_non_blocking">Nicht blockierend</string>
     <string name="mix_port_flag_compress_offload">Komprimierter Offload</string>
     <string name="spk_encoding_pcm_16bit_offload">16-bit PCM Offload</string>
     <string name="spk_encoding_pcm_24bit_offload">24-bit (8.24) PCM offload</string>
-    <string name="contributors_yuyuko1024">Verschnörkelter Fortschrittsbalken</string>
-    <string name="contributors_ghhccghk">Liedtexte in der Statusleiste &amp; andere Verbesserungen</string>
     <string name="home_menu_quick_refresh">Schnelles Aktualisieren</string>
     <string name="add_to_queue">Zur Warteschlange hinzufügen</string>
     <string name="disabled">deaktiviert</string>
@@ -422,8 +416,6 @@
     <string name="mix_port_flag_deep_buffer">Tiefpuffer</string>
     <string name="refreshing_wait">Aktualisierung, bitte warten…</string>
     <string name="still_refreshing">Aktualisierung, Schritt %1$d/%2$d: %3$s</string>
-    <string name="contributors_akanetan">Ursprünglicher Schöpfer, pensionierter Entwickler</string>
-    <string name="contributors_lambada10">Bereitstellung von Liedtextbeispielen &amp; SongSync</string>
     <string name="contributors_code_contributions">Codebeiträge</string>
     <string name="mix_port_flag_fast">Schnell</string>
     <string name="settings_mp3_index_seeking">MP3-Indexsuche</string>
@@ -450,5 +442,4 @@
     <string name="duration_queue">Noch %1$s, %2$s insgesamt</string>
     <string name="clear_queue">Warteschlange leeren</string>
     <string name="choose_sd">%s auswählen</string>
-    <string name="contributors_saladnoober">Qualitätssicherung</string>
 </resources>

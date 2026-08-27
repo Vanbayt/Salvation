@@ -46,10 +46,7 @@ class AboutSettingsFragment : BasePreferenceFragment() {
         val contributorsPref = findPreference<Preference>("contributors")
         versionPrefs!!.summary = BuildConfig.MY_VERSION_NAME
         releaseType!!.summary = BuildConfig.RELEASE_TYPE
-        contributorsPref!!.summary =
-            requireContext().getString(
-                R.string.settings_contributors_click,
-                Contributors.LIST.subList(0, 5).joinToString { it.login })
+        contributorsPref?.summary = "vanbayt"
     }
 
     override fun onPreferenceTreeClick(preference: Preference): Boolean {
@@ -75,7 +72,7 @@ class AboutSettingsFragment : BasePreferenceFragment() {
                 BuildConfig.VERSION_NAME
             val aboutTextView = rootView.findViewById<TextView>(R.id.about_text)!!
             aboutTextView.text = requireContext()
-                .getString(R.string.opensource_info, "© 2023-2025 AkaneTan, nift4 and contributors")
+                .getString(R.string.opensource_info, "© 2025–2026 vanbayt")
             // does not render correctly on old versions for mysterious reasons
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
                 rootView.findViewById<View>(R.id.iconCard)!!.visibility = View.GONE
@@ -92,10 +89,9 @@ class AboutSettingsFragment : BasePreferenceFragment() {
                 .setTitle(R.string.settings_open_source_licenses)
                 .setMessage(
                     """
-                        Copyright (C) 2023-2024 AkaneTan
-                        Copyright (C) 2023-2025 nift4
+                        Copyright (C) 2025-2026 vanbayt
 
-                        This program is free software: you can redistribute it and/or modify
+                        Salvation is free software: you can redistribute it and/or modify
                         it under the terms of the GNU General Public License as published by
                         the Free Software Foundation, either version 3 of the License, or
                         (at your option) any later version.

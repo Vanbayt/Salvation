@@ -2,18 +2,7 @@ package org.akanework.gramophone.ui.components.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +12,7 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +45,7 @@ fun SongActionBottomSheet(
     onGoToArtist: () -> Unit,
     onGoToAlbum: () -> Unit,
     onDismiss: () -> Unit,
+    onStartRadio: (() -> Unit)? = null,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
     ModalBottomSheet(
@@ -66,6 +57,8 @@ fun SongActionBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .widthIn(max = 560.dp)
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 6.dp)
         ) {
@@ -170,6 +163,36 @@ fun SongActionBottomSheet(
                     }
                 )
             }
+
+            SongActionItem(
+                icon = Icons.Rounded.Radio,
+                title = "Радио по треку",
+                onClick = {
+                    onDismiss()
+                    if (onStartRadio != null) {
+                        onStartRadio()
+                    } else {
+                        var ctx: android.content.Context? = context
+                        var mainAct: org.akanework.gramophone.ui.MainActivity? = null
+                        while (ctx is android.content.ContextWrapper) {
+                            if (ctx is org.akanework.gramophone.ui.MainActivity) {
+                                mainAct = ctx
+                                break
+                            }
+                            ctx = ctx.baseContext
+                        }
+                        val player = mainAct?.getPlayer()
+                        org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                            context,
+                            player,
+                            track.id,
+                            track.artist,
+                            track.title,
+                            track.cover
+                        )
+                    }
+                }
+            )
 
             SongActionItem(
                 icon = Icons.AutoMirrored.Rounded.QueueMusic,

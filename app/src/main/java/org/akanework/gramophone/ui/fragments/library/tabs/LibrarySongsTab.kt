@@ -6,17 +6,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -65,6 +55,8 @@ import org.akanework.gramophone.logic.LibraryCacheManager
 import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.api.Track
 import org.akanework.gramophone.ui.MainActivity
+import org.akanework.gramophone.ui.components.library.DesktopSongTableHeader
+import org.akanework.gramophone.ui.components.library.DesktopSongTableRow
 import org.akanework.gramophone.ui.components.library.EnhancedSongListItem
 import org.akanework.gramophone.ui.components.library.ExpressiveScrollBar
 import org.akanework.gramophone.ui.components.library.LibraryActionRow
@@ -92,6 +84,8 @@ fun LibrarySongsTab(
     val activity = context as? MainActivity
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isDesktop = configuration.screenWidthDp >= 840
 
     val tracks = remember { mutableStateListOf<Track>() }
     var isLoading by remember { mutableStateOf(false) }
@@ -445,7 +439,7 @@ fun LibrarySongsTab(
                         org.akanework.gramophone.logic.lossless.LosslessStateManager.isTrackLossless(it.id, it.is_lossless)
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         LazyColumn(
                             state = listState,
                             contentPadding = PaddingValues(
@@ -455,7 +449,9 @@ fun LibrarySongsTab(
                                 bottom = bottomPadding.calculateBottomPadding() + 220.dp
                             ),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .widthIn(max = 1100.dp)
                         ) {
                             // Верхний скроллируемый бар действий (Shuffle, Sort, Locate, Track count)
                             item(key = "library_action_row") {
@@ -611,6 +607,12 @@ fun LibrarySongsTab(
                                 )
                             }
 
+                            if (isDesktop && displayedTracks.isNotEmpty()) {
+                                item(key = "desktop_table_header") {
+                                    DesktopSongTableHeader()
+                                }
+                            }
+
                             itemsIndexed(
                                 items = displayedTracks,
                                 key = { index, track -> "song_${track.id}_$index" },
@@ -620,33 +622,69 @@ fun LibrarySongsTab(
                                 val selectionIndex = if (isSelected) selectedTrackIds.indexOf(track.id) + 1 else null
                                 val isCurrentTrack = isTrackMatching(track, currentPlayingTrackId, currentPlayingTitle, currentPlayingArtist)
 
-                                EnhancedSongListItem(
-                                    track = track,
-                                    isPlaying = isCurrentTrack && isPlaying,
-                                    isCurrentTrack = isCurrentTrack,
-                                    isSelected = isSelected,
-                                    isSelectionMode = isSelectionMode,
-                                    selectionIndex = selectionIndex,
-                                    onTrackClick = {
-                                        if (isSelectionMode) {
+                                if (isDesktop && !isSelectionMode) {
+                                    DesktopSongTableRow(
+                                        index = index + 1,
+                                        track = track,
+                                        isPlaying = isCurrentTrack && isPlaying,
+                                        isCurrentTrack = isCurrentTrack,
+                                        onTrackClick = {
+                                            playTrack(track, shuffle = false)
+                                        },
+                                        onMoreClick = {
+                                            selectedTrackForMenu = track
+                                            showTrackActionSheet = true
+                                        },
+                                        onLikeClick = {
+                                            val curId = track.id
+                                            if (org.akanework.gramophone.logic.LikeCache.isLiked(curId)) {
+                                                org.akanework.gramophone.logic.LikeCache.remove(curId)
+                                                NetworkClient.getApi(context).unlikeTrack(curId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                                    override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                                    override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                                        org.akanework.gramophone.logic.LikeCache.add(curId, title = track.title, artist = track.artist)
+                                                    }
+                                                })
+                                            } else {
+                                                org.akanework.gramophone.logic.LikeCache.add(curId, title = track.title, artist = track.artist)
+                                                NetworkClient.getApi(context).likeTrack(curId).enqueue(object : retrofit2.Callback<okhttp3.ResponseBody> {
+                                                    override fun onResponse(call: retrofit2.Call<okhttp3.ResponseBody>, response: retrofit2.Response<okhttp3.ResponseBody>) {}
+                                                    override fun onFailure(call: retrofit2.Call<okhttp3.ResponseBody>, t: Throwable) {
+                                                        org.akanework.gramophone.logic.LikeCache.remove(curId)
+                                                    }
+                                                })
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    EnhancedSongListItem(
+                                        track = track,
+                                        isPlaying = isCurrentTrack && isPlaying,
+                                        isCurrentTrack = isCurrentTrack,
+                                        isSelected = isSelected,
+                                        isSelectionMode = isSelectionMode,
+                                        selectionIndex = selectionIndex,
+                                        onTrackClick = {
+                                            if (isSelectionMode) {
+                                                if (isSelected) selectedTrackIds.remove(track.id)
+                                                else selectedTrackIds.add(track.id)
+                                                if (selectedTrackIds.isEmpty()) isSelectionMode = false
+                                            } else {
+                                                playTrack(track, shuffle = false)
+                                            }
+                                        },
+                                        onLongPress = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            isSelectionMode = true
                                             if (isSelected) selectedTrackIds.remove(track.id)
                                             else selectedTrackIds.add(track.id)
-                                            if (selectedTrackIds.isEmpty()) isSelectionMode = false
-                                        } else {
-                                            playTrack(track, shuffle = false)
+                                        },
+                                        onMoreClick = {
+                                            selectedTrackForMenu = track
+                                            showTrackActionSheet = true
                                         }
-                                    },
-                                    onLongPress = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        isSelectionMode = true
-                                        if (isSelected) selectedTrackIds.remove(track.id)
-                                        else selectedTrackIds.add(track.id)
-                                    },
-                                    onMoreClick = {
-                                        selectedTrackForMenu = track
-                                        showTrackActionSheet = true
-                                    }
-                                )
+                                    )
+                                }
                             }
 
                             if (isLoading && tracks.isNotEmpty()) {
@@ -729,6 +767,31 @@ fun LibrarySongsTab(
         if (currentTrackMenu != null && showTrackActionSheet) {
             SongActionBottomSheet(
                 track = currentTrackMenu,
+                onStartRadio = {
+                    showTrackActionSheet = false
+                    val p = activity?.getPlayer()
+                    if (p == null && activity != null) {
+                        activity.controllerViewModel.addControllerCallback(activity.lifecycle) { controller, _ ->
+                            org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                                context,
+                                controller,
+                                currentTrackMenu.id,
+                                currentTrackMenu.artist,
+                                currentTrackMenu.title,
+                                currentTrackMenu.cover
+                            )
+                        }
+                    } else {
+                        org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                            context,
+                            p,
+                            currentTrackMenu.id,
+                            currentTrackMenu.artist,
+                            currentTrackMenu.title,
+                            currentTrackMenu.cover
+                        )
+                    }
+                },
                 onPlayNext = { addTrackToQueueNext(currentTrackMenu) },
                 onAddToQueue = { addTrackToQueueEnd(currentTrackMenu) },
                 onAddToPlaylist = {

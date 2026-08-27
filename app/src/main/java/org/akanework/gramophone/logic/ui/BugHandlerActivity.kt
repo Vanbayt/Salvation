@@ -172,7 +172,7 @@ class BugHandlerActivity : BaseActivity() {
         actionShare.setOnClickListener {
             val sendIntent = Intent().apply {
                 action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_TITLE, "Gramophone Logs")
+                putExtra(Intent.EXTRA_TITLE, "Salvation Logs")
                 putExtra(Intent.EXTRA_TEXT, bugText.text)
                 type = "text/plain"
             }
@@ -201,13 +201,13 @@ class BugHandlerActivity : BaseActivity() {
     }
 
     private fun sendEmail() {
-        Log.w("Gramophone", "Exporting logs due to crash...")
+        Log.w("Salvation", "Exporting logs due to crash...")
         val policy = StrictMode.allowThreadDiskWrites()
         val crashLogDir: File
         val f: File
         try {
             crashLogDir = File(cacheDir, "CrashLog")
-            f = File(crashLogDir, "GramophoneLog${System.currentTimeMillis()}.txt")
+            f = File(crashLogDir, "SalvationLog${System.currentTimeMillis()}.txt")
         } finally {
             StrictMode.setThreadPolicy(policy)
         }
@@ -221,7 +221,7 @@ class BugHandlerActivity : BaseActivity() {
                     R.id.editText
                 ) as TextInputEditText
                 val desc = et.editableText.toString().takeIf { it.isNotBlank() }
-                val mailText = "Hi Nick,\n\nGramophone crashed!\nI was doing:\n\n" +
+                val mailText = "Salvation crashed!\nI was doing:\n\n" +
                         "${desc ?: "--INSERT DESCRIPTION HERE--"}\n\nIt crashed with this" +
                         " log:\n\n\n$log"
                 triedToSendEmail = true
@@ -251,12 +251,10 @@ class BugHandlerActivity : BaseActivity() {
                     withContext(Dispatchers.Main) {
                         try {
                             startActivity(Intent(Intent.ACTION_SEND).apply {
-                                selector =
-                                    Intent(Intent.ACTION_SENDTO).apply { setData("mailto:nift4dev@gmail.com".toUri()) }
-                                putExtra(Intent.EXTRA_EMAIL, arrayOf("nift4dev@gmail.com"))
+                                type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_SUBJECT,
-                                    "Gramophone ${BuildConfig.MY_VERSION_NAME} crashed"
+                                    "Salvation ${BuildConfig.MY_VERSION_NAME} crash report"
                                 )
                                 putExtra(Intent.EXTRA_TEXT, mailText)
                                 putExtra(
@@ -270,16 +268,11 @@ class BugHandlerActivity : BaseActivity() {
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             })
                         } catch (_: ActivityNotFoundException) {
-                            Toast.makeText(
-                                this@BugHandlerActivity,
-                                R.string.send_email_manually,
-                                Toast.LENGTH_LONG
-                            ).show()
                             val clipboard: ClipboardManager =
                                 getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText(
-                                "email text",
-                                "Send below text to nift4dev@gmail.com:\n\n\n$mailText"
+                                "crash report",
+                                mailText
                             )
                             allowDiskAccessInStrictMode {
                                 clipboard.setPrimaryClip(clip)

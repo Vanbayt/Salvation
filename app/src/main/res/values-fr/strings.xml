@@ -201,7 +201,7 @@
     <string name="spk_encoding_aac_eld">AAC-ELD</string>
     <string name="spk_encoding_ac4">AC-4</string>
     <string name="spk_encoding_dts">DTS</string>
-    <string name="open_in_gramophone">Ouvrir dans Gramophone</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="delete_really">Voulez-vous réellement supprimer \"%s\" ? Cette action est irréversible.</string>
     <string name="spk_channel_out_mono">Mono</string>
     <string name="spk_channel_out_stereo">Stéréo</string>
@@ -232,7 +232,7 @@
     <string name="device_type_line_digital">Ligne digitale</string>
     <string name="cannot_play_file">Impossible de jouer ce fichier</string>
     <string name="settings_lyrics_no_animation">Désactiver les animations</string>
-    <string name="package_type_explainer">Les APKs de Gramophone peuvent être créés par tout le monde, car Gramophone est open source. Pour vous aider à vous souvenir d\'où provient un APK, Gramophone indique le type de paquet.\n\nLe type le plus courant est Release, qui est obtenu depuis F-Droid, Google Play, GitHub ou IzzyOnDroid.\nLe type de paquet CI fait référence aux builds automatisés effectués pour chaque commit sur GitHub.Ces builds peuvent être instables.\nPour les autres types de paquets, le nom devrait donner une indication raisonnable de la provenance de l\'APK.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="device_type_dock">Station d\'accueil</string>
     <string name="settings_contributors_click">%S (cliquez pour en savoir plus!)</string>
     <string name="dialog_bitrate">Bitrate</string>
@@ -276,12 +276,12 @@
     <string name="settings_open_source_licenses">Licenses open source</string>
     <string name="oh_no">Oh non !</string>
     <string name="send_email">Envoyer un email</string>
-    <string name="send_email_manually">Veuillez envoyer le journal à nift4dev@gmail.com - impossible de trouver une application d\'email</string>
+    <string name="send_email_manually">Veuillez envoyer le journal à  - impossible de trouver une application d\'email</string>
     <string name="mix_port_flag_none">Aucun</string>
     <string name="audio_not_initialized">Le système de lecture audio n\'a pas été initialisé. Essaye de jouer quelque chose !</string>
     <string name="mix_port_flag_spatializer">Son spatial</string>
     <string name="mix_port_flag_ultrasound">Ultrason</string>
-    <string name="gramophone_crashed_explainer2">Gramophone a crashé :(\n\nMerci de m\'envoyer un rapport de bug pour que les problèmes comme celui qui a conduit à ce crash puissent être résolu !\n\nChaque situation est aussi unique que la musique, sans votre aide il est probable que ce bug ne sera <b>PAS</b> résolu !</string>
+    <string name="gramophone_crashed_explainer2">Salvation a crashé :(\n\nMerci de m\'envoyer un rapport de bug pour que les problèmes comme celui qui a conduit à ce crash puissent être résolu !\n\nChaque situation est aussi unique que la musique, sans votre aide il est probable que ce bug ne sera <b>PAS</b> résolu !</string>
     <string name="spk_encoding_opus">Opus</string>
     <string name="audio_signal_chain">Chaîne son spatial</string>
     <string name="mix_port_flag_unknown">Inconnu</string>

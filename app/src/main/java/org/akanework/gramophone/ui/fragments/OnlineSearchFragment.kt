@@ -172,12 +172,17 @@ class OnlineSearchFragment : Fragment() {
             )
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .nestedScroll(nestedScrollConnection)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = 1100.dp)
+                    .statusBarsPadding()
+                    .nestedScroll(nestedScrollConnection)
+            ) {
             // 1. TOP SEARCH BAR
             SearchTopBar(
                 searchQuery = searchQuery,
@@ -311,6 +316,7 @@ class OnlineSearchFragment : Fragment() {
                     }
                 )
             }
+        }
         }
     }
 
@@ -1139,6 +1145,24 @@ class OnlineSearchFragment : Fragment() {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
+            // Option: Радио по треку
+            OptionItem(
+                title = "Радио по треку",
+                iconVector = Icons.Rounded.Radio,
+                onClick = {
+                    onDismiss()
+                    val player = (activity as? MainActivity)?.getPlayer()
+                    org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                        requireContext(),
+                        player,
+                        track.id,
+                        track.artist,
+                        track.title,
+                        track.cover
+                    )
+                }
+            )
+
             // Option 1: Добавить в плейлист
             OptionItem(
                 title = "Добавить в плейлист",
@@ -1174,7 +1198,8 @@ class OnlineSearchFragment : Fragment() {
     @Composable
     private fun OptionItem(
         title: String,
-        iconRes: Int,
+        iconRes: Int? = null,
+        iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null,
         onClick: () -> Unit
     ) {
         Surface(
@@ -1189,12 +1214,21 @@ class OnlineSearchFragment : Fragment() {
                     .fillMaxWidth()
                     .padding(vertical = 12.dp, horizontal = 8.dp)
             ) {
-                Icon(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (iconVector != null) {
+                    Icon(
+                        imageVector = iconVector,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else if (iconRes != null) {
+                    Icon(
+                        painter = painterResource(id = iconRes),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = title,

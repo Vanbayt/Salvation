@@ -37,7 +37,7 @@
     </plurals>
     <string name="settings_play_on_launch_summary">Odtwarzaj muzykę po uruchomieniu odtwarzacza</string>
     <string name="category_genres">Gatunki</string>
-    <string name="settings_about_app">O Gramophone</string>
+    <string name="settings_about_app">O Salvation</string>
     <string name="natural_order">Domyślny</string>
     <string name="light">Jasny</string>
     <string name="settings_player_ui_summary">Pełny interfejs odtwarzacza, teksty</string>
@@ -278,7 +278,7 @@
     <string name="spk_encoding_pcm_float">32-bit (float) PCM</string>
     <string name="spk_encoding_e_ac3_joc">E-AC-3-JOC</string>
     <string name="device_type_ble_headset">Zestaw słuchawkowy Bluetooth LE</string>
-    <string name="open_in_gramophone">Otwórz w Gramophone</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="settings_trim_lyrics_summary">Spacje przed pierwszą literą lub po końcu wersu tekstu mogą mieć wartość artystyczną. Jeśli się z tym nie zgadzasz, możesz włączyć tę opcję, aby automatycznie usuwać te spacje.</string>
     <string name="delete_really">Czy naprawdę chcesz usunąć „%s”? Tego działania nie można cofnąć.</string>
     <string name="cannot_play_file">Nie można odtworzyć tego pliku</string>
@@ -289,10 +289,10 @@
     <string name="bitrate_format">%1$d kbps</string>
     <string name="settings_open_source_licenses">Licencje kodu otwartego</string>
     <string name="settings_contributors_click">%s (kliknij po więcej!)</string>
-    <string name="package_type_explainer">Pakiety APK Gramophone mogą być tworzone przez każdego, ponieważ Gramophone jest oprogramowaniem z otwartym kodem źródłowym. Aby pomóc zapamiętać, skąd pochodzi APK, Gramophone podaje typ pakietu.\n\nNajpopularniejszym typem jest Release, który można uzyskać z F-Droid, Google Play, GitHub lub IzzyOnDroid.\nTyp pakietu CI odnosi się do automatycznych kompilacji tworzonych dla każdego zatwierdzenia na GitHubie. Te kompilacje mogą być niestabilne.\nW przypadku innych typów pakietów nazwa powinna dawać rozsądną wskazówkę, skąd pochodzi APK.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="oh_no">O nie!</string>
     <string name="send_email">Wyślij wiadomość e-mail</string>
-    <string name="send_email_manually">Wyślij dziennik na adres nift4dev@gmail.com - nie mogę znaleźć aplikacji pocztowej</string>
+    <string name="send_email_manually">Wyślij dziennik na adres  - nie mogę znaleźć aplikacji pocztowej</string>
     <string name="failed_to_parse_lyric">Nie udało się przeanalizować tekstów</string>
     <string name="mix_port_flag_ultrasound">Ultrasound</string>
     <string name="mix_port_flag_voip_rx">VoIP RX</string>
@@ -352,7 +352,7 @@
     <string name="spk_encoding_sbc">SBC</string>
     <string name="spk_encoding_lhdc_ll">LLAC (LHDC-LL)</string>
     <string name="spk_encoding_aac_adts_ltp">AAC-LTP w ADTS</string>
-    <string name="what_were_you_doing">Co robiłeś/aś w Gramophone, gdy wystąpiła ta awaria? Podaj jak najwięcej szczegółów, aby zwiększyć szanse na naprawienie problemu.\n\nPamiętaj, że w przypadku zgłoszeń błędów preferowany jest język angielski, ale spróbuję użyć tłumaczenia maszynowego, jeśli wyślesz zgłoszenie w innym języku.</string>
+    <string name="what_were_you_doing">Co robiłeś/aś w Salvation, gdy wystąpiła ta awaria? Podaj jak najwięcej szczegółów, aby zwiększyć szanse na naprawienie problemu.\n\nPamiętaj, że w przypadku zgłoszeń błędów preferowany jest język angielski, ale spróbuję użyć tłumaczenia maszynowego, jeśli wyślesz zgłoszenie w innym języku.</string>
     <string name="spk_encoding_lc3">LC3</string>
     <string name="spk_encoding_aac_latm_lc">AAC-LC w LATM</string>
     <string name="spk_encoding_aac_scalable">AAC Skalowalne</string>
@@ -414,22 +414,14 @@
     <string name="rename_failed_playlist">Nie udało się zmienić nazwy listy odtwarzania: %s</string>
     <string name="create_failed_playlist">Nie udało się utworzyć listy odtwarzania: %s</string>
     <string name="playlist_name">Nazwa listy odtwarzania</string>
-    <string name="refresh_did_you_know">Gramophone prosi o zaktualizowanie listy utworów przy każdym uruchomieniu aplikacji, a gdy Gramophone jest uruchomiony, automatycznie wykrywa również nowe nośniki. Przycisk „Odśwież” nie spowoduje ponownego załadowania multimediów w Gramophone, zamiast tego poprosi system o ponowne przeskanowanie wszystkich plików ze wszystkich podłączonych urządzeń pamięci masowej (dlatego zajmuje to trochę czasu). Oznacza to, że jeśli system lub inne aplikacje nie działają nieprawidłowo, nigdy nie będziesz musieć korzystać z tej funkcji.\n\nBrakuje niektórych utworów? Sprawdź Ustawienia &gt; Zachowanie dla filtra minimalnej długości i czarnej listy folderów i potwierdź, że te ustawienia są ustawione na oczekiwaną wartość. Więcej możliwych przyczyn można znaleźć w naszym FAQ.</string>
+    <string name="refresh_did_you_know">Salvation prosi o zaktualizowanie listy utworów przy każdym uruchomieniu aplikacji, a gdy Salvation jest uruchomiony, automatycznie wykrywa również nowe nośniki. Przycisk „Odśwież” nie spowoduje ponownego załadowania multimediów w Salvation, zamiast tego poprosi system o ponowne przeskanowanie wszystkich plików ze wszystkich podłączonych urządzeń pamięci masowej (dlatego zajmuje to trochę czasu). Oznacza to, że jeśli system lub inne aplikacje nie działają nieprawidłowo, nigdy nie będziesz musieć korzystać z tej funkcji.\n\nBrakuje niektórych utworów? Sprawdź Ustawienia &gt; Zachowanie dla filtra minimalnej długości i czarnej listy folderów i potwierdź, że te ustawienia są ustawione na oczekiwaną wartość. Więcej możliwych przyczyn można znaleźć w naszym FAQ.</string>
     <string name="rename_playlist">Zmień nazwę listy odtwarzania</string>
     <string name="add_to_playlist">Dodaj do listy odtwarzania</string>
     <string name="playlist_editing_pref_desc">Umożliwia dodawanie utworów do list odtwarzania (przenoszenie/usuwanie nie zostało jeszcze zaimplementowane)</string>
     <string name="no_app_found">Nie znaleziono aplikacji, która mogłaby to wykonać</string>
-    <string name="contributors_nift4">Opiekun / Główny programista</string>
-    <string name="contributors_123duo3">Główny projektant</string>
-    <string name="contributors_akanetan">Pierwotny twórca, emerytowany programista</string>
     <string name="contributors_developer">Programista</string>
-    <string name="contributors_wstxda">zaprojektował jedną odmianę ikony aplikacji</string>
-    <string name="contributors_pxeemo">Pomoc i testowanie nowych tekstów</string>
-    <string name="contributors_lambada10">dostarczanie próbek tekstów i SongSync</string>
     <string name="contributors_code_contributions">Wkład w kod</string>
-    <string name="contributors_yuyuko1024">Zygzakowaty pasek postępu</string>
-    <string name="contributors_ghhccghk">Teksty na pasku stanu i inne ulepszenia</string>
-    <string name="app_name">Gramophone</string>
+    <string name="app_name">Salvation</string>
     <string name="home_menu_quick_refresh">Szybkie odświeżanie</string>
     <string name="add_to_queue">Dodaj do kolejki</string>
     <string name="disabled">Wyłączono</string>
@@ -483,7 +475,6 @@
     <string name="settings_replaygain_mode_desc">Funkcja „Inteligentny” automatycznie zachowuje dynamikę albumu tylko podczas odtwarzania utworów z albumu jeden po drugim.</string>
     <string name="sort_by_artist_year"><![CDATA[Artist -> rok]]></string>
     <string name="clear_queue">Wyczyść kolejkę</string>
-    <string name="contributors_saladnoober">Kontrola jakości</string>
     <string name="actions_query_shuffle_all_songs">mieszaj wszystkie piosenki</string>
     <string name="actions_query_shuffle_everything">mieszaj wszystko</string>
     <string name="actions_query_play_random_songs">odtwarzaj losowe piosenki</string>

@@ -40,6 +40,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
+import org.akanework.gramophone.logic.api.NetworkClient
+import org.akanework.gramophone.logic.api.RadioResponse
 import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.library.AudioQualityBadge
 
@@ -120,6 +122,76 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
                         onReport = {
                             Toast.makeText(context, "Жалоба отправлена", Toast.LENGTH_SHORT).show()
                         },
+                        onStartRadio = {
+                            dismiss()
+                            val mediaId = currentItem?.mediaId ?: ""
+                            val currentTitle = currentItem?.mediaMetadata?.title?.toString() ?: ""
+                            val currentArtist = currentItem?.mediaMetadata?.artist?.toString() ?: ""
+
+                            val seedId = mediaId.toLongOrNull()
+                            val sourceId = if (seedId == null && mediaId.isNotEmpty()) mediaId else null
+                            val artistParam = if (seedId == null && sourceId == null && currentArtist.isNotEmpty()) currentArtist else null
+                            val titleParam = if (seedId == null && sourceId == null && currentTitle.isNotEmpty()) currentTitle else null
+
+                            if (seedId != null || sourceId != null || (artistParam != null && titleParam != null)) {
+                                Toast.makeText(context, "Подбираем волну рекомендаций...", Toast.LENGTH_SHORT).show()
+                                NetworkClient.getApi(context).getRadio(
+                                    seedTrackId = seedId,
+                                    sourceId = sourceId,
+                                    artist = artistParam,
+                                    title = titleParam,
+                                    limit = 25
+                                ).enqueue(object : retrofit2.Callback<RadioResponse> {
+                                    override fun onResponse(call: retrofit2.Call<RadioResponse>, response: retrofit2.Response<RadioResponse>) {
+                                        val radio = response.body()
+                                        val candidates = radio?.tracks ?: emptyList()
+                                        if (candidates.isNotEmpty()) {
+                                            val tracks = candidates.map { c ->
+                                                val streamId = if (!c.sourceId.isNullOrEmpty()) c.sourceId else (c.trackId?.toString() ?: "rec_${c.artist}_${c.title}")
+                                                org.akanework.gramophone.logic.api.Track(
+                                                    id = streamId,
+                                                    title = c.title,
+                                                    artist = c.artist,
+                                                    album = c.album ?: "",
+                                                    duration = c.duration,
+                                                    cover = c.coverUrl,
+                                                    sourceId = streamId
+                                                )
+                                            }
+                                            val mediaItems = tracks.map { track ->
+                                                val extrasBundle = Bundle().apply {
+                                                    putString("PLAYING_FROM", "Радио: $currentTitle")
+                                                }
+                                                val coverUrlFinal = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                                                MediaItem.Builder()
+                                                    .setMediaId(track.id)
+                                                    .setUri("http://185.196.41.31/stream/${track.id}".toUri())
+                                                    .setMediaMetadata(
+                                                        androidx.media3.common.MediaMetadata.Builder()
+                                                            .setTitle(track.title)
+                                                            .setArtist(track.artist)
+                                                            .setArtworkUri(coverUrlFinal?.toUri())
+                                                            .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
+                                                            .setExtras(extrasBundle)
+                                                            .build()
+                                                    ).build()
+                                            }
+                                            player?.setMediaItems(mediaItems, 0, 0L)
+                                            player?.prepare()
+                                            player?.play()
+                                            Toast.makeText(context, "Волна радио запущена (${tracks.size} треков)", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Не удалось подобрать треки", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    override fun onFailure(call: retrofit2.Call<RadioResponse>, t: Throwable) {
+                                        Toast.makeText(context, "Ошибка сети", Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            } else {
+                                Toast.makeText(context, "Не удалось определить трек", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         onGoToArtist = {
                             resolveAndNavigateToArtist(activity, trackArtist, artistId)
                         },
@@ -148,7 +220,15 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
         super.onStart()
         val dialog = dialog as? com.google.android.material.bottomsheet.BottomSheetDialog
         val bottomSheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-        bottomSheet?.setBackgroundResource(android.R.color.transparent)
+        bottomSheet?.let {
+            it.setBackgroundResource(android.R.color.transparent)
+            val displayMetrics = resources.displayMetrics
+            val screenWidthDp = displayMetrics.widthPixels / displayMetrics.density
+            if (screenWidthDp > 600) {
+                it.layoutParams.width = (560 * displayMetrics.density).toInt()
+                it.requestLayout()
+            }
+        }
     }
 
     private fun resolveAndNavigateToArtist(activity: MainActivity, artistName: String, directArtistId: String?) {
@@ -277,6 +357,7 @@ private fun PlayerMenuSheetContent(
     onReport: () -> Unit,
     onGoToArtist: () -> Unit,
     onGoToAlbum: () -> Unit,
+    onStartRadio: () -> Unit,
     onPlayQueueItem: (MediaItem) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -285,7 +366,10 @@ private fun PlayerMenuSheetContent(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = colors.surfaceContainerLow,
         tonalElevation = 6.dp,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = 560.dp)
     ) {
         Column(
             modifier = Modifier
@@ -443,6 +527,16 @@ private fun PlayerMenuSheetContent(
                     onClick = onGoToAlbum
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            MenuNavigationItem(
+                icon = Icons.Rounded.Radio,
+                title = "Радио по треку",
+                subtitle = "Запустить бесконечный поток рекомендаций",
+                iconContainerColor = colors.tertiaryContainer,
+                iconColor = colors.onTertiaryContainer,
+                onClick = onStartRadio
+            )
 
             // 4. Мини-очередь (если есть следующие треки)
             if (miniQueue.isNotEmpty()) {

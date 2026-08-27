@@ -48,14 +48,6 @@ android {
             keyAlias = "key0"
             keyPassword = "0150asdf"
         }
-        create("release2") {
-            if (project.hasProperty("AKANE2_RELEASE_KEY_ALIAS")) {
-                storeFile = file(project.properties["AKANE2_RELEASE_STORE_FILE"].toString())
-                storePassword = project.properties["AKANE2_RELEASE_STORE_PASSWORD"].toString()
-                keyAlias = project.properties["AKANE2_RELEASE_KEY_ALIAS"].toString()
-                keyPassword = project.properties["AKANE2_RELEASE_KEY_PASSWORD"].toString()
-            }
-        }
     }
 
     androidResources {
@@ -110,8 +102,8 @@ android {
         // keep support for it for a while.
         minSdk = 23
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.0.17"
+        versionCode = 27
+        versionName = "1.0.0-beta07"
         ndk {
             abiFilters.add("arm64-v8a")
         }
@@ -141,8 +133,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -232,6 +224,10 @@ android {
         includeInApk = false
         includeInBundle = false
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     testOptions.unitTests.isIncludeAndroidResources = true
 }
 
@@ -252,7 +248,7 @@ kotlin {
 }
 
 base {
-    archivesName = "Gramophone-${android.defaultConfig.versionName}${android.defaultConfig.versionNameSuffix ?: ""}"
+    archivesName = "Salvation-${android.defaultConfig.versionName}${android.defaultConfig.versionNameSuffix ?: ""}"
 }
 
 baselineProfile {
@@ -302,7 +298,11 @@ dependencies {
     androidTestImplementation(composeBom)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.material3.adaptive:adaptive")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation")
+    implementation("androidx.window:window:1.3.0")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.activity:activity-compose:1.11.0")

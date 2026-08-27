@@ -1,97 +1,107 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ======================================================================
+# Salvation ProGuard / R8 Configuration
+# Optimized for Android & Shared Multiplatform Desktop Architecture
+# ======================================================================
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
+# --- Basic / General Optimization & Debugging ---
 -keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-# -renamesourcefileattribute SourceFile
-
-# enabling obfuscation would break some self-reflection in the app
--dontobfuscate
-
-# Сохраняем информацию о дженериках (важно для Gson)
 -keepattributes Signature
 -keepattributes *Annotation*
+-keepattributes EnclosingMethod,InnerClasses
 
-# Не даем R8 ломать TypeToken
+# Prevent stripping generic type arguments (critical for JSON serialization & reflection)
+-keepattributes *Signature*
+
+# --- Kotlin & Coroutines ---
+-dontwarn kotlinx.coroutines.**
+-keep class kotlinx.coroutines.** { *; }
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory { *; }
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler { *; }
+-keepclassmembernames class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+
+# --- JSON / Data Serialization (Gson & Multiplatform Models) ---
+-keep class com.google.gson.** { *; }
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
+-keepclassmembers class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    !static !transient <fields>;
+    !private <fields>;
+    !private <methods>;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
 
-# Также стоит сохранить твои модели данных, которые сериализует Gson
+# Preserve all API and domain models shared across Android & Desktop
 -keep class org.akanework.gramophone.logic.api.** { *; }
--keep class org.akanework.gramophone.logic.** { *; }
+-keepclassmembers class org.akanework.gramophone.logic.api.** { *; }
+-keep class org.akanework.gramophone.logic.offline.** { *; }
+-keepclassmembers class org.akanework.gramophone.logic.offline.** { *; }
+-keep class org.akanework.gramophone.logic.utils.data.** { *; }
+-keepclassmembers class org.akanework.gramophone.logic.utils.data.** { *; }
 
-# reflection by androidx via theme attr viewInflaterClass
--keep class org.akanework.gramophone.logic.ui.ViewCompatInflater { *; }
+# --- Network: Retrofit 2 & OkHttp 3/4/5 ---
+-dontwarn retrofit2.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class retrofit2.** { *; }
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
 
-# reflection by lyric getter xposed
+# --- Room Database & SQLite ---
+-dontwarn androidx.room.**
+-keep class androidx.room.** { *; }
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class * { *; }
+-keep @androidx.room.Dao interface * { *; }
+
+# --- Image Loading: Coil 3 ---
+-dontwarn coil3.**
+-keep class coil3.** { *; }
+
+# --- Media3 / ExoPlayer & Audio Engine ---
+-dontwarn androidx.media3.**
+-keep class androidx.media3.** { *; }
+-keep class * extends androidx.media3.session.MediaLibraryService { *; }
+-keep class * extends androidx.media3.session.MediaSessionService { *; }
+-keep class org.akanework.gramophone.logic.GramophonePlaybackService { *; }
+-keep class org.akanework.gramophone.logic.utils.exoplayer.** { *; }
+
+# Media3 Util reflection
 -keep class androidx.media3.common.util.Util {
     public static void setForegroundServiceNotification(...);
 }
 
-# JNI
--keep class org.nift4.gramophone.hificore.NativeTrack {
-    onAudioDeviceUpdate(...);
-    onUnderrun(...);
-    onMarker(...);
-    onNewPos(...);
-    onStreamEnd(...);
-    onNewIAudioTrack(...);
-    onNewTimestamp(...);
-    onLoopEnd(...);
-    onBufferEnd(...);
-    onMoreData(...);
-    onCanWriteMoreData(...);
+# --- JNI & Native Libraries (HiFiCore & ALAC Decoders) ---
+-keepclasseswithmembernames class * {
+    native <methods>;
 }
-
-
-# Сохраняем сигнатуры дженериков (угловые скобки)
--keepattributes Signature
-
-# Сохраняем аннотации Retrofit (@POST, @Field и т.д.)
--keepattributes *Annotation*
-
-# Запрещаем трогать всё, что лежит в папке с API
--keep class org.akanework.gramophone.logic.api.** { *; }
-
-# --- ПРАВИЛА ДЛЯ RETROFIT И СИГНАТУР ---
-
-# САМОЕ ВАЖНОЕ: Запрещаем R8 вырезать информацию о дженериках (<T>)
--keepattributes Signature
-
-# Запрещаем вырезать аннотации (Retrofit использует их для @POST, @GET и т.д.)
--keepattributes *Annotation*
-
-# Сохраняем все классы Retrofit и их методы
--keep class retrofit2.** { *; }
--keepclassmembers,allowshrinking,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
-
-# Сохраняем модели данных, которые парсятся из JSON
--keepclassmembers class org.akanework.gramophone.logic.api.LoginResponse { *; }
--keepclassmembers class org.akanework.gramophone.logic.api.Track { *; }
--keep class org.akanework.gramophone.logic.api.** { *; }
-
-# Сохраняем все UI-фрагменты, Compose-компоненты и адаптеры
--keep class org.akanework.gramophone.ui.** { *; }
--keep class org.akanework.gramophone.ui.fragments.** { *; }
--keep class org.akanework.gramophone.ui.components.** { *; }
--keep class org.akanework.gramophone.ui.adapters.** { *; }
-
--dontwarn android.media.**
 -dontwarn org.nift4.**
+-keep class org.nift4.gramophone.hificore.** { *; }
+-keepclassmembers class org.nift4.gramophone.hificore.NativeTrack {
+    *;
+}
+-keep class org.akanework.gramophone.alacdecoder.** { *; }
+-keepclassmembers class org.akanework.gramophone.alacdecoder.** { *; }
+
+# --- Jetpack Compose & UI Components (Shared Desktop & Mobile) ---
+-dontwarn androidx.compose.**
+-keep class androidx.compose.** { *; }
+-keep class org.akanework.gramophone.ui.components.desktop.** { *; }
+-keepclassmembers class org.akanework.gramophone.ui.components.desktop.** { *; }
+-keep class org.akanework.gramophone.ui.** { *; }
+-keep class org.akanework.gramophone.logic.ui.ViewCompatInflater { *; }
+
+# System audio / vendor warnings
+-dontwarn android.media.**

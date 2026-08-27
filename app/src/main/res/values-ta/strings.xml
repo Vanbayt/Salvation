@@ -269,19 +269,19 @@
     <string name="device_type_line_digital">டிசிட்டல் வரி</string>
     <string name="device_type_ble_speaker">ஊடலை லு ச்பீக்கர்</string>
     <string name="device_type_ble_broadcast">ஊடலை லே ஒளிபரப்பு</string>
-    <string name="open_in_gramophone">கிராமபோனில் திறக்கவும்</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
     <string name="cannot_play_file">இந்த கோப்பை இயக்க முடியாது</string>
     <string name="settings_lyrics_no_animation">அனிமேசன்களை முடக்கு</string>
     <string name="settings_lyrics_no_animation_summary">அனைத்து வரி மாற்றம் பாடல் அனிமேசன்களையும் முடக்கு</string>
     <string name="dialog_bitrate">பிட்ரேட்</string>
     <string name="bitrate_format">%1$d KBPS</string>
     <string name="bitrate_unknown">தெரியாத பிட்ரேட்</string>
-    <string name="package_type_explainer">கிராமபோன் அப்க்சை யாராலும் உருவாக்க முடியும், ஏனெனில் கிராமபோன் திறந்த மூலமாகும். ஒரு APK எங்கிருந்து வந்தது என்பதை நினைவில் வைத்துக் கொள்ள, கிராமபோன் தொகுப்பு வகையை வழங்குகிறது. \n\nமிகவும் பொதுவான வகை வெளியீடு, இது எஃப்-டிராய்டு, கூகிள் பிளே, அறிவிலிமையம் அல்லது இச்யோண்ட்ராய்டு ஆகியவற்றிலிருந்து பெறப்படுகிறது. \nCI தொகுப்பு வகை என்பது கிட்அப்பில் ஒவ்வொரு உறுதிப்பாட்டிற்கும் செய்யப்பட்ட தானியங்கி கட்டடங்களைக் குறிக்கிறது. இந்த கட்டடங்கள் நிலையற்றதாக இருக்கலாம். \nபிற தொகுப்பு வகைகளுக்கு, APK எங்கிருந்து வருகிறது என்பதற்கு பெயர் ஒரு நியாயமான குறிப்பைக் கொடுக்க வேண்டும்.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="settings_open_source_licenses">திறந்த மூல உரிமங்கள்</string>
     <string name="oh_no">ஓ!</string>
     <string name="gramophone_crashed_explainer2">கிராமபோன் செயலிழந்தது :( \n\nதயவுசெய்து எனக்கு ஒரு பிழை அறிக்கையை அனுப்புங்கள், எனவே இந்த விபத்துக்கு என்ன வழிவகுக்கும் என்பது போன்ற சிக்கல்களை சரிசெய்ய முடியும்! \n\nஒவ்வொரு சூழ்நிலையும் இசையைப் போல தனித்துவமானது, உங்கள் உதவி இல்லாமல் இந்த பிழை <b> இல்லை </b> சரி செய்யப்படும்!</string>
     <string name="send_email">மின்னஞ்சல் அனுப்புங்கள்</string>
-    <string name="send_email_manually">தயவுசெய்து பதிவை nift4dev@gmail.com க்கு அனுப்பவும் - அஞ்சல் பயன்பாட்டைக் கண்டுபிடிக்க முடியவில்லை</string>
+    <string name="send_email_manually">தயவுசெய்து பதிவை  க்கு அனுப்பவும் - அஞ்சல் பயன்பாட்டைக் கண்டுபிடிக்க முடியவில்லை</string>
     <string name="failed_to_parse_lyric">பாடல் வரிகளை அலசத் தவறிவிட்டது</string>
     <string name="audio_signal_chain">ஆடியோ சிக்னல் சங்கிலி</string>
     <string name="audio_not_initialized">ஆடியோ பிளேபேக் அமைப்பு துவக்கப்படவில்லை. ஏதாவது விளையாட முயற்சிக்கவும்!</string>
@@ -403,13 +403,6 @@
     <string name="add_to_playlist">பிளேலிச்ட்டில் சேர்க்கவும்</string>
     <string name="playlist_editing_pref_desc">பிளேலிச்ட்களில் பாடல்களைச் சேர்க்க அனுமதிக்கிறது (இன்னும் செயல்படுத்தப்படவில்லை)</string>
     <string name="no_app_found">இதைச் செய்யக்கூடிய எந்த பயன்பாடும் கிடைக்கவில்லை</string>
-    <string name="contributors_nift4">பராமரிப்பாளர் / முன்னணி உருவாக்குபவர்</string>
-    <string name="contributors_123duo3">முன்னணி வடிவமைப்பாளர்</string>
-    <string name="contributors_akanetan">அசல் படைப்பாளி, ஓய்வு பெற்ற உருவாக்குபவர்</string>
     <string name="contributors_developer">உருவாக்குநர்</string>
-    <string name="contributors_wstxda">பயன்பாட்டு ஐகானின் ஒரு மாறுபாடு வடிவமைக்கப்பட்டுள்ளது</string>
-    <string name="contributors_pxeemo">புதிய பாடல்களின் உதவி மற்றும் சோதனை</string>
-    <string name="contributors_lambada10">பாடல் மாதிரிகள் மற்றும் பாடல்கள்</string>
     <string name="contributors_code_contributions">குறியீடு பங்களிப்புகள்</string>
-    <string name="contributors_yuyuko1024">மோசமான முன்னேற்றப் பட்டி</string>
     </resources>

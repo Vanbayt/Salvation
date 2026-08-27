@@ -149,6 +149,11 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
             behavior.state = BottomSheetBehavior.STATE_EXPANDED
             behavior.skipCollapsed = true
             it.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+            val displayMetrics = resources.displayMetrics
+            val screenWidthDp = displayMetrics.widthPixels / displayMetrics.density
+            if (screenWidthDp > 600) {
+                it.layoutParams.width = (640 * displayMetrics.density).toInt()
+            }
             it.requestLayout()
             it.setBackgroundResource(android.R.color.transparent)
         }
@@ -159,6 +164,73 @@ private data class QueueTrack(
     val originalIndex: Int,
     val mediaItem: MediaItem
 )
+
+@Composable
+fun DesktopQueueView(
+    player: Player?,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (player == null) return
+    var currentMediaIndex by remember { mutableIntStateOf(player.currentMediaItemIndex) }
+    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var mediaItemCount by remember { mutableIntStateOf(player.mediaItemCount) }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                currentMediaIndex = player.currentMediaItemIndex
+                mediaItemCount = player.mediaItemCount
+            }
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                currentMediaIndex = player.currentMediaItemIndex
+                mediaItemCount = player.mediaItemCount
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    val currentItem = player.currentMediaItem
+    val playingFrom = currentItem?.mediaMetadata?.extras?.getString("PLAYING_FROM") ?: "Медиатека"
+
+    val allItems = remember(currentMediaIndex, mediaItemCount) {
+        val list = mutableListOf<MediaItem>()
+        for (i in 0 until player.mediaItemCount) {
+            list.add(player.getMediaItemAt(i))
+        }
+        list
+    }
+
+    QueueScreenContent(
+        items = allItems,
+        currentIndex = currentMediaIndex,
+        isPlaying = isPlaying,
+        playingFrom = playingFrom,
+        onClose = onClose,
+        onItemClick = { targetIndex ->
+            player.seekTo(targetIndex, 0L)
+            player.play()
+        },
+        onMoveMediaItem = { from, to ->
+            player.moveMediaItem(from, to)
+        },
+        onRemoveItem = { removeIndex ->
+            player.removeMediaItem(removeIndex)
+        },
+        onClearQueue = {
+            val cur = player.currentMediaItemIndex
+            if (cur in 0 until player.mediaItemCount) {
+                val item = player.getMediaItemAt(cur)
+                player.clearMediaItems()
+                player.setMediaItem(item)
+            }
+        }
+    )
+}
 
 @Composable
 private fun QueueScreenContent(
@@ -221,7 +293,10 @@ private fun QueueScreenContent(
     }
 
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = 640.dp),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = colors.surfaceContainerLow,
         tonalElevation = 4.dp

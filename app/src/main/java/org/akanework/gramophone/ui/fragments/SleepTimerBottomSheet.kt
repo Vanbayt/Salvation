@@ -71,7 +71,15 @@ class SleepTimerBottomSheet : BottomSheetDialogFragment() {
         super.onStart()
         val dialog = dialog as? com.google.android.material.bottomsheet.BottomSheetDialog
         val bottomSheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-        bottomSheet?.setBackgroundResource(android.R.color.transparent)
+        bottomSheet?.let {
+            it.setBackgroundResource(android.R.color.transparent)
+            val displayMetrics = resources.displayMetrics
+            val screenWidthDp = displayMetrics.widthPixels / displayMetrics.density
+            if (screenWidthDp > 600) {
+                it.layoutParams.width = (560 * displayMetrics.density).toInt()
+                it.requestLayout()
+            }
+        }
     }
 
     companion object {
@@ -101,6 +109,8 @@ fun SleepTimerContent(
         tonalElevation = 6.dp,
         modifier = Modifier
             .fillMaxWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = 560.dp)
             .wrapContentHeight()
     ) {
         Column(

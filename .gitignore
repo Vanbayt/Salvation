@@ -11,3 +11,9 @@
 .cxx
 local.properties
 .aider*
+
+*.log
+
+build/
+**/build/
+

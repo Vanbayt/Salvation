@@ -187,7 +187,7 @@
     <string name="device_type_unknown">Desconhecido</string>
     <string name="device_type_dock_digital">Dock Digital</string>
     <string name="bitrate_unknown">Bitrate desconhecido</string>
-    <string name="package_type_explainer">Os APKs do Gramophone podem ser criados por qualquer pessoa, pois o Gramophone é de código aberto. Para ajudar a lembrar de onde veio um APK, o Gramophone fornece o tipo de pacote.\n\nO tipo mais comum é Release, que é obtido no F-Droid, Google Play, GitHub ou IzzyOnDroid.\nO tipo de pacote CI refere-se a compilações automatizadas feitas para cada commit no GitHub. Estas compilações podem ser instáveis.\nPara outros tipos de pacote, o nome deve dar uma dica razoável sobre a origem do APK.</string>
+    <string name="package_type_explainer">Salvation package release type.</string>
     <string name="mix_port_flag_spatializer">Espacializador</string>
     <string name="mix_port_flag_gapless_offload">Descarga sem intervalos</string>
     <string name="mix_port_flag_mmap_noirq">MMAP (sem irq)</string>
@@ -209,7 +209,7 @@
     <string name="spk_encoding_amr_wb_plus">AMR-WB+</string>
     <string name="spk_encoding_unknown">Formato Desconhecido %s</string>
     <string name="spk_encoding_unknown_d">Formato Desconhecido %d</string>
-    <string name="what_were_you_doing">O que fez no Gramophone quando este crash ocorreu? Adicione o máximo de pormenores possível para aumentar as chances de eu conseguir corrigir o problema.\n\nObserve que o inglês é o idioma preferencial para relatórios de bugs, mas tentarei traduzir se enviar relatórios em outro idioma.</string>
+    <string name="what_were_you_doing">O que fez no Salvation quando este crash ocorreu? Adicione o máximo de pormenores possível para aumentar as chances de eu conseguir corrigir o problema.\n\nObserve que o inglês é o idioma preferencial para relatórios de bugs, mas tentarei traduzir se enviar relatórios em outro idioma.</string>
     <string name="dialog_bitrate">Bitrate</string>
     <string name="delete_really">Realmente deseja apagar “%s”? Esta ação não pode ser desfeita.</string>
     <string name="spk_channel_out_mono">Mono</string>
@@ -250,8 +250,8 @@
     <string name="device_type_usb_device">Dispositivo USB</string>
     <string name="device_type_dock_analog">Dock Analógico</string>
     <string name="device_type_aux_line">Entrada auxiliar</string>
-    <string name="open_in_gramophone">Abrir no Gramophone</string>
-    <string name="gramophone_crashed_explainer2">O Gramophone crashou :(\n\nEnvie-me um relatório de erro para que problemas como o que levou a este crash possam ser corrigidos!\n\nCada situação é tão única quanto música e, sem a sua ajuda, é provável que este bug <b>NÃO</b> seja corrigido!</string>
+    <string name="open_in_gramophone">Open in Salvation</string>
+    <string name="gramophone_crashed_explainer2">O Salvation crashou :(\n\nEnvie-me um relatório de erro para que problemas como o que levou a este crash possam ser corrigidos!\n\nCada situação é tão única quanto música e, sem a sua ajuda, é provável que este bug <b>NÃO</b> seja corrigido!</string>
     <string name="crash_report">Relatório de crash</string>
     <string name="email_clipboard">E-mail e texto copiados para a área de transferência</string>
     <string name="settings_export_logs">Exportar registo da app</string>
@@ -290,7 +290,7 @@
     <string name="settings_open_source_licenses">Licenças de código aberto</string>
     <string name="oh_no">Oh não!</string>
     <string name="send_email">Enviar email</string>
-    <string name="send_email_manually">Por favor envie o registo para nift4dev@gmail.com - não é possível encontrar o app de e-mail</string>
+    <string name="send_email_manually">Por favor envie o registo para  - não é possível encontrar o app de e-mail</string>
     <string name="audio_signal_chain">Cadeia de sinal</string>
     <string name="audio_not_initialized">O sistema de reprodução de áudio não foi inicializado. Tente reproduzir algo!</string>
     <string name="mix_port_flag_none">Nenhum</string>
@@ -307,5 +307,5 @@
     <string name="settings_lyrics_no_animation">Remover animações</string>
     <string name="settings_lyrics_no_animation_summary">Remover todas animações de transição de letras</string>
     <string name="bitrate_format">%1$d kbps</string>
-    <string name="app_name">Gramophone</string>
+    <string name="app_name">Salvation</string>
 </resources>

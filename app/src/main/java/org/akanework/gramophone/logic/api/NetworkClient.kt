@@ -6,13 +6,24 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
+interface TokenStorage {
+    fun getToken(): String?
+    fun saveToken(token: String?)
+    fun clearToken()
+}
+
 object NetworkClient {
     private const val BASE_URL = "http://185.196.41.31/" // Твой IP
 
     private var retrofit: Retrofit? = null
+    private var tokenStorage: TokenStorage? = null
 
-    fun getApi(context: Context): GramophoneApi {
-        val appContext = context.applicationContext
+    fun setTokenStorage(storage: TokenStorage) {
+        tokenStorage = storage
+    }
+
+    fun getApi(context: Context? = null): GramophoneApi {
+        val appContext = context?.applicationContext
         if (retrofit == null) {
             // Создаем перехватчик (Interceptor), который добавляет токен
             val client = OkHttpClient.Builder()
@@ -20,13 +31,8 @@ object NetworkClient {
                     val original = chain.request()
                     val builder = original.newBuilder()
 
-                    // Достаем токен через appContext
-                    val token = AuthManager.getToken(appContext)
-
-                    // --- ДОБАВЛЯЕМ ЛОГ ДЛЯ ПРОВЕРКИ ---
-                    android.util.Log.d("AUTH_DEBUG", "Отправляем запрос на: ${original.url}")
-                    android.util.Log.d("AUTH_DEBUG", "Токен из AuthManager: $token")
-                    // ----------------------------------
+                    // Достаем токен через TokenStorage или fallback на AuthManager
+                    val token = tokenStorage?.getToken() ?: appContext?.let { AuthManager.getToken(it) }
 
                     if (!token.isNullOrEmpty()) {
                         builder.header("Authorization", "Bearer $token")
@@ -35,7 +41,7 @@ object NetworkClient {
                     chain.proceed(builder.build())
                 }
                 .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
                 .build()
 
             retrofit = Retrofit.Builder()

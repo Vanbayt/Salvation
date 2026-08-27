@@ -347,6 +347,31 @@ fun ArtistDetailScreen(
         val activeTrack = selectedTrackForMenu!!
         SongActionBottomSheet(
             track = activeTrack,
+            onStartRadio = {
+                showTrackActionSheet = false
+                val p = activity?.getPlayer()
+                if (p == null && activity != null) {
+                    activity.controllerViewModel.addControllerCallback(activity.lifecycle) { controller, _ ->
+                        org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                            context,
+                            controller,
+                            activeTrack.id,
+                            activeTrack.artist,
+                            activeTrack.title,
+                            activeTrack.cover ?: artist?.cover
+                        )
+                    }
+                } else {
+                    org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                        context,
+                        p,
+                        activeTrack.id,
+                        activeTrack.artist,
+                        activeTrack.title,
+                        activeTrack.cover ?: artist?.cover
+                    )
+                }
+            },
             onPlayNext = {
                 showTrackActionSheet = false
                 addTrackToQueueNext(activeTrack)

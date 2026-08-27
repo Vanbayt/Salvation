@@ -51,7 +51,9 @@ import org.akanework.gramophone.logic.HistoryManager
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.Artist
 import org.akanework.gramophone.logic.api.NetworkClient
+import org.akanework.gramophone.logic.api.PresetCard
 import org.akanework.gramophone.logic.api.Track
+import org.akanework.gramophone.logic.recommendation.ContextManager
 import org.akanework.gramophone.ui.AppTab
 import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.PlayingEqIcon
@@ -68,6 +70,8 @@ class MainFragment : Fragment() {
     private var favoriteAlbumsState = mutableStateOf<List<Album>>(emptyList())
     private var favoriteArtistsState = mutableStateOf<List<Artist>>(emptyList())
     private var favoriteTracksState = mutableStateOf<List<Track>>(emptyList())
+    private var contextPresetsState = mutableStateOf<List<PresetCard>>(emptyList())
+    private var isPresetsLoading = mutableStateOf(false)
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -85,6 +89,12 @@ class MainFragment : Fragment() {
         loadFavoriteAlbums()
         loadFavoriteArtists()
         loadFavoriteTracks()
+        loadContextPresets()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadContextPresets()
     }
 
     private fun getThemeColorScheme(): ColorScheme {
@@ -110,6 +120,7 @@ class MainFragment : Fragment() {
                 val mainActivity = remember { requireActivity() as MainActivity }
                 var currentPlayingTrackId by remember { mutableStateOf<String?>(null) }
                 var isCurrentPlaying by remember { mutableStateOf(false) }
+                var selectedPreset by remember { mutableStateOf<PresetCard?>(null) }
 
                 LaunchedEffect(Unit) {
                     while (true) {
@@ -128,9 +139,14 @@ class MainFragment : Fragment() {
                     }
                 }
 
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
+                        .widthIn(max = 1100.dp)
                         .nestedScroll(nestedScrollConnection),
                     contentPadding = PaddingValues(bottom = 260.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -147,7 +163,7 @@ class MainFragment : Fragment() {
                         )
                     }
 
-                    // 1. HERO TITLE & FLOATING PLAY BUTTON ("Your Mix" Style)
+                    // 1. HERO TITLE & FLOATING PLAY BUTTON ("Your Mix" Style with dynamic mood)
                     item {
                         AnimatedVisibility(
                             visible = isVisible,
@@ -155,8 +171,40 @@ class MainFragment : Fragment() {
                         ) {
                             ExpressiveYourMixHeroHeader(
                                 tracksCount = favoriteTracksState.value.size,
-                                onPlayClick = { if (!isMixLoading) playMyMix() }
+                                selectedPreset = selectedPreset,
+                                onPlayClick = {
+                                    val target = selectedPreset
+                                        ?: contextPresetsState.value.firstOrNull { it.id == "daily_mix" }
+                                        ?: contextPresetsState.value.firstOrNull()
+                                    if (target != null) {
+                                        playPreset(target)
+                                    } else {
+                                        playPresetById("daily_mix", "Ваш Микс")
+                                    }
+                                }
                             )
+                        }
+                    }
+
+                    // 1.2. MATERIAL 3 EXPRESSIVE MOOD PILLS
+                    if (contextPresetsState.value.isNotEmpty()) {
+                        item {
+                            AnimatedVisibility(
+                                visible = isVisible,
+                                enter = fadeIn(tween(450)) + slideInVertically(tween(550)) { it / 3 }
+                            ) {
+                                ExpressiveMoodPillsRow(
+                                    presets = contextPresetsState.value,
+                                    selectedPreset = selectedPreset,
+                                    onSelect = { preset ->
+                                        if (selectedPreset?.id == preset.id) {
+                                            playPreset(preset)
+                                        } else {
+                                            selectedPreset = preset
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -179,7 +227,16 @@ class MainFragment : Fragment() {
                                 onArtistsClick = {
                                     (requireActivity() as MainActivity).switchTab(AppTab.LIBRARY)
                                 },
-                                onMixClick = { if (!isMixLoading) playMyMix() }
+                                onMixClick = {
+                                    val target = selectedPreset
+                                        ?: contextPresetsState.value.firstOrNull { it.id == "daily_mix" }
+                                        ?: contextPresetsState.value.firstOrNull()
+                                    if (target != null) {
+                                        playPreset(target)
+                                    } else {
+                                        playPresetById("daily_mix", "Ваш Микс")
+                                    }
+                                }
                             )
                         }
                     }
@@ -270,6 +327,7 @@ class MainFragment : Fragment() {
                     }
                 }
             }
+            }
         }
     }
 
@@ -334,34 +392,325 @@ class MainFragment : Fragment() {
     }
 
     @Composable
+    fun ExpressiveMoodPillsRow(
+        presets: List<PresetCard>,
+        selectedPreset: PresetCard?,
+        onSelect: (PresetCard) -> Unit
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(presets, key = { it.id }) { preset ->
+                val isSelected = (selectedPreset?.id == preset.id) || (selectedPreset == null && preset.id == "daily_mix")
+                val presetIcon = when (preset.id) {
+                    "daily_mix" -> Icons.Rounded.AutoAwesome
+                    "flow_mix" -> Icons.Rounded.Waves
+                    "discovery_radar" -> Icons.Rounded.Explore
+                    "energy_flow" -> Icons.Rounded.Bolt
+                    "calm_focus" -> Icons.Rounded.Spa
+                    "time_capsule" -> Icons.Rounded.History
+                    else -> Icons.Rounded.GraphicEq
+                }
+
+                Surface(
+                    onClick = { onSelect(preset) },
+                    shape = CircleShape,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
+                    },
+                    contentColor = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    border = if (isSelected) {
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    } else {
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                    },
+                    shadowElevation = if (isSelected) 3.dp else 0.dp,
+                    modifier = Modifier.height(38.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = presetIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = preset.moodTag,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun DynamicPresetCarousel(
+        presets: List<PresetCard>,
+        selectedPresetId: String?,
+        onPresetClick: (PresetCard) -> Unit
+    ) {
+        if (presets.isEmpty()) return
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Персональные волны",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.3).sp,
+                    fontSize = 20.sp
+                ),
+                modifier = Modifier.padding(horizontal = 24.dp),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(presets, key = { it.id }) { preset ->
+                    val isSelected = preset.id == selectedPresetId
+                    val gradientColors = remember(preset.gradientHex) {
+                        if (preset.gradientHex.size >= 2) {
+                            preset.gradientHex.map {
+                                try {
+                                    Color(android.graphics.Color.parseColor(it))
+                                } catch (e: Exception) {
+                                    Color(0xFF1E293B)
+                                }
+                            }
+                        } else {
+                            listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                        }
+                    }
+
+                    val presetIcon = when (preset.id) {
+                        "daily_mix" -> Icons.Rounded.AutoAwesome
+                        "discovery_radar" -> Icons.Rounded.Explore
+                        "energy_flow" -> Icons.Rounded.Bolt
+                        "calm_focus" -> Icons.Rounded.Spa
+                        "time_capsule" -> Icons.Rounded.History
+                        else -> Icons.Rounded.GraphicEq
+                    }
+
+                    // Material 3 Expressive Asymmetrical Corner Shape Token (Android 15-16)
+                    val cardShape = remember(preset.isContrast) {
+                        if (preset.isContrast) {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 32.dp, bottomEnd = 16.dp, bottomStart = 32.dp)
+                        } else {
+                            RoundedCornerShape(topStart = 32.dp, topEnd = 16.dp, bottomEnd = 32.dp, bottomStart = 16.dp)
+                        }
+                    }
+
+                    Card(
+                        onClick = { onPresetClick(preset) },
+                        modifier = Modifier
+                            .width(162.dp)
+                            .height(195.dp),
+                        shape = cardShape,
+                        border = when {
+                            isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            preset.isContrast -> BorderStroke(1.5.dp, Brush.horizontalGradient(listOf(Color(0xFFBA8B02), Color(0xFFFFD700))))
+                            else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                        },
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = if (isSelected) 6.dp else 2.dp,
+                            pressedElevation = 8.dp
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Brush.linearGradient(gradientColors))
+                        ) {
+                            // Subtle artwork preview if cover available
+                            if (!preset.coverUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = preset.coverUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(alpha = 0.35f)
+                                )
+                            }
+
+                            // High-contrast M3 Expressive film overlay
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color.Black.copy(alpha = 0.12f),
+                                                Color.Black.copy(alpha = 0.45f),
+                                                Color.Black.copy(alpha = 0.88f)
+                                            )
+                                        )
+                                    )
+                                    .padding(14.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    // Top Row: Vector Mood Tag Pill & Quick Play
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color.Black.copy(alpha = 0.38f),
+                                            contentColor = if (preset.isContrast) Color(0xFFFFD700) else Color.White
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = presetIcon,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(13.dp),
+                                                    tint = if (preset.isContrast) Color(0xFFFFD700) else Color.White
+                                                )
+                                                Spacer(modifier = Modifier.width(5.dp))
+                                                Text(
+                                                    text = preset.moodTag.uppercase(),
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 9.sp,
+                                                        letterSpacing = 0.8.sp
+                                                    ),
+                                                    color = if (preset.isContrast) Color(0xFFFFD700) else Color.White
+                                                )
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color.White.copy(alpha = 0.25f),
+                                            modifier = Modifier.size(34.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.PlayArrow,
+                                                    contentDescription = "Воспроизвести",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Bottom Text Content
+                                    Column {
+                                        Text(
+                                            text = preset.title,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 16.sp,
+                                                lineHeight = 20.sp,
+                                                letterSpacing = (-0.3).sp
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = preset.subtitle,
+                                            color = Color.White.copy(alpha = 0.80f),
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 11.5.sp,
+                                                lineHeight = 14.sp
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
     fun ExpressiveYourMixHeroHeader(
         tracksCount: Int,
+        selectedPreset: PresetCard?,
         onPlayClick: () -> Unit
     ) {
+        val displayTitle = when (selectedPreset?.id) {
+            "flow_mix" -> "Музыкальный\nПоток"
+            "energy_flow" -> "Энергия\nи Драйв"
+            "calm_focus" -> "Спокойствие\nи Фокус"
+            "discovery_radar" -> "Радар\nОткрытий"
+            "time_capsule" -> "Глубокое\nПогружение"
+            else -> "Мой\nМикс"
+        }
+
+        val displaySubtitle = when (selectedPreset?.id) {
+            "flow_mix" -> "Непрерывное радио в вашем вкусе"
+            "energy_flow" -> "Бодрый ритм и динамичное звучание"
+            "calm_focus" -> "Мягкая музыка для отдыха и концентрации"
+            "discovery_radar" -> "Свежие треки от новых для вас артистов"
+            "time_capsule" -> "Редкие находки и забытые треки"
+            else -> if (tracksCount > 0) "$tracksCount треков • Медиатека и открытия" else "Моя музыка с новыми треками"
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
+                .padding(horizontal = 24.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                 Text(
-                    text = "Ваш\nМикс",
+                    text = displayTitle,
                     style = MaterialTheme.typography.displayMedium.copy(
                         fontWeight = FontWeight.Black,
                         lineHeight = 44.sp,
                         letterSpacing = (-1.2).sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (tracksCount > 0) "$tracksCount треков для вас" else "Микс на сегодня",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.Medium
+                    text = displaySubtitle,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -373,14 +722,14 @@ class MainFragment : Fragment() {
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shadowElevation = 8.dp,
                 tonalElevation = 6.dp,
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(76.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_play),
-                        contentDescription = "Играть микс",
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = "Играть волну",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(38.dp)
                     )
                 }
             }
@@ -913,7 +1262,7 @@ class MainFragment : Fragment() {
         (requireActivity() as MainActivity).startFragment(fragment, null, null)
     }
 
-    private fun playTrack(clickedTrack: Track, allTracks: List<Track>, source: String = "Неизвестно") {
+    private fun playTrack(clickedTrack: Track, allTracks: List<Track>, source: String = "Неизвестно", presetId: String? = null, isWave: Boolean = false) {
         val player = (requireActivity() as MainActivity).getPlayer() ?: return
         val startIndex = allTracks.indexOf(clickedTrack).coerceAtLeast(0)
 
@@ -923,6 +1272,8 @@ class MainFragment : Fragment() {
                 putString("ARTIST_ID", track.artistId)
                 putString("ALBUM_ID", track.albumId)
                 putString("PLAYING_FROM", source)
+                if (presetId != null) putString("PRESET_ID", presetId)
+                if (isWave) putBoolean("IS_INFINITE_WAVE", true)
             }
             val finalCoverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
             MediaItem.Builder()
@@ -979,6 +1330,95 @@ class MainFragment : Fragment() {
                 override fun onFailure(call: Call<List<Track>>, t: Throwable) {
                     isMixLoading = false
                     if (isAdded) Toast.makeText(context, "Ошибка сети", Toast.LENGTH_SHORT).show()
+                }
+            })
+    }
+
+    private fun loadContextPresets() {
+        val ctx = context ?: return
+        val deviceType = ContextManager.detectDeviceType(ctx)
+        val skipCount = ContextManager.getRecentSkipCount()
+
+        isPresetsLoading.value = true
+        NetworkClient.getApi(ctx).getContextPresets(deviceType = deviceType, recentSkipCount = skipCount)
+            .enqueue(object : Callback<List<PresetCard>> {
+                override fun onResponse(call: Call<List<PresetCard>>, response: Response<List<PresetCard>>) {
+                    isPresetsLoading.value = false
+                    if (isAdded && response.isSuccessful) {
+                        contextPresetsState.value = response.body() ?: emptyList()
+                    }
+                }
+                override fun onFailure(call: Call<List<PresetCard>>, t: Throwable) {
+                    isPresetsLoading.value = false
+                }
+            })
+    }
+
+    private fun playPresetById(presetId: String, title: String) {
+        val dummyPreset = PresetCard(
+            id = presetId,
+            title = title,
+            subtitle = "",
+            coverUrl = null,
+            gradientHex = emptyList(),
+            moodTag = "",
+            isContrast = false,
+            seedQuery = ""
+        )
+        playPreset(dummyPreset)
+    }
+
+    private fun playPreset(preset: PresetCard) {
+        val ctx = context ?: return
+        Toast.makeText(ctx, "Подбираем волну «${preset.title}»...", Toast.LENGTH_SHORT).show()
+
+        NetworkClient.getApi(ctx).getPresetTracks(preset.id, limit = 25)
+            .enqueue(object : Callback<org.akanework.gramophone.logic.api.RadioResponse> {
+                override fun onResponse(call: Call<org.akanework.gramophone.logic.api.RadioResponse>, response: Response<org.akanework.gramophone.logic.api.RadioResponse>) {
+                    if (isAdded && response.isSuccessful) {
+                        val candidates = response.body()?.tracks ?: emptyList()
+                        if (candidates.isNotEmpty()) {
+                            val tracks = candidates.map { cand ->
+                                val streamId = if (!cand.sourceId.isNullOrEmpty()) cand.sourceId else (cand.trackId?.toString() ?: "rec_${cand.artist}_${cand.title}")
+                                Track(
+                                    id = streamId,
+                                    title = cand.title,
+                                    artist = cand.artist,
+                                    album = cand.album,
+                                    cover = cand.coverUrl,
+                                    duration = cand.duration,
+                                    sourceId = streamId
+                                )
+                            }
+                            playTrack(tracks.first(), tracks, preset.title, presetId = preset.id, isWave = true)
+                            Toast.makeText(ctx, "Волна «${preset.title}» запущена (${tracks.size} треков)", Toast.LENGTH_SHORT).show()
+                            return
+                        }
+                    }
+                    fallbackPlayPresetSearch(preset)
+                }
+                override fun onFailure(call: Call<org.akanework.gramophone.logic.api.RadioResponse>, t: Throwable) {
+                    if (isAdded) fallbackPlayPresetSearch(preset)
+                }
+            })
+    }
+
+    private fun fallbackPlayPresetSearch(preset: PresetCard) {
+        val ctx = context ?: return
+        NetworkClient.getApi(ctx).searchMusic(preset.seedQuery)
+            .enqueue(object : Callback<org.akanework.gramophone.logic.api.SearchResponse> {
+                override fun onResponse(call: Call<org.akanework.gramophone.logic.api.SearchResponse>, response: Response<org.akanework.gramophone.logic.api.SearchResponse>) {
+                    if (isAdded && response.isSuccessful) {
+                        val tracks = response.body()?.tracks ?: emptyList()
+                        if (tracks.isNotEmpty()) {
+                            playTrack(tracks.first(), tracks, preset.title)
+                        } else {
+                            Toast.makeText(ctx, "Треки для пресета не найдены", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                override fun onFailure(call: Call<org.akanework.gramophone.logic.api.SearchResponse>, t: Throwable) {
+                    if (isAdded) Toast.makeText(ctx, "Ошибка сети", Toast.LENGTH_SHORT).show()
                 }
             })
     }

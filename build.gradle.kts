@@ -8,8 +8,11 @@ plugins {
 	id("androidx.baselineprofile") version "1.4.1" apply false
     val kotlinVersion = "2.3.0"
 	kotlin("android") version kotlinVersion apply false
+    kotlin("jvm") version kotlinVersion apply false
+    kotlin("multiplatform") version kotlinVersion apply false
     kotlin("plugin.parcelize") version kotlinVersion apply false
     kotlin("plugin.compose") version kotlinVersion apply false
+    id("org.jetbrains.compose") version "1.7.3" apply false
     val aboutLibsVersion = "14.0.0-b02"
     id("com.mikepenz.aboutlibraries.plugin") version aboutLibsVersion apply false
     id("com.mikepenz.aboutlibraries.plugin.android") version aboutLibsVersion apply false

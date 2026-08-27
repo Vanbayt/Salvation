@@ -275,6 +275,8 @@ fun LyricsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .widthIn(max = 680.dp)
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {

@@ -190,6 +190,23 @@ class SongAdapter(
 
         popupMenu.setOnMenuItemClickListener { it1 ->
             when (it1.itemId) {
+                R.id.start_radio -> {
+                    val mediaController = mainActivity.getPlayer()
+                    val id = item.mediaId
+                    val artist = item.mediaMetadata.artist?.toString()
+                    val title = item.mediaMetadata.title?.toString()
+                    val cover = item.mediaMetadata.artworkUri?.toString()
+                    org.akanework.gramophone.logic.utils.WaveManager.startTrackRadio(
+                        context,
+                        mediaController,
+                        id,
+                        artist,
+                        title,
+                        cover
+                    )
+                    true
+                }
+
                 R.id.play_next -> {
                     val mediaController = mainActivity.getPlayer()
                     mediaController?.addMediaItem(
