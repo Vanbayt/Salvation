@@ -1369,57 +1369,14 @@ class MainFragment : Fragment() {
     }
 
     private fun playPreset(preset: PresetCard) {
-        val ctx = context ?: return
-        Toast.makeText(ctx, "Подбираем волну «${preset.title}»...", Toast.LENGTH_SHORT).show()
-
-        NetworkClient.getApi(ctx).getPresetTracks(preset.id, limit = 25)
-            .enqueue(object : Callback<org.akanework.gramophone.logic.api.RadioResponse> {
-                override fun onResponse(call: Call<org.akanework.gramophone.logic.api.RadioResponse>, response: Response<org.akanework.gramophone.logic.api.RadioResponse>) {
-                    if (isAdded && response.isSuccessful) {
-                        val candidates = response.body()?.tracks ?: emptyList()
-                        if (candidates.isNotEmpty()) {
-                            val tracks = candidates.map { cand ->
-                                val streamId = if (!cand.sourceId.isNullOrEmpty()) cand.sourceId else (cand.trackId?.toString() ?: "rec_${cand.artist}_${cand.title}")
-                                Track(
-                                    id = streamId,
-                                    title = cand.title,
-                                    artist = cand.artist,
-                                    album = cand.album,
-                                    cover = cand.coverUrl,
-                                    duration = cand.duration,
-                                    sourceId = streamId
-                                )
-                            }
-                            playTrack(tracks.first(), tracks, preset.title, presetId = preset.id, isWave = true)
-                            Toast.makeText(ctx, "Волна «${preset.title}» запущена (${tracks.size} треков)", Toast.LENGTH_SHORT).show()
-                            return
-                        }
-                    }
-                    fallbackPlayPresetSearch(preset)
-                }
-                override fun onFailure(call: Call<org.akanework.gramophone.logic.api.RadioResponse>, t: Throwable) {
-                    if (isAdded) fallbackPlayPresetSearch(preset)
-                }
-            })
-    }
-
-    private fun fallbackPlayPresetSearch(preset: PresetCard) {
-        val ctx = context ?: return
-        NetworkClient.getApi(ctx).searchMusic(preset.seedQuery)
-            .enqueue(object : Callback<org.akanework.gramophone.logic.api.SearchResponse> {
-                override fun onResponse(call: Call<org.akanework.gramophone.logic.api.SearchResponse>, response: Response<org.akanework.gramophone.logic.api.SearchResponse>) {
-                    if (isAdded && response.isSuccessful) {
-                        val tracks = response.body()?.tracks ?: emptyList()
-                        if (tracks.isNotEmpty()) {
-                            playTrack(tracks.first(), tracks, preset.title)
-                        } else {
-                            Toast.makeText(ctx, "Треки для пресета не найдены", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                override fun onFailure(call: Call<org.akanework.gramophone.logic.api.SearchResponse>, t: Throwable) {
-                    if (isAdded) Toast.makeText(ctx, "Ошибка сети", Toast.LENGTH_SHORT).show()
-                }
-            })
+        val player = (activity as? MainActivity)?.getPlayer()
+        val initialTrack = favoriteTracksState.value.firstOrNull()
+        org.akanework.gramophone.logic.utils.WaveManager.startPresetWave(
+            context = requireContext().applicationContext,
+            player = player,
+            presetId = preset.id,
+            presetTitle = preset.title,
+            initialTrack = initialTrack
+        )
     }
 }

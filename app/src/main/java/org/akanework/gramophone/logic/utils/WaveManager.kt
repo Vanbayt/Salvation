@@ -130,6 +130,117 @@ object WaveManager {
     }
 
     /**
+     * Запуск персонального микса/пресета: мгновенный старт первого трека + фоновая догрузка очереди
+     */
+    fun startPresetWave(
+        context: Context,
+        player: Player?,
+        presetId: String,
+        presetTitle: String,
+        initialTrack: Track? = null
+    ) {
+        val appContext = context.applicationContext
+        if (player == null) {
+            Toast.makeText(appContext, "Плеер ещё загружается, подождите секунду", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Если передан быстрый якорный трек (из кэша/избранного), запускаем его прямо сейчас за 0 мс!
+        if (initialTrack != null) {
+            val initialStreamId = if (!initialTrack.sourceId.isNullOrEmpty()) initialTrack.sourceId else initialTrack.id
+            val seedExtras = Bundle().apply {
+                putString("PLAYING_FROM", "Волна: $presetTitle")
+                putString("PRESET_ID", presetId)
+                putBoolean("IS_INFINITE_WAVE", true)
+            }
+            val coverFinal = if (initialTrack.cover?.startsWith("/") == true) "http://185.196.41.31${initialTrack.cover}" else initialTrack.cover
+            val initialMediaItem = MediaItem.Builder()
+                .setMediaId(initialStreamId)
+                .setUri("http://185.196.41.31/stream/$initialStreamId".toUri())
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(initialTrack.title)
+                        .setArtist(initialTrack.artist)
+                        .setArtworkUri(coverFinal?.toUri())
+                        .setExtras(seedExtras)
+                        .build()
+                ).build()
+
+            player.shuffleModeEnabled = false
+            player.setMediaItems(listOf(initialMediaItem), 0, 0L)
+            player.prepare()
+            player.play()
+            Toast.makeText(appContext, "Волна «$presetTitle» запущена...", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(appContext, "Подбираем волну «$presetTitle»...", Toast.LENGTH_SHORT).show()
+        }
+
+        // Фоновая генерация и наполнение очереди микса
+        NetworkClient.getApi(appContext).getPresetTracks(presetId, limit = 25)
+            .enqueue(object : Callback<RadioResponse> {
+                override fun onResponse(call: Call<RadioResponse>, response: Response<RadioResponse>) {
+                    val radio = response.body()
+                    val candidates = radio?.tracks ?: emptyList()
+                    if (candidates.isNotEmpty()) {
+                        val tracks = candidates.map { c ->
+                            val streamId = if (!c.sourceId.isNullOrEmpty()) c.sourceId else (c.trackId?.toString() ?: "rec_${c.artist}_${c.title}")
+                            Track(
+                                id = streamId,
+                                title = c.title,
+                                artist = c.artist,
+                                album = c.album ?: "",
+                                duration = c.duration,
+                                cover = c.coverUrl,
+                                sourceId = streamId
+                            )
+                        }
+
+                        val mediaItems = tracks.map { track ->
+                            val extrasBundle = Bundle().apply {
+                                putString("PLAYING_FROM", "Волна: $presetTitle")
+                                putString("PRESET_ID", presetId)
+                                putBoolean("IS_INFINITE_WAVE", true)
+                            }
+                            val coverFinal = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                            MediaItem.Builder()
+                                .setMediaId(track.id)
+                                .setUri("http://185.196.41.31/stream/${track.id}".toUri())
+                                .setMediaMetadata(
+                                    MediaMetadata.Builder()
+                                        .setTitle(track.title)
+                                        .setArtist(track.artist)
+                                        .setArtworkUri(coverFinal?.toUri())
+                                        .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
+                                        .setExtras(extrasBundle)
+                                        .build()
+                                ).build()
+                        }
+
+                        if (initialTrack != null && player.mediaItemCount > 0) {
+                            // Фильтруем якорный трек и добавляем остальные в очередь
+                            val remainingItems = mediaItems.filterNot { it.mediaId == initialTrack.id || it.mediaId == initialTrack.sourceId }
+                            if (remainingItems.isNotEmpty()) {
+                                player.addMediaItems(remainingItems)
+                            }
+                        } else {
+                            player.shuffleModeEnabled = false
+                            player.setMediaItems(mediaItems, 0, 0L)
+                            player.prepare()
+                            player.play()
+                        }
+                        PlaybackLogger.log("WAVE_PRESET", "Preset '$presetTitle' loaded with ${tracks.size} tracks")
+                    } else {
+                        PlaybackLogger.log("WAVE_PRESET", "No tracks returned for preset '$presetTitle'")
+                    }
+                }
+
+                override fun onFailure(call: Call<RadioResponse>, t: Throwable) {
+                    PlaybackLogger.log("WAVE_PRESET", "Network failure loading preset '$presetTitle': ${t.message}")
+                }
+            })
+    }
+
+    /**
      * Бесшовная фоновая догрузка следующей пачки бесконечной волны (когда в очереди осталось <= 3 трека)
      */
     fun checkAndAppendNextWave(
