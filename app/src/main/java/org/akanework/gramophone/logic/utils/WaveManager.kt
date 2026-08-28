@@ -19,7 +19,7 @@ object WaveManager {
     private val isAppending = AtomicBoolean(false)
 
     /**
-     * Запуск радио по конкретному треку
+     * Запуск радио по конкретному треку: мгновенный старт сида + фоновое наполнение очереди
      */
     fun startTrackRadio(
         context: Context,
@@ -29,8 +29,9 @@ object WaveManager {
         title: String?,
         coverUrl: String?
     ) {
+        val appContext = context.applicationContext
         if (player == null) {
-            Toast.makeText(context, "Плеер ещё загружается, подождите секунду", Toast.LENGTH_SHORT).show()
+            Toast.makeText(appContext, "Плеер ещё загружается, подождите секунду", Toast.LENGTH_SHORT).show()
             return
         }
         val seedId = trackId?.toLongOrNull()
@@ -39,14 +40,41 @@ object WaveManager {
         val titleParam = if (!title.isNullOrEmpty()) title else null
 
         if (seedId == null && sourceId == null && (artistParam == null || titleParam == null)) {
-            Toast.makeText(context, "Не удалось определить трек для радио", Toast.LENGTH_SHORT).show()
+            Toast.makeText(appContext, "Не удалось определить трек для радио", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val displayTitle = title ?: artist ?: "треку"
-        Toast.makeText(context, "Подбираем волну «Радио: $displayTitle»...", Toast.LENGTH_SHORT).show()
+        val displayTitle = titleParam ?: artistParam ?: "треку"
+        val seedStreamId = if (!sourceId.isNullOrEmpty()) sourceId else (seedId?.toString() ?: "rec_${artistParam}_${titleParam}")
 
-        NetworkClient.getApi(context).getRadio(
+        // 1. МГНОВЕННЫЙ СТАРТ: ставим сид-трек в плеер прямо сейчас (0 мс задержки)
+        val seedExtras = Bundle().apply {
+            putString("PLAYING_FROM", "Радио: $displayTitle")
+            putString("RADIO_SEED_ARTIST", artistParam ?: "")
+            putString("RADIO_SEED_TITLE", titleParam ?: "")
+            putBoolean("IS_INFINITE_WAVE", true)
+        }
+        val seedCoverFinal = if (coverUrl?.startsWith("/") == true) "http://185.196.41.31$coverUrl" else coverUrl
+        val seedMediaItem = MediaItem.Builder()
+            .setMediaId(seedStreamId)
+            .setUri("http://185.196.41.31/stream/$seedStreamId".toUri())
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(titleParam ?: displayTitle)
+                    .setArtist(artistParam ?: "")
+                    .setArtworkUri(seedCoverFinal?.toUri())
+                    .setExtras(seedExtras)
+                    .build()
+            ).build()
+
+        player.shuffleModeEnabled = false
+        player.setMediaItems(listOf(seedMediaItem), 0, 0L)
+        player.prepare()
+        player.play()
+        Toast.makeText(appContext, "Радио запущено, подбираем поток...", Toast.LENGTH_SHORT).show()
+
+        // 2. ФОНОВАЯ ПОДГРУЗКА: нейросетевой подбор очереди в фоне
+        NetworkClient.getApi(appContext).getRadio(
             seedTrackId = seedId,
             sourceId = sourceId,
             artist = artistParam,
@@ -57,56 +85,46 @@ object WaveManager {
                 val radio = response.body()
                 val candidates = radio?.tracks ?: emptyList()
                 if (candidates.isNotEmpty()) {
-                    val tracks = candidates.map { c ->
-                        val streamId = if (!c.sourceId.isNullOrEmpty()) c.sourceId else (c.trackId?.toString() ?: "rec_${c.artist}_${c.title}")
-                        Track(
-                            id = streamId,
-                            title = c.title,
-                            artist = c.artist,
-                            album = c.album ?: "",
-                            duration = c.duration,
-                            cover = c.coverUrl,
-                            sourceId = streamId
-                        )
+                    // Фильтруем сид-трек (он уже играет на позиции 0)
+                    val remainingCandidates = candidates.filterNot { c ->
+                        (c.artist.equals(artistParam, ignoreCase = true) && c.title.equals(titleParam, ignoreCase = true)) ||
+                                (!c.sourceId.isNullOrEmpty() && c.sourceId == seedStreamId)
                     }
 
-                    val mediaItems = tracks.map { track ->
+                    val mediaItems = remainingCandidates.map { c ->
+                        val streamId = if (!c.sourceId.isNullOrEmpty()) c.sourceId else (c.trackId?.toString() ?: "rec_${c.artist}_${c.title}")
                         val extrasBundle = Bundle().apply {
                             putString("PLAYING_FROM", "Радио: $displayTitle")
-                            putString("RADIO_SEED_ARTIST", artist ?: "")
-                            putString("RADIO_SEED_TITLE", title ?: "")
+                            putString("RADIO_SEED_ARTIST", artistParam ?: "")
+                            putString("RADIO_SEED_TITLE", titleParam ?: "")
                             putBoolean("IS_INFINITE_WAVE", true)
                         }
-                        val coverFinal = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                        val coverFinal = if (c.coverUrl?.startsWith("/") == true) "http://185.196.41.31${c.coverUrl}" else c.coverUrl
                         MediaItem.Builder()
-                            .setMediaId(track.id)
-                            .setUri("http://185.196.41.31/stream/${track.id}".toUri())
+                            .setMediaId(streamId)
+                            .setUri("http://185.196.41.31/stream/$streamId".toUri())
                             .setMediaMetadata(
                                 MediaMetadata.Builder()
-                                    .setTitle(track.title)
-                                    .setArtist(track.artist)
+                                    .setTitle(c.title)
+                                    .setArtist(c.artist)
                                     .setArtworkUri(coverFinal?.toUri())
-                                    .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
+                                    .setDurationMs((c.duration * 1000L).takeIf { it > 0 })
                                     .setExtras(extrasBundle)
                                     .build()
                             ).build()
                     }
 
-                    PlaybackLogger.log("WAVE_RADIO", "Radio loaded: ${tracks.size} tracks for '$displayTitle'")
-                    player.shuffleModeEnabled = false
-                    player.setMediaItems(mediaItems, 0, 0L)
-                    player.prepare()
-                    player.play()
-                    Toast.makeText(context, "Волна радио запущена (${tracks.size} треков)", Toast.LENGTH_SHORT).show()
+                    if (mediaItems.isNotEmpty()) {
+                        player.addMediaItems(mediaItems)
+                        PlaybackLogger.log("WAVE_RADIO", "Radio background populated: ${mediaItems.size} tracks added for '$displayTitle'")
+                    }
                 } else {
-                    PlaybackLogger.log("WAVE_RADIO", "No tracks returned for radio '$displayTitle'")
-                    Toast.makeText(context, "Не удалось подобрать треки для радио", Toast.LENGTH_SHORT).show()
+                    PlaybackLogger.log("WAVE_RADIO", "No background tracks returned for radio '$displayTitle'")
                 }
             }
 
             override fun onFailure(call: Call<RadioResponse>, t: Throwable) {
-                PlaybackLogger.log("WAVE_RADIO", "Network failure loading radio: ${t.message}")
-                Toast.makeText(context, "Ошибка сети: ${t.message}", Toast.LENGTH_SHORT).show()
+                PlaybackLogger.log("WAVE_RADIO", "Network failure loading background radio: ${t.message}")
             }
         })
     }
