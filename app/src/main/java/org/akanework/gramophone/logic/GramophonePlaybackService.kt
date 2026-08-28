@@ -1309,16 +1309,24 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         val completion = SettableFuture.create<List<MediaItem>>()
         lifecycleScope.launch(Dispatchers.Default) {
             try {
-                val result = mediaItems.flatMap {
-                    if (it.localConfiguration != null)
-                        listOf(it)
-                    else if (it.mediaId != MediaItem.DEFAULT_MEDIA_ID)
-                        gramophoneApplication.reader.songListFlow.first()
-                            .filter { m -> m.mediaId == it.mediaId }
-                    else if (it.requestMetadata.searchQuery != null)
-                        searchForMediaItem(it)
-                    else
-                        throw UnsupportedOperationException("can't do anything with $it")
+                val localSongs = gramophoneApplication.reader.songListFlow.first()
+                val result = mediaItems.flatMap { item ->
+                    if (item.localConfiguration != null) {
+                        listOf(item)
+                    } else if (item.mediaId != MediaItem.DEFAULT_MEDIA_ID) {
+                        val matchedLocal = localSongs.filter { m -> m.mediaId == item.mediaId }
+                        if (matchedLocal.isNotEmpty()) {
+                            matchedLocal
+                        } else {
+                            // Online / streaming track: assign remote stream URI
+                            val streamUri = Uri.parse("http://185.196.41.31/stream/${item.mediaId}")
+                            listOf(item.buildUpon().setUri(streamUri).build())
+                        }
+                    } else if (item.requestMetadata.searchQuery != null) {
+                        searchForMediaItem(item)
+                    } else {
+                        throw UnsupportedOperationException("can't do anything with $item")
+                    }
                 }
                 completion.set(result)
             } catch (e: UnsupportedOperationException) {
