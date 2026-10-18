@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_compact_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="88dp"
+    android:background="@drawable/widget_compact_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="12dp">
+
+    <!-- Squircle Album Art (Material Expressive 18dp corner radius) -->
+    <ImageView
+        android:id="@+id/widget_album_art"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/widget_album_art_bg"
+        android:clipToOutline="true"
+        android:contentDescription="@string/dialog_album"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_default_cover"
+        tools:src="@drawable/ic_default_cover" />
+
+    <!-- Track Metadata & Tactile Progress Hierarchy -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Title & Audio Quality Badge Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_track_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="marquee"
+                android:fadingEdge="horizontal"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                tools:text="Alien Manifestation" />
+
+            <TextView
+                android:id="@+id/widget_audio_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_badge_bg"
+                android:letterSpacing="0.05"
+                android:paddingStart="5dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="5dp"
+                android:paddingBottom="1dp"
+                android:text="FLAC"
+                android:textColor="@color/md_theme_primary"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                tools:text="FLAC" />
+        </LinearLayout>
+
+        <!-- Artist & Duration Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_track_artist"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textSize="13sp"
+                tools:text="Keiichi Okabe • NieR:Automata" />
+
+            <TextView
+                android:id="@+id/widget_track_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="@color/md_theme_outline"
+                android:textSize="11sp"
+                tools:text="01:42 / 04:28" />
+        </LinearLayout>
+
+        <!-- Tactile Rounded Progress Bar -->
+        <ProgressBar
+            android:id="@+id/widget_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:layout_marginTop="8dp"
+            android:max="100"
+            android:progress="38"
+            android:progressDrawable="@drawable/widget_progress_bar" />
+    </LinearLayout>
+
+    <!-- Expressive Playback & Favorite Controls Cluster -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Favorite (Heart) Action -->
+        <ImageButton
+            android:id="@+id/widget_btn_favorite"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/widget_btn_circle_ripple"
+            android:contentDescription="@string/playlist_favourite"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_favorite_filled"
+            android:tint="@color/md_theme_primary"
+            tools:src="@drawable/ic_favorite_filled" />
+
+        <!-- Previous Track Action -->
+        <ImageButton
+            android:id="@+id/widget_btn_prev"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/widget_btn_circle_ripple"
+            android:contentDescription="@string/skip_previous"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_previous"
+            android:tint="@color/md_theme_onSurface"
+            tools:src="@drawable/ic_skip_previous" />
+
+        <!-- Prominent High-Contrast Play/Pause Action -->
+        <ImageButton
+            android:id="@+id/widget_btn_play_pause"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_play_btn_bg"
+            android:contentDescription="@string/play"
+            android:padding="11dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_pause"
+            android:tint="@color/md_theme_onPrimary"
+            tools:src="@drawable/ic_pause" />
+
+        <!-- Next Track Action -->
+        <ImageButton
+            android:id="@+id/widget_btn_next"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/widget_btn_circle_ripple"
+            android:contentDescription="@string/skip_next"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_next"
+            android:tint="@color/md_theme_onSurface"
+            tools:src="@drawable/ic_skip_next" />
+    </LinearLayout>
+
+</LinearLayout>

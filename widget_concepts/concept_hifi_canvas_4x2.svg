@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" width="720" height="360">
+  <defs>
+    <linearGradient id="cardBg2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242831"/>
+      <stop offset="100%" stop-color="#1E2128"/>
+    </linearGradient>
+    <linearGradient id="primaryPlay2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B2D3FF"/>
+      <stop offset="100%" stop-color="#7CA8F8"/>
+    </linearGradient>
+    <linearGradient id="progressGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7CA8F8"/>
+      <stop offset="100%" stop-color="#B2D3FF"/>
+    </linearGradient>
+    <clipPath id="albumClip2">
+      <rect x="32" y="32" width="296" height="296" rx="48" ry="48"/>
+    </clipPath>
+  </defs>
+
+  <style>
+    .f-bold { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 700; }
+    .f-medium { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 500; }
+    .f-mono { font-family: "SF Mono", "Roboto Mono", monospace; font-weight: 600; }
+  </style>
+
+  <!-- Pure Widget Card Body (32dp corner radius = 64px at 2x) -->
+  <rect x="1" y="1" width="718" height="358" rx="64" fill="url(#cardBg2)" stroke="#3E4552" stroke-width="1.5"/>
+
+  <!-- Left Side: Large Squircle Album Art (148dp / 296px at 2x, rx="48") -->
+  <g clip-path="url(#albumClip2)">
+    <rect x="32" y="32" width="296" height="296" fill="#1C1A17"/>
+    <!-- Stylized Atmospheric Vinyl & Lunar Flower Art -->
+    <circle cx="180" cy="180" r="122" fill="#292620" stroke="#3D372D" stroke-width="1.5"/>
+    <circle cx="180" cy="180" r="100" fill="#24211B" stroke="#332E24" stroke-width="1"/>
+    <circle cx="180" cy="180" r="76" fill="#1C1A17" stroke="#3D372D" stroke-width="1"/>
+    <circle cx="180" cy="180" r="50" fill="#383228"/>
+    <!-- Floral center -->
+    <g fill="#FFFDF5" opacity="0.95">
+      <ellipse cx="180" cy="146" rx="9" ry="22"/>
+      <ellipse cx="180" cy="214" rx="9" ry="22"/>
+      <ellipse cx="146" cy="180" rx="22" ry="9"/>
+      <ellipse cx="214" cy="180" rx="22" ry="9"/>
+      <ellipse cx="156" cy="156" rx="9" ry="22" transform="rotate(-45 156 156)"/>
+      <ellipse cx="204" cy="156" rx="9" ry="22" transform="rotate(45 204 156)"/>
+      <ellipse cx="156" cy="204" rx="9" ry="22" transform="rotate(45 156 204)"/>
+      <ellipse cx="204" cy="204" rx="9" ry="22" transform="rotate(-45 204 204)"/>
+    </g>
+    <circle cx="180" cy="180" r="15" fill="#EADBBE"/>
+    <circle cx="180" cy="180" r="6" fill="#5E533C"/>
+
+    <!-- Frosted Hi-Res Badge Overlay on Art -->
+    <g transform="translate(48, 48)">
+      <rect width="94" height="26" rx="6" fill="#000000" fill-opacity="0.7"/>
+      <rect width="94" height="26" rx="6" fill="none" stroke="#D4AF37" stroke-width="1" stroke-opacity="0.75"/>
+      <text x="47" y="17" text-anchor="middle" class="f-bold" font-size="10.5" fill="#E5C158" letter-spacing="0.5">Hi-Res AUDIO</text>
+    </g>
+  </g>
+  <!-- Art squircle inner highlight border -->
+  <rect x="32" y="32" width="296" height="296" rx="48" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.1"/>
+
+  <!-- Right Side: Track Metadata & Audiophile Controls -->
+  <!-- Bold Track Title -->
+  <text x="356" y="74" class="f-bold" font-size="26" fill="#FFFFFF">Weight of the World</text>
+
+  <!-- Artist & Album -->
+  <text x="356" y="104" class="f-medium" font-size="16.5" fill="#A4A8B5">Keiichi Okabe • NieR:Automata OST</text>
+
+  <!-- Technical Audiophile Pill Badge with Active Green DAC Dot -->
+  <rect x="356" y="128" width="276" height="34" rx="17" fill="#14243D" stroke="#2B5188" stroke-width="1.2"/>
+  <circle cx="374" cy="145" r="4.5" fill="#4ADE80"/>
+  <text x="388" y="150" class="f-mono" font-size="12.5" fill="#A8C7FA" letter-spacing="0.4">FLAC 24-bit / 96 kHz • Hi-Res</text>
+
+  <!-- Tactile Progress Bar & Timestamps -->
+  <text x="356" y="196" class="f-mono" font-size="13.5" fill="#A4A8B5">02:45</text>
+  <text x="686" y="196" text-anchor="end" class="f-mono" font-size="13.5" fill="#8C919D">05:12</text>
+  <rect x="356" y="208" width="330" height="8" rx="4" fill="#323640"/>
+  <rect x="356" y="208" width="176" height="8" rx="4" fill="url(#progressGrad2)"/>
+  <circle cx="532" cy="212" r="7.5" fill="#FFFFFF"/>
+
+  <!-- Symmetrically Distributed Expressive 5-Button Control Bar -->
+  <!-- 1. Shuffle -->
+  <g transform="translate(356, 252)">
+    <circle cx="26" cy="26" r="26" fill="#282C34"/>
+    <g transform="translate(14, 14)">
+      <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" fill="#8C919D"/>
+    </g>
+  </g>
+
+  <!-- 2. Previous Track -->
+  <g transform="translate(421, 252)">
+    <circle cx="26" cy="26" r="26" fill="#282C34"/>
+    <g transform="translate(14, 14)">
+      <path d="M7 7h3v16H7zm4 8l10 8V7z" fill="#E2E2E9"/>
+    </g>
+  </g>
+
+  <!-- 3. Primary Circular FAB Play/Pause (#B2D3FF) -->
+  <g transform="translate(485, 242)">
+    <circle cx="36" cy="36" r="36" fill="url(#primaryPlay2)"/>
+    <g transform="translate(28, 27)" fill="#06224E">
+      <rect x="0" y="0" width="4.5" height="18" rx="2.25"/>
+      <rect x="11.5" y="0" width="4.5" height="18" rx="2.25"/>
+    </g>
+  </g>
+
+  <!-- 4. Next Track -->
+  <g transform="translate(569, 252)">
+    <circle cx="26" cy="26" r="26" fill="#282C34"/>
+    <g transform="translate(14, 14)">
+      <path d="M20 7h-3v16h3zm-4 8L6 7v16z" fill="#E2E2E9"/>
+    </g>
+  </g>
+
+  <!-- 5. Favorite Heart Button -->
+  <g transform="translate(634, 252)">
+    <circle cx="26" cy="26" r="26" fill="#323640"/>
+    <g transform="translate(14, 14)">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FF5370"/>
+    </g>
+  </g>
+</svg>

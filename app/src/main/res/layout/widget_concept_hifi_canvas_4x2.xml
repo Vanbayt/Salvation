@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Concept 2: Material Expressive Audiophile Hi-Fi Canvas Widget (4x2) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_concept_hifi_bg"
+    android:baselineAligned="false"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="16dp"
+    android:theme="@style/Theme.Gramophone">
+
+    <!-- Left: Large Squircle Album Art (148dp / 296px at 2x, 24dp corner radius) -->
+    <FrameLayout
+        android:id="@+id/widget_album_art_container"
+        android:layout_width="148dp"
+        android:layout_height="148dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/widget_concept_hifi_art_bg"
+        android:clipToOutline="true">
+
+        <ImageView
+            android:id="@+id/widget_album_art"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/album_cover"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_default_cover"
+            tools:src="@drawable/ic_default_cover" />
+
+        <!-- Frosted Hi-Res Badge Overlay on Art -->
+        <LinearLayout
+            android:id="@+id/widget_art_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="10dp"
+            android:background="@drawable/widget_concept_hifi_art_badge"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="7dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="3dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.05"
+                android:text="Hi-Res AUDIO"
+                android:textColor="#E5C158"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                tools:text="Hi-Res AUDIO" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Right Side Information and Control Canvas -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="14dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <!-- Bold Title -->
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="marquee"
+            android:fontFamily="sans-serif-black"
+            android:singleLine="true"
+            android:text="Weight of the World"
+            android:textColor="@color/md_theme_onSurface"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            tools:text="Weight of the World" />
+
+        <!-- Artist & Album -->
+        <TextView
+            android:id="@+id/widget_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:singleLine="true"
+            android:text="Keiichi Okabe • NieR:Automata OST"
+            android:textColor="@color/md_theme_onSurfaceVariant"
+            android:textSize="12sp"
+            tools:text="Keiichi Okabe • NieR:Automata OST" />
+
+        <!-- Technical Pill Badge with Active Green DAC Dot -->
+        <LinearLayout
+            android:id="@+id/widget_format_pill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/widget_concept_hifi_pill_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="3dp">
+
+            <ImageView
+                android:id="@+id/widget_dac_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/widget_concept_hifi_dac_dot"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/widget_audio_format"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.02"
+                android:singleLine="true"
+                android:text="FLAC 24-bit / 96 kHz • Hi-Res"
+                android:textColor="#A8C7FA"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="FLAC 24-bit / 96 kHz • Hi-Res" />
+        </LinearLayout>
+
+        <!-- Tactile Progress Bar with Precision Timestamps -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="3dp">
+
+                <TextView
+                    android:id="@+id/widget_current_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="true"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="02:45"
+                    android:textColor="@color/md_theme_onSurfaceVariant"
+                    android:textSize="10sp"
+                    tools:text="02:45" />
+
+                <TextView
+                    android:id="@+id/widget_total_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="05:12"
+                    android:textColor="@color/md_theme_outline"
+                    android:textSize="10sp"
+                    tools:text="05:12" />
+            </RelativeLayout>
+
+            <ProgressBar
+                android:id="@+id/widget_progress_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:max="100"
+                android:progress="53"
+                android:progressDrawable="@drawable/widget_concept_hifi_progress"
+                tools:progress="53" />
+        </LinearLayout>
+
+        <!-- Expressive 5-Button Control Bar: Shuffle, Prev, Primary Circular FAB Play/Pause, Next, Favorite -->
+        <LinearLayout
+            android:id="@+id/widget_controls_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/widget_btn_shuffle"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_concept_hifi_control_bg"
+                android:contentDescription="@string/shuffle"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_shuffle"
+                android:tint="@color/md_theme_onSurfaceVariant" />
+
+            <ImageButton
+                android:id="@+id/widget_btn_prev"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_concept_hifi_control_bg"
+                android:contentDescription="@string/skip_previous"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_skip_previous_filled"
+                android:tint="@color/md_theme_onSurface" />
+
+            <!-- Tactile Big Primary Circular Play/Pause FAB Button -->
+            <ImageButton
+                android:id="@+id/widget_btn_play_pause"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="0"
+                android:background="@drawable/widget_concept_hifi_play_bg"
+                android:contentDescription="@string/play"
+                android:elevation="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_pause_filled"
+                android:tint="@color/md_theme_onPrimary" />
+
+            <ImageButton
+                android:id="@+id/widget_btn_next"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_concept_hifi_control_bg"
+                android:contentDescription="@string/skip_next"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_skip_next_filled"
+                android:tint="@color/md_theme_onSurface" />
+
+            <ImageButton
+                android:id="@+id/widget_btn_favorite"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_concept_hifi_control_bg"
+                android:contentDescription="@string/playlist_favourite"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_favorite_filled"
+                android:tint="#FF5370" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

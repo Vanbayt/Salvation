@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" width="720" height="360">
+  <defs>
+    <linearGradient id="cardBg4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242832"/>
+      <stop offset="100%" stop-color="#1A1D24"/>
+    </linearGradient>
+    <linearGradient id="flowCtaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1D4ED8"/>
+      <stop offset="60%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="metalPillGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#581020"/>
+      <stop offset="50%" stop-color="#831830"/>
+      <stop offset="100%" stop-color="#991B1B"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .f-bold { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Google Sans", sans-serif; font-weight: 700; }
+    .f-medium { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Google Sans", sans-serif; font-weight: 500; }
+    .f-mono { font-family: "SF Mono", "Roboto Mono", "Google Sans Mono", monospace; font-weight: 600; }
+  </style>
+
+  <!-- Widget Card Body (rx="64" at 2x / 32dp, surfaceContainer #22262F) -->
+  <rect x="1" y="1" width="718" height="358" rx="64" fill="url(#cardBg4)" stroke="#3E4552" stroke-width="1.5" stroke-opacity="0.6"/>
+
+  <!-- Header Signal Chips (Contextual Signals: Time, Weather, Codec, BPM Pulse) -->
+  <g transform="translate(28, 24)">
+    <!-- Chip 1: Mood / Time of Day (🌙 Ночной эмбиент) -->
+    <rect x="0" y="0" width="154" height="36" rx="18" fill="#282E3B" stroke="#3D4556" stroke-width="1"/>
+    <g transform="translate(13, 9) scale(0.75)">
+      <path d="M12.3 2C12.2 2.3 12.15 2.65 12.15 3c0 4.97 4.03 9 9 9 .35 0 .7-.05 1-.15C21.1 17.75 15.95 22 10 22 4.48 22 0 17.52 0 12 0 6.05 4.25.9 10.15-.15c-.1.3-.15.65-.15 1 0 .4.1.8.3 1.15z" fill="#FDE047"/>
+    </g>
+    <text x="38" y="23" class="f-medium" font-size="12" fill="#D2D6E2">Ночной эмбиент</text>
+
+    <!-- Chip 2: Weather Signal (🌧️ Дождь 14°C) -->
+    <rect x="164" y="0" width="126" height="36" rx="18" fill="#222E3E" stroke="#374863" stroke-width="1"/>
+    <g transform="translate(176, 9) scale(0.68)">
+      <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#93C5FD"/>
+      <line x1="6" y1="22" x2="4" y2="25" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round"/>
+      <line x1="11" y1="22" x2="9" y2="25" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round"/>
+      <line x1="16" y1="22" x2="14" y2="25" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+    <text x="200" y="23" class="f-medium" font-size="12" fill="#A8C7FA">Дождь 14°C</text>
+
+    <!-- Chip 3: Hardware Codec Signal (🎧 Sony • LDAC 990k) -->
+    <rect x="300" y="0" width="196" height="36" rx="18" fill="#252D3C" stroke="#3E495E" stroke-width="1"/>
+    <g transform="translate(312, 9) scale(0.019)" fill="#A8C7FA">
+      <path d="M360 840L200 840Q167 840 143.5 816.5Q120 793 120 760L120 480Q120 405 148.5 339.5Q177 274 225.5 225.5Q274 177 339.5 148.5Q405 120 480 120Q555 120 620.5 148.5Q686 177 734.5 225.5Q783 274 811.5 339.5Q840 405 840 480L840 760Q840 793 816.5 816.5Q793 840 760 840L600 840L600 520L760 520L760 480Q760 363 678.5 281.5Q597 200 480 200Q363 200 281.5 281.5Q200 363 200 480L200 520L360 520L360 840ZM280 600L200 600L200 760L280 760ZM680 600L680 760L760 760L760 600Z"/>
+    </g>
+    <text x="338" y="23" class="f-mono" font-size="12" fill="#E2E2E9">Sony • LDAC 990k</text>
+
+    <!-- Chip 4: BPM Pulse Signal (🟢 72 BPM • Спокойно) -->
+    <rect x="506" y="0" width="158" height="36" rx="18" fill="#1B2F24" stroke="#2B573D" stroke-width="1"/>
+    <circle cx="522" cy="18" r="7.5" fill="#4ADE80" opacity="0.25"/>
+    <circle cx="522" cy="18" r="4.5" fill="#4ADE80"/>
+    <text x="536" y="23" class="f-mono" font-size="12" fill="#86EFAC">72 BPM • Спокойно</text>
+  </g>
+
+  <!-- Hero CTA Pill (rx="38"): Запустить Мою Волну with Wave Bars and White Play Button -->
+  <g transform="translate(28, 76)">
+    <rect x="0" y="0" width="664" height="76" rx="38" fill="url(#flowCtaGrad)" stroke="#60A5FA" stroke-width="1.5"/>
+
+    <!-- Animated-style Audio Wave Bars Glyph -->
+    <g transform="translate(26, 21)" fill="#FFFFFF">
+      <rect x="0" y="9" width="4.5" height="16" rx="2.25"/>
+      <rect x="7.5" y="4" width="4.5" height="26" rx="2.25"/>
+      <rect x="15" y="0" width="4.5" height="34" rx="2.25"/>
+      <rect x="22.5" y="7" width="4.5" height="20" rx="2.25"/>
+      <rect x="30" y="13" width="4.5" height="8" rx="2.25"/>
+      <rect x="37.5" y="3" width="4.5" height="28" rx="2.25"/>
+      <rect x="45" y="6" width="4.5" height="22" rx="2.25"/>
+    </g>
+
+    <!-- Hero Title & Context Subtitle -->
+    <text x="92" y="44" class="f-bold" font-size="22" fill="#FFFFFF">Запустить Мою Волну</text>
+    <text x="340" y="44" class="f-medium" font-size="14" fill="#BFDBFE">• Персональный умный поток</text>
+
+    <!-- White Circular Play Button with Accent Play Triangle -->
+    <circle cx="620" cy="38" r="24" fill="#FFFFFF"/>
+    <polygon points="614,27 632,38 614,49" fill="#1D4ED8"/>
+  </g>
+
+  <!-- Section Label: Dynamic Presets 75/25 Architecture -->
+  <text x="32" y="176" class="f-bold" font-size="11.5" fill="#8C919D" letter-spacing="1">ДИНАМИЧЕСКИЕ ПРЕСЕТЫ • АРХИТЕКТУРА 75/25</text>
+
+  <!-- Recommendation Presets Row (75/25 Head + Contrast Tail) -->
+  <g transform="translate(28, 192)">
+    <!-- Preset 1 (75% Head): Deep Focus -->
+    <g>
+      <rect x="0" y="0" width="212" height="142" rx="22" fill="#242832" stroke="#3A404E" stroke-width="1.2"/>
+      <rect x="14" y="14" width="38" height="38" rx="12" fill="#182E4F"/>
+      <!-- Mind/Brain Vector Glyph -->
+      <g transform="translate(23, 23)">
+        <path d="M10 2.5C7.2 2.5 5 4.7 5 7.5c0 1.1.4 2.1 1 2.9C4.3 11.2 3 13 3 15.2 3 18 5.2 20 8 20c1.2 0 2.3-.4 3.1-1.2.8.8 1.9 1.2 3.1 1.2 2.8 0 5-2 5-4.8 0-2.2-1.3-4-3-4.8.6-.8 1-1.8 1-2.9 0-2.8-2.2-5-5-5h-2.2z" fill="#3B82F6" opacity="0.4"/>
+        <path d="M10 4.5c-1.6 0-3 1.3-3 3 0 .7.3 1.3.7 1.8C6.8 9.9 6.2 11 6.2 12.2c0 2.1 1.7 3.8 3.8 3.8.9 0 1.6-.3 2.2-.8.6.5 1.3.8 2.2.8 2.1 0 3.8-1.7 3.8-3.8 0-1.2-.6-2.3-1.5-2.9.4-.5.7-1.1.7-1.8 0-1.7-1.3-3-3-3h-4.4z" fill="#93C5FD"/>
+      </g>
+      <rect x="122" y="14" width="76" height="22" rx="11" fill="#15281E" stroke="#255938" stroke-width="0.8"/>
+      <text x="130" y="29" class="f-mono" font-size="10" fill="#4ADE80">98% МАТЧ</text>
+      <text x="14" y="74" class="f-mono" font-size="9" fill="#7CA8F8" letter-spacing="0.8">75% HEAD</text>
+      <text x="14" y="96" class="f-bold" font-size="18" fill="#F1F3F9">Deep Focus</text>
+      <text x="14" y="118" class="f-medium" font-size="12" fill="#9DA3B4">Ambient • 72 BPM</text>
+    </g>
+
+    <!-- Preset 2 (75% Head): Rain Ambient -->
+    <g transform="translate(226, 0)">
+      <rect x="0" y="0" width="212" height="142" rx="22" fill="#242832" stroke="#3A404E" stroke-width="1.2"/>
+      <rect x="14" y="14" width="38" height="38" rx="12" fill="#1E293B"/>
+      <!-- Cloud & Raindrops Vector Glyph -->
+      <g transform="translate(23, 23)">
+        <path d="M15.5 8C15 5.2 12.5 3.2 9.6 3.2 7.3 3.2 5.3 4.5 4.3 6.4 1.9 6.7 0 8.7 0 11.2 0 13.9 2.2 16 4.8 16h10.4c2.2 0 4-1.8 4-4 0-2.1-1.6-3.8-3.7-4z" fill="#93C5FD"/>
+        <line x1="5" y1="18" x2="3.5" y2="21" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9.5" y1="18" x2="8" y2="21" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="18" x2="12.5" y2="21" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+      </g>
+      <rect x="122" y="14" width="76" height="22" rx="11" fill="#15281E" stroke="#255938" stroke-width="0.8"/>
+      <text x="130" y="29" class="f-mono" font-size="10" fill="#4ADE80">95% МАТЧ</text>
+      <text x="14" y="74" class="f-mono" font-size="9" fill="#7CA8F8" letter-spacing="0.8">75% HEAD</text>
+      <text x="14" y="96" class="f-bold" font-size="18" fill="#F1F3F9">Rain Ambient</text>
+      <text x="14" y="118" class="f-medium" font-size="12" fill="#9DA3B4">Piano Drone • 64 BPM</text>
+    </g>
+
+    <!-- Preset 3 (25% Contrast Tail): Контраст: Метал -->
+    <g transform="translate(452, 0)">
+      <rect x="0" y="0" width="212" height="142" rx="22" fill="url(#metalPillGrad)" stroke="#EF4444" stroke-width="1.2"/>
+      <rect x="14" y="14" width="38" height="38" rx="12" fill="#450A0A"/>
+      <!-- Fire / Flame Vector Glyph -->
+      <g transform="translate(23, 23)">
+        <path d="M10.8.5s.6 2.1.6 3.8c0 1.6-1.1 3-2.7 3-1.7 0-2.9-1.3-2.9-3l.02-.29C4.2 6 3.2 8.5 3.2 11.2c0 3.5 2.9 6.4 6.4 6.4s6.4-2.9 6.4-6.4C16 6.9 13.9 3 10.8.5zm-1.4 14.7c-1.4 0-2.6-1.1-2.6-2.5 0-1.3.8-2.2 2.2-2.5 1.4-.3 2.9-1 3.7-2.1.3 1 .5 2.1.5 3.2 0 2.1-1.7 3.9-3.8 3.9z" fill="#FDA4AF"/>
+      </g>
+      <rect x="116" y="14" width="82" height="22" rx="11" fill="#7F1D1D" stroke="#B91C1C" stroke-width="0.8"/>
+      <text x="122" y="29" class="f-mono" font-size="10" fill="#FCA5A5">25% ХВОСТ</text>
+      <text x="14" y="74" class="f-mono" font-size="9" fill="#FECDD3" letter-spacing="0.8">25% CONTRAST</text>
+      <text x="14" y="96" class="f-bold" font-size="18" fill="#FFFFFF">Контраст: Метал</text>
+      <text x="14" y="118" class="f-medium" font-size="12" fill="#FECACA">Symphonic • 145 BPM</text>
+    </g>
+  </g>
+</svg>

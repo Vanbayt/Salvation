@@ -247,8 +247,29 @@ fun FullPlayerScreen(
     val defaultSurface = MaterialTheme.colorScheme.surface
     val defaultSurfaceContainer = MaterialTheme.colorScheme.surfaceContainerLowest
 
-    val coverUrl = metadata?.artworkUri?.toString()?.let {
-        if (it.startsWith("/")) "http://185.196.41.31$it" else it
+    var dynamicCoverUrl by remember(trackId) {
+        mutableStateOf(org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId))
+    }
+
+    DisposableEffect(trackId) {
+        val listener: (String, String) -> Unit = { trId, newCover ->
+            if (trId == trackId) {
+                dynamicCoverUrl = newCover
+            }
+        }
+        org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.addCoverListener(listener)
+        onDispose {
+            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.removeCoverListener(listener)
+        }
+    }
+
+    val rawCover = metadata?.artworkUri?.toString()
+    val coverUrl = remember(rawCover, dynamicCoverUrl, trackId) {
+        val best = org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+            rawCover,
+            dynamicCoverUrl ?: org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId)
+        )
+        org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(best)
     }
 
     // Извлечение динамической палитры

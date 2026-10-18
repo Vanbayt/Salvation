@@ -173,6 +173,7 @@ class AudioPreviewActivity : BaseActivity(), View.OnClickListener {
                 .setPcmEncodingRestrictionLifted(true)
                 .setEnableDecoderFallback(true)
                 .setEnableAudioTrackPlaybackParams(true)
+                .setMediaCodecSelector(androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER),
             GramophoneMediaSourceFactory(this,
                 DefaultDataSource.Factory(this),
@@ -198,11 +199,14 @@ class AudioPreviewActivity : BaseActivity(), View.OnClickListener {
                     .setAudioOffloadPreferences(
                         TrackSelectionParameters.AudioOffloadPreferences.Builder()
                             .apply {
-                                val config = prefs.getStringStrict("offload", "0")?.toIntOrNull()
-                                if (config != null && config > 0 && Flags.OFFLOAD) {
+                                val config = prefs.getStringStrict("offload", "0")?.toIntOrNull() ?: 0
+                                if (config > 0 && Flags.OFFLOAD) {
                                     rgAp.setOffloadEnabled(true)
                                     setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
                                     setIsGaplessSupportRequired(config == 2)
+                                } else {
+                                    rgAp.setOffloadEnabled(false)
+                                    setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
                                 }
                             }
                             .build()))

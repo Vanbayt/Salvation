@@ -74,8 +74,13 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
                     val trackAlbum = metadata?.albumTitle?.toString() ?: ""
 
                     val originalUri = metadata?.artworkUri?.toString() ?: ""
-                    val finalCoverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
                     val currentTrackId = currentItem?.mediaId
+                    val finalCoverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(
+                        org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+                            originalUri,
+                            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(currentTrackId)
+                        )
+                    ) ?: ""
                     val isLosslessExtra = metadata?.extras?.getBoolean("IS_LOSSLESS", false) ?: false
                     val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(currentTrackId, isLosslessExtra)
 

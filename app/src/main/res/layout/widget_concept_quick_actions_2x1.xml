@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Concept 6: Material Expressive Quick Actions & Micro-Widgets (2x1)
+    Compatible with Android RemoteViews (AppWidgetProvider).
+    Features a vibrant 4-tile expressive dock:
+    1. Tile 1 (Coral): 'Любимое' (Heart icon + '1 420 треков')
+    2. Tile 2 (Blue/Violet): 'Моя волна' (Soundwave icon + 'Умный поток')
+    3. Tile 3 (Teal): 'Поиск' (Magnifier icon + 'Радар + голос')
+    4. Tile 4 (Amber/Vinyl): 'Недавнее' (Vinyl record icon + 'Продолжить')
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_quick_actions_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_widget_expressive_container"
+    android:baselineAligned="false"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    tools:layout_height="88dp"
+    tools:layout_width="360dp">
+
+    <!-- Tile 1 (Coral): 'Любимое' (Heart icon + '1 420 треков') -->
+    <LinearLayout
+        android:id="@+id/tile_favorites"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_widget_expressive_favorites"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="6dp">
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/icon_favorites"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="Любимое"
+                android:src="@drawable/ic_favorite_filled"
+                android:tint="#FF5370" />
+
+            <ImageView
+                android:id="@+id/btn_play_favorites"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/bg_widget_expressive_play_badge_coral"
+                android:contentDescription="Воспроизвести любимое"
+                android:padding="2dp"
+                android:src="@drawable/ic_play_arrow_filled"
+                android:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/tv_favorites_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Любимое"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="Любимое" />
+
+        <TextView
+            android:id="@+id/tv_favorites_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="1 420 треков"
+            android:textColor="#FF9EB5"
+            android:textSize="9sp"
+            tools:text="1 420 треков" />
+    </LinearLayout>
+
+    <!-- Tile 2 (Blue/Violet): 'Моя волна' (Soundwave icon + 'Умный поток') -->
+    <LinearLayout
+        android:id="@+id/tile_my_wave"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_widget_expressive_wave"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="6dp">
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/icon_my_wave"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="Моя волна"
+                android:src="@drawable/ic_widget_wave_bars"
+                android:tint="#A5B4FC" />
+
+            <ImageView
+                android:id="@+id/btn_play_wave"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/bg_widget_expressive_play_badge_violet"
+                android:contentDescription="Запустить мою волну"
+                android:padding="2dp"
+                android:src="@drawable/ic_play_arrow_filled"
+                android:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/tv_my_wave_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Моя волна"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="Моя волна" />
+
+        <TextView
+            android:id="@+id/tv_my_wave_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Умный поток"
+            android:textColor="#D8B4FE"
+            android:textSize="9sp"
+            tools:text="Умный поток" />
+    </LinearLayout>
+
+    <!-- Tile 3 (Teal): 'Поиск' (Magnifier icon + 'Радар + голос') -->
+    <LinearLayout
+        android:id="@+id/tile_search"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_widget_expressive_search"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="6dp">
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/icon_search"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="Поиск"
+                android:src="@drawable/ic_search"
+                android:tint="#2DD4BF" />
+
+            <ImageView
+                android:id="@+id/badge_search_discover"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_gravity="top|end"
+                android:contentDescription="Радар + голос"
+                android:src="@drawable/ic_widget_sparkle"
+                android:tint="#5EEAD4" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/tv_search_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Поиск"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="Поиск" />
+
+        <TextView
+            android:id="@+id/tv_search_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Радар + голос"
+            android:textColor="#99F6E4"
+            android:textSize="9sp"
+            tools:text="Радар + голос" />
+    </LinearLayout>
+
+    <!-- Tile 4 (Amber/Vinyl): 'Недавнее' (Vinyl record icon + 'Продолжить') -->
+    <LinearLayout
+        android:id="@+id/tile_recent_album"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="@drawable/bg_widget_expressive_album"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="6dp">
+
+        <FrameLayout
+            android:layout_width="30dp"
+            android:layout_height="30dp">
+
+            <ImageView
+                android:id="@+id/iv_recent_album_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_widget_expressive_cover_squircle"
+                android:contentDescription="Недавнее"
+                android:padding="3dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_album"
+                android:tint="#F59E0B" />
+
+            <ImageView
+                android:id="@+id/btn_play_album"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/bg_widget_expressive_play_badge_amber"
+                android:contentDescription="Продолжить"
+                android:padding="2dp"
+                android:src="@drawable/ic_play_arrow_filled"
+                android:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/tv_album_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Недавнее"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="Недавнее" />
+
+        <TextView
+            android:id="@+id/tv_album_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Продолжить"
+            android:textColor="#FDE68A"
+            android:textSize="9sp"
+            tools:text="Продолжить" />
+    </LinearLayout>
+
+</LinearLayout>

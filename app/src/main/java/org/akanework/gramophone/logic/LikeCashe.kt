@@ -3,6 +3,7 @@ package org.akanework.gramophone.logic
 import java.util.concurrent.ConcurrentHashMap
 
 // Синглтон, который хранит ID и сигнатуры (title_artist) всех лайкнутых треков в оперативной памяти
+typealias LikeCashe = LikeCache
 object LikeCache {
     val likedTracks = ConcurrentHashMap.newKeySet<String>()
     val likedSignatures = ConcurrentHashMap.newKeySet<String>()

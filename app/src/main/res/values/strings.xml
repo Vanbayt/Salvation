@@ -495,4 +495,7 @@
     <string name="actions_query_shuffle_specific">shuffle $item_name</string>
     <string name="please_allow_to_delete">Press allow to delete files</string>
     <string name="choose_sd">Choose %s</string>
+    <string name="widget_up_next">Up next</string>
+    <string name="widget_open_queue">Open queue</string>
+    <string name="widget_play_now">Play now</string>
 </resources>

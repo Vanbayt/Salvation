@@ -487,4 +487,7 @@
     <string name="offload_enabled_no_gapless">Всегда включено, но без бесшовной аппаратной разгрузки</string>
     <string name="please_allow_to_delete">Нажмите «Разрешить», чтобы удалить файлы</string>
     <string name="choose_sd">Выберите %s</string>
+    <string name="widget_up_next">Далее в очереди</string>
+    <string name="widget_open_queue">Открыть очередь</string>
+    <string name="widget_play_now">Слушать сейчас</string>
 </resources>

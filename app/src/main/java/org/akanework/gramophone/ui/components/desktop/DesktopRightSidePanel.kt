@@ -52,7 +52,14 @@ fun DesktopRightSidePanel(
     val curItem = player?.currentMediaItem
     val title = curItem?.mediaMetadata?.title?.toString() ?: ""
     val artist = curItem?.mediaMetadata?.artist?.toString() ?: ""
-    val coverUrl = curItem?.mediaMetadata?.artworkUri?.toString() ?: ""
+    val rawCover = curItem?.mediaMetadata?.artworkUri?.toString() ?: ""
+    val trackId = curItem?.mediaId
+    val coverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(
+        org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+            rawCover,
+            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId)
+        )
+    ) ?: ""
 
     var isPlaying by remember { mutableStateOf(player?.isPlaying == true) }
     var currentPositionMs by remember { mutableLongStateOf(player?.currentPosition ?: 0L) }

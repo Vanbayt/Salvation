@@ -35,7 +35,40 @@ data class Artist(
 
     // 🔥 ДОБАВЛЯЕМ В КЛАСС Artist
     @SerializedName("is_liked")
-    var isLiked: Boolean = false
+    var isLiked: Boolean = false,
+
+    // Ближайшие / Будущие релизы артиста (Spotify Countdown аналог)
+    @SerializedName("upcoming")
+    val upcoming: List<UpcomingRelease>? = null
+) : Serializable
+
+data class UpcomingRelease(
+    @SerializedName("title")
+    val title: String,
+
+    @SerializedName("artist_name")
+    val artistName: String,
+
+    @SerializedName("release_date")
+    val releaseDate: String,
+
+    @SerializedName("days_left")
+    val daysLeft: Int,
+
+    @SerializedName("release_timestamp")
+    val releaseTimestamp: Long? = null,
+
+    @SerializedName("record_type")
+    val recordType: String? = null,
+
+    @SerializedName("cover")
+    val cover: String? = null,
+
+    @SerializedName("track_count")
+    val trackCount: Int? = null,
+
+    @SerializedName("source")
+    val source: String? = null
 ) : Serializable
 
 data class ArtistInfo(

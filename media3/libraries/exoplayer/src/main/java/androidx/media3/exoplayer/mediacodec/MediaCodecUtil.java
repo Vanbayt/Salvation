@@ -259,7 +259,20 @@ public final class MediaCodecUtil {
       List<MediaCodecInfo> decoderInfos, Format format) {
     decoderInfos = new ArrayList<>(decoderInfos);
     sortByScore(
-        decoderInfos, decoderInfo -> decoderInfo.isFormatFunctionallySupported(format) ? 1 : 0);
+        decoderInfos,
+        decoderInfo -> {
+          int score = 0;
+          if (decoderInfo.isFormatFunctionallySupported(format)) {
+            score += 1000;
+          }
+          if (decoderInfo.hardwareAccelerated || !decoderInfo.softwareOnly) {
+            score += 500;
+          }
+          if (decoderInfo.vendor) {
+            score += 100;
+          }
+          return score;
+        });
     return decoderInfos;
   }
 
@@ -275,7 +288,17 @@ public final class MediaCodecUtil {
         decoderInfos,
         decoderInfo -> {
           try {
-            return decoderInfo.isFormatSupported(format) ? 1 : 0;
+            int score = 0;
+            if (decoderInfo.isFormatSupported(format)) {
+              score += 1000;
+            }
+            if (decoderInfo.hardwareAccelerated || !decoderInfo.softwareOnly) {
+              score += 500;
+            }
+            if (decoderInfo.vendor) {
+              score += 100;
+            }
+            return score;
           } catch (DecoderQueryException e) {
             return -1;
           }

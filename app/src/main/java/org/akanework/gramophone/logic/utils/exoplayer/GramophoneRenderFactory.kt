@@ -1,6 +1,9 @@
 package org.akanework.gramophone.logic.utils.exoplayer
 
 import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
@@ -20,6 +23,7 @@ import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.video.VideoRendererEventListener
+import org.akanework.gramophone.logic.utils.MediaRoutes
 import org.akanework.gramophone.logic.utils.MonoAudioProcessor
 import org.akanework.gramophone.logic.utils.PostAmpAudioSink
 import org.akanework.gramophone.logic.utils.ReplayGainAudioProcessor
@@ -131,7 +135,7 @@ class GramophoneRenderFactory(
         })
 
         builder.setAudioOffloadSupportProvider(
-            MyAudioOffloadSupportProvider(DefaultAudioOffloadSupportProvider(context), disableGaplessOffload)
+            MyAudioOffloadSupportProvider(context, DefaultAudioOffloadSupportProvider(context), rgAp, monoAp, disableGaplessOffload)
         )
 
         var postAmpAudioSink: PostAmpAudioSink? = null
@@ -164,14 +168,96 @@ class GramophoneRenderFactory(
     }
 
     class MyAudioOffloadSupportProvider(
+        private val context: Context,
         private val default: DefaultAudioOffloadSupportProvider,
+        private val rgAp: ReplayGainAudioProcessor,
+        private val monoAp: MonoAudioProcessor,
         private val disableGaplessOffload: Boolean
     ) : DefaultAudioSink.AudioOffloadSupportProvider by default {
+
+        private fun isBluetoothDeviceType(type: Int): Boolean {
+            return when (type) {
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_HEARING_AID -> true
+                else -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                        type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+                        type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+                    } else false
+                }
+            }
+        }
+
+        private fun isBluetoothActive(): Boolean {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+            try {
+                val selectedDevice = MediaRoutes.getSelectedAudioDevice(context)
+                if (selectedDevice != null && isBluetoothDeviceType(selectedDevice.type)) {
+                    return true
+                }
+            } catch (t: Throwable) {
+                // Ignore and fall back to audioManager checks
+            }
+
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn) {
+                return true
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val commDevice = audioManager.communicationDevice
+                if (commDevice != null && isBluetoothDeviceType(commDevice.type)) {
+                    return true
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                for (device in devices) {
+                    if (isBluetoothDeviceType(device.type)) {
+                        return true
+                    }
+                }
+            }
+
+            return false
+        }
+
+        private fun isSoftwareAudioProcessorActive(): Boolean {
+            return monoAp.isMonoEnabled || rgAp.mode != org.akanework.gramophone.logic.utils.ReplayGainUtil.Mode.None
+        }
+
         override fun getAudioOffloadSupport(
             format: Format,
             audioAttributes: AudioAttributes
         ): AudioOffloadSupport {
+            if (!org.akanework.gramophone.logic.utils.Flags.OFFLOAD) {
+                return AudioOffloadSupport.DEFAULT_UNSUPPORTED
+            }
+
+            if (isBluetoothActive()) {
+                android.util.Log.i(
+                    "GramophoneOffload",
+                    "Bluetooth route active, disabling compressed offload (falling back to hardware MediaCodec + PCM mixer)"
+                )
+                return AudioOffloadSupport.DEFAULT_UNSUPPORTED
+            }
+
+            if (isSoftwareAudioProcessorActive()) {
+                android.util.Log.i(
+                    "GramophoneOffload",
+                    "Software AudioProcessor active (mono=${monoAp.isMonoEnabled}, rgMode=${rgAp.mode}), disabling offload"
+                )
+                return AudioOffloadSupport.DEFAULT_UNSUPPORTED
+            }
+
             val defaultResult = default.getAudioOffloadSupport(format, audioAttributes)
+            android.util.Log.i(
+                "GramophoneOffload",
+                "getAudioOffloadSupport: mime=${format.sampleMimeType}, rate=${format.sampleRate}, channels=${format.channelCount}, supported=${defaultResult.isFormatSupported}, gapless=${defaultResult.isGaplessSupported}"
+            )
             val audioOffloadSupport = AudioOffloadSupport.Builder()
             return audioOffloadSupport
                 .setIsFormatSupported(defaultResult.isFormatSupported)

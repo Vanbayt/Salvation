@@ -338,5 +338,6 @@ data class TrackResolveInfoResponse(
     @SerializedName("is_lossless") val isLossless: Boolean = false,
     @SerializedName("has_local_flac") val hasLocalFlac: Boolean = false,
     @SerializedName("bitrate") val bitrate: Int? = null,
-    @SerializedName("file_path") val filePath: String? = null
+    @SerializedName("file_path") val filePath: String? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null
 )

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 176" width="720" height="176">
+  <defs>
+    <style>
+      .widget-card { fill: #211F1D; }
+      .tile-note { fill: #4A4643; }
+      .tile-btn { fill: #54453E; }
+      .txt-title { font-family: "Google Sans", "Product Sans", "Roboto", -apple-system, sans-serif; font-size: 30px; font-weight: 700; fill: #F5EFEA; }
+      .txt-subtitle { font-family: "Google Sans", "Product Sans", "Roboto", -apple-system, sans-serif; font-size: 22px; font-weight: 500; fill: #C8C2BC; }
+    </style>
+  </defs>
+
+  <rect width="720" height="176" rx="56" class="widget-card"/>
+
+  <rect x="28" y="38" width="100" height="100" rx="36" class="tile-note"/>
+  <g transform="translate(78, 88) scale(2.6) translate(-11, -12)"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" fill="#F5EFEA"/></g>
+
+  <text x="152" y="80" class="txt-title">PixelPlayer</text>
+  <text x="152" y="114" class="txt-subtitle">Tap to open</text>
+
+  <rect x="396" y="44" width="88" height="88" rx="36" class="tile-btn"/>
+  <g transform="translate(440, 88) scale(1.7) translate(-12, -12)"><path d="M5.5,18L5.5,6L7.5,6L7.5,18L5.5,18ZM18.5,18L9.5,12L18.5,6L18.5,18Z" fill="#F5EFEA"/></g>
+
+  <rect x="500" y="44" width="88" height="88" rx="44" class="tile-btn"/>
+  <g transform="translate(544, 88) scale(1.8) translate(-13, -12)"><path d="M8,19L8,5L19,12L8,19Z" fill="#F5EFEA"/></g>
+
+  <rect x="604" y="44" width="88" height="88" rx="36" class="tile-btn"/>
+  <g transform="translate(648, 88) scale(1.7) translate(-12, -12)"><path d="M16.5,18L16.5,6L18.5,6L18.5,18L16.5,18ZM5.5,18L5.5,6L14.5,12L5.5,18Z" fill="#F5EFEA"/></g>
+</svg>

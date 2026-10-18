@@ -14,6 +14,7 @@ import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.Artist
 import org.akanework.gramophone.logic.api.Track
+import org.akanework.gramophone.logic.utils.CoverUtils
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
@@ -226,7 +227,7 @@ class OnlineSearchAdapter(
             cover.shapeAppearanceModel = cover.shapeAppearanceModel.toBuilder()
                 .setAllCornerSizes(12 * itemView.resources.displayMetrics.density)
                 .build()
-            cover.load(track.cover) {
+            cover.load(CoverUtils.upgradeCoverQuality(track.cover)) {
                 allowHardware(false)
             }
             btnPlay.setImageResource(R.drawable.ic_play_arrow)
@@ -241,7 +242,7 @@ class OnlineSearchAdapter(
             cover.shapeAppearanceModel = cover.shapeAppearanceModel.toBuilder()
                 .setAllCornerSizes(36 * itemView.resources.displayMetrics.density)
                 .build()
-            cover.load(a.picture ?: a.cover) {
+            cover.load(CoverUtils.upgradeCoverQuality(a.picture ?: a.cover)) {
                 allowHardware(false)
             }
             btnPlay.setImageResource(R.drawable.ic_person)
@@ -289,10 +290,7 @@ class OnlineSearchAdapter(
     inner class ArtistViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val name: TextView = view.findViewById(R.id.tv_artist_name)
         private val cover: ImageView = view.findViewById(R.id.iv_artist_avatar)
-        private fun fixCoverUrl(url: String?): String? {
-            if (url.isNullOrEmpty()) return null
-            return if (url.startsWith("/")) "http://185.196.41.31$url" else url
-        }
+        private fun fixCoverUrl(url: String?): String? = CoverUtils.upgradeCoverQuality(url)
 
         fun bind(artist: Artist) {
             // 🔥 Устанавливаем уникальное имя и передаем View
@@ -316,7 +314,7 @@ class OnlineSearchAdapter(
         fun bind(track: Track) {
             title.text = track.title
             artist.text = track.artist
-            val finalCover = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+            val finalCover = CoverUtils.upgradeCoverQuality(track.cover)
             finalCover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onClick(track) }
             menuBtn.setOnClickListener { onMenuClick(track, menuBtn) }
@@ -435,7 +433,7 @@ class OnlineSearchAdapter(
             itemView.transitionName = "album_card_${album.id}"
             title.text = album.title
             year.text = album.releaseYear?.toString() ?: ""
-            val finalCover = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
+            val finalCover = CoverUtils.upgradeCoverQuality(album.cover)
             finalCover?.let { cover.load(it) } ?: cover.setImageResource(R.drawable.ic_library)
             itemView.setOnClickListener { onAlbumClick(album, itemView) }
         }
@@ -454,7 +452,7 @@ class OnlineSearchAdapter(
             val yearStr = album.releaseYear?.toString() ?: ""
             subtitle.text = if (yearStr.isNotEmpty()) "${album.artistName} • $yearStr" else album.artistName
 
-            val finalCoverUrl = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
+            val finalCoverUrl = CoverUtils.upgradeCoverQuality(album.cover)
             finalCoverUrl?.let { url ->
                 cover.load(url) {
                     allowHardware(false) // Разрешаем чтение пикселей
@@ -502,7 +500,7 @@ class OnlineSearchAdapter(
             title.text = artist.name
             subtitle.text = "Артист"
 
-            val imgUrl = artist.picture ?: artist.cover
+            val imgUrl = CoverUtils.upgradeCoverQuality(artist.picture ?: artist.cover)
             imgUrl?.let { url ->
                 cover.load(url) {
                     allowHardware(false)

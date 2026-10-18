@@ -163,9 +163,11 @@ class PostAmpAudioSink(
     // These can be created once handler is created and offloadEnabled is loaded, and then never
     // need to be recycled until we get released.
     private fun createEffectsIfNeeded() {
-        val offloadEnabled = offloadEnabled!!
-        val handler = handler!!
-        val hasOffloadDpe = isDpeAvailable && isDpeOffloadable && offloadEnabled
+        val offloadEnabled = offloadEnabled ?: false
+        val handler = handler ?: return
+        // DynamicsProcessing effect cannot be offloaded to DSP and attaching it to an offloaded
+        // AudioTrack will either silence playback or fail AudioFlinger. Never attach DPE when offload is active.
+        val hasOffloadDpe = false
         val useDpeForVolume = !isVolumeAvailable && !offloadEnabled && isDpeAvailable
         // Set a lower priority when creating effects - we are willing to share.
         // (User story "EQ is not working and I have to change a obscure setting to fix it"
@@ -257,6 +259,7 @@ class PostAmpAudioSink(
 
             override fun onAudioTrackInitialized(audioTrackConfig: AudioSink.AudioTrackConfig) {
                 myApplyPendingConfig()
+                setVolumeInternal()
                 listener.onAudioTrackInitialized(audioTrackConfig)
             }
 
@@ -327,11 +330,9 @@ class PostAmpAudioSink(
     }
 
     override fun setVolume(volume: Float) {
-        if (this.volume != volume) {
-            // Only call setVolume() if data changed to avoid needlessly resetting Volume effect
-            this.volume = volume
-            setVolumeInternal()
-        }
+        val safeVolume = if (volume.isNaN() || volume < 0f) 0f else min(volume, 1f)
+        this.volume = safeVolume
+        setVolumeInternal()
     }
 
     private fun setVolumeInternal() {
@@ -368,7 +369,7 @@ class PostAmpAudioSink(
     }
 
     private fun myApplyPendingConfig() {
-        if (pendingFormat != null && pendingTags != null) {
+        if (pendingFormat != null) {
             format = pendingFormat
             tags = pendingTags
             pendingFormat = null
@@ -416,7 +417,8 @@ class PostAmpAudioSink(
             lastAppliedGain = calcGain
             val gain = calcGain?.first ?: ReplayGainUtil.dbToAmpl(nonRgGain.toFloat())
             val kneeThresholdDb = calcGain?.second
-            rgVolume = if (useDpe) 1f else min(gain, 1f)
+            val rawRgVolume = if (useDpe) 1f else min(gain, 1f)
+            rgVolume = if (rawRgVolume <= 0f || rawRgVolume.isNaN()) 1f else rawRgVolume
             try {
                 if (useDpe) {
                     dpeEffect!!.effect!!.setInputGainAllChannelsTo(ReplayGainUtil.amplToDb(gain) + boostGainDbLimited)
@@ -491,7 +493,7 @@ class PostAmpAudioSink(
     }
 
     private fun updateVolumeEffect() {
-        if (volumeEffect == null) return
+        if (volumeEffect == null || offloadEnabled == true) return
         val boostGainDb: Int
         synchronized(rgAp) {
             boostGainDb = rgAp.boostGain
@@ -544,7 +546,11 @@ class PostAmpAudioSink(
         dpeEffect = null
         volumeEffect?.releaseSafe()
         volumeEffect = null
-        context.unregisterReceiver(receiver)
+        try {
+            context.applicationContext.unregisterReceiver(receiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to unregister receiver", e)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 AudioSystemHiddenApi.removeVolumeCallback(context, this)

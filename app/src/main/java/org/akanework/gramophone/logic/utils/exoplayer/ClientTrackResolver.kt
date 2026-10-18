@@ -14,6 +14,8 @@ import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import com.google.gson.annotations.SerializedName
+import org.akanework.gramophone.logic.utils.CoverUtils
 
 object ClientTrackResolver {
     private const val TAG = "ClientTrackResolver"
@@ -48,8 +50,35 @@ object ClientTrackResolver {
     private val directStreamCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
     private val uriToTrackIdMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val urlToUserAgentMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val trackCoverMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val coverListeners = java.util.concurrent.CopyOnWriteArrayList<(trackId: String, coverUrl: String) -> Unit>()
 
     fun getDirectStreamUrl(trackId: Long): String? = directStreamCache[trackId]
+
+    fun getTrackCover(trackId: String?): String? {
+        if (trackId.isNullOrEmpty()) return null
+        return trackCoverMap[trackId] ?: resolveInfoCache[trackId]?.coverUrl?.let { CoverUtils.upgradeCoverQuality(it) }
+    }
+
+    fun addCoverListener(listener: (trackId: String, coverUrl: String) -> Unit) {
+        coverListeners.add(listener)
+    }
+
+    fun removeCoverListener(listener: (trackId: String, coverUrl: String) -> Unit) {
+        coverListeners.remove(listener)
+    }
+
+    fun notifyCoverResolved(trackId: String, coverUrl: String) {
+        coverListeners.forEach { listener ->
+            try {
+                listener(trackId, coverUrl)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cover listener failed: ${e.message}")
+            }
+        }
+    }
+
+    fun upgradeCoverQuality(url: String?): String? = CoverUtils.upgradeCoverQuality(url)
 
     fun getUserAgentForUrl(url: String): String {
         val mapped = urlToUserAgentMap[url]
@@ -250,7 +279,8 @@ object ClientTrackResolver {
         val album: String,
         val duration: Int,
         val isLossless: Boolean = false,
-        val hasLocalFlac: Boolean = false
+        val hasLocalFlac: Boolean = false,
+        @SerializedName("cover_url") val coverUrl: String? = null
     )
 
     data class CandidateV2(
@@ -332,7 +362,20 @@ object ClientTrackResolver {
             PoTokenProvider.initAsync(context)
             // 1. Fetch Track Metadata from Backend
             val info = fetchTrackInfo(trackIdStr) ?: return rawUri
-            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId}, Lossless: ${info.isLossless || info.hasLocalFlac})")
+            Log.d(TAG, "Fetched metadata for track ${info.trackId}: ${info.artist} - ${info.title} (SourceID: ${info.sourceId}, Lossless: ${info.isLossless || info.hasLocalFlac}, CoverUrl: ${info.coverUrl})")
+
+            // Inspect info.coverUrl
+            if (!info.coverUrl.isNullOrEmpty()) {
+                val upgradedCover = CoverUtils.upgradeCoverQuality(info.coverUrl) ?: info.coverUrl
+                trackCoverMap[trackIdStr] = upgradedCover
+                Log.i(TAG, "🖼️ [COVER_RESOLVED] Track $trackIdStr resolved cover URL: $upgradedCover")
+                org.akanework.gramophone.logic.utils.PlaybackLogger.log(
+                    "COVER_RESOLVE",
+                    "Resolved cover for ${info.artist} - ${info.title}: $upgradedCover"
+                )
+                org.akanework.gramophone.logic.GramophonePlaybackService.updateTrackCover(trackIdStr, upgradedCover)
+                notifyCoverResolved(trackIdStr, upgradedCover)
+            }
 
             // 1.1. ПРЯМОЙ FLAC-СТРИМ С СЕРВЕРА
             // Если трек уже подтвержден как Lossless/FLAC или скачан на сервере, немедленно отдаем прямой URL к /stream/{id}
@@ -615,6 +658,7 @@ object ClientTrackResolver {
             if (!resp.isSuccessful) return null
             val body = resp.body?.string() ?: return null
             val json = JSONObject(body)
+            val rawCover = json.optString("cover_url").takeIf { it.isNotBlank() }
             val info = TrackResolveInfo(
                 trackId = json.optLong("track_id"),
                 sourceId = json.optString("source_id"),
@@ -624,9 +668,14 @@ object ClientTrackResolver {
                 album = json.optString("album"),
                 duration = json.optInt("duration"),
                 isLossless = json.optBoolean("is_lossless", false),
-                hasLocalFlac = json.optBoolean("has_local_flac", false)
+                hasLocalFlac = json.optBoolean("has_local_flac", false),
+                coverUrl = rawCover
             )
             resolveInfoCache[trackIdStr] = info
+            if (!rawCover.isNullOrEmpty()) {
+                val upgraded = CoverUtils.upgradeCoverQuality(rawCover) ?: rawCover
+                trackCoverMap[trackIdStr] = upgraded
+            }
             return info
         }
     }
@@ -1215,15 +1264,15 @@ object ClientTrackResolver {
 
         // Continuous duration scoring curve
         val targetDur = info.duration.toDouble()
-        if (targetDur > 0 && c.duration > 0) {
+        if (targetDur > 0 && targetDur != 180.0 && c.duration > 0) {
             val diff = Math.abs(targetDur - c.duration)
             if (diff <= 3.0) {
                 score += 1000
             } else if (diff <= 8.0) {
                 score += 400
-            } else if (diff > 30.0) {
+            } else if (diff > 45.0) {
                 return -10000
-            } else if (diff > 18.0) {
+            } else if (diff > 25.0) {
                 score -= 3000
             }
         }
@@ -1355,10 +1404,10 @@ object ClientTrackResolver {
 
                     val videoDetails = json.optJSONObject("videoDetails")
                     val playerLengthSec = videoDetails?.optString("lengthSeconds", "0")?.toIntOrNull() ?: 0
-                    if (targetDurationSec > 0 && playerLengthSec > 0) {
+                    if (targetDurationSec > 0 && targetDurationSec != 180 && playerLengthSec > 0) {
                         val diff = Math.abs(targetDurationSec - playerLengthSec)
-                        if (diff > 35 || (playerLengthSec < 0.5 * targetDurationSec && diff > 20)) {
-                            val msg = "Duration mismatch: Video ${playerLengthSec}s vs Target ${targetDurationSec}s (diff ${diff}s > 35s)"
+                        if (diff > 45 || (playerLengthSec < 0.5 * targetDurationSec && diff > 30)) {
+                            val msg = "Duration mismatch: Video ${playerLengthSec}s vs Target ${targetDurationSec}s (diff ${diff}s > 45s)"
                             Log.w(TAG, "Rejected candidate $videoId: $msg")
                             org.akanework.gramophone.logic.utils.PlaybackLogger.log("EXTRACT_FAIL", "VideoID $videoId | $msg")
                             return null

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -56,6 +57,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.HistoryManager
+import org.akanework.gramophone.logic.utils.CoverUtils
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.Artist
 import org.akanework.gramophone.logic.api.NetworkClient
@@ -132,27 +134,29 @@ class OnlineSearchFragment : Fragment() {
             }
         }
 
-        // Live Debounced Search
+        // Live Debounced Search with automatic cancellation of previous queries
         LaunchedEffect(searchQuery) {
             val q = searchQuery.trim()
             if (q.length > 1) {
-                delay(350)
+                delay(300)
                 isSearching = true
-                NetworkClient.getApi(requireContext()).searchMusic(q)
-                    .enqueue(object : Callback<SearchResponse> {
-                        override fun onResponse(call: Call<SearchResponse>, response: Response<SearchResponse>) {
-                            isSearching = false
-                            if (isAdded && response.isSuccessful) {
-                                searchResult = response.body()
-                                saveToHistory(q)
-                                historyList = getHistory()
-                            }
+                try {
+                    val call = NetworkClient.getApi(requireContext()).searchMusic(q)
+                    val response = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            call.execute()
+                        } catch (e: Exception) {
+                            null
                         }
-
-                        override fun onFailure(call: Call<SearchResponse>, t: Throwable) {
-                            isSearching = false
-                        }
-                    })
+                    }
+                    if (isAdded && response != null && response.isSuccessful) {
+                        searchResult = response.body()
+                        saveToHistory(q)
+                        historyList = getHistory()
+                    }
+                } finally {
+                    isSearching = false
+                }
             } else if (q.isEmpty()) {
                 isSearching = false
                 searchResult = null
@@ -655,7 +659,7 @@ class OnlineSearchFragment : Fragment() {
                         contentPadding = PaddingValues(vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(artists, key = { it.id }) { artist ->
+                        itemsIndexed(artists, key = { idx, artist -> "${artist.id}_$idx" }) { _, artist ->
                             ArtistSearchAvatar(artist = artist, onClick = { onArtistClick(artist) })
                         }
                     }
@@ -675,7 +679,7 @@ class OnlineSearchFragment : Fragment() {
                         contentPadding = PaddingValues(vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        items(albums, key = { it.id }) { album ->
+                        itemsIndexed(albums, key = { idx, album -> "${album.id}_$idx" }) { _, album ->
                             AlbumSearchCard(album = album, onClick = { onAlbumClick(album) })
                         }
                     }
@@ -695,7 +699,7 @@ class OnlineSearchFragment : Fragment() {
                     }
 
                     val tracksToDisplay = if (filterIndex == 0 && artists.isNotEmpty()) tracks.take(15) else tracks
-                    items(tracksToDisplay, key = { it.id }) { track ->
+                    itemsIndexed(tracksToDisplay, key = { idx, track -> "${track.id}_$idx" }) { _, track ->
                         TrackSearchRow(
                             track = track,
                             isCurrentlyPlaying = track.id == currentPlayingTrackId,
@@ -724,7 +728,7 @@ class OnlineSearchFragment : Fragment() {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val coverUrl = if (artist.cover?.startsWith("/") == true) "http://185.196.41.31${artist.cover}" else artist.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(artist.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -796,7 +800,7 @@ class OnlineSearchFragment : Fragment() {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val coverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(track.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -880,7 +884,7 @@ class OnlineSearchFragment : Fragment() {
                 tonalElevation = 2.dp,
                 modifier = Modifier.size(86.dp)
             ) {
-                val coverUrl = if (artist.cover?.startsWith("/") == true) "http://185.196.41.31${artist.cover}" else artist.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(artist.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -912,7 +916,7 @@ class OnlineSearchFragment : Fragment() {
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                val coverUrl = if (album.cover?.startsWith("/") == true) "http://185.196.41.31${album.cover}" else album.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(album.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -986,7 +990,7 @@ class OnlineSearchFragment : Fragment() {
                     .fillMaxWidth()
                     .padding(10.dp)
             ) {
-                val coverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(track.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -1110,7 +1114,7 @@ class OnlineSearchFragment : Fragment() {
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                val coverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+                val coverUrl = CoverUtils.upgradeCoverQuality(track.cover)
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
@@ -1158,7 +1162,7 @@ class OnlineSearchFragment : Fragment() {
                         track.id,
                         track.artist,
                         track.title,
-                        track.cover
+                        CoverUtils.upgradeCoverQuality(track.cover)
                     )
                 }
             )
@@ -1289,7 +1293,7 @@ class OnlineSearchFragment : Fragment() {
                 putString("ALBUM_ID", track.albumId)
                 putString("PLAYING_FROM", source)
             }
-            val finalCoverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+            val finalCoverUrl = CoverUtils.upgradeCoverQuality(track.cover)
             MediaItem.Builder()
                 .setMediaId(track.id)
                 .setUri("http://185.196.41.31/stream/${track.id}".toUri())
@@ -1316,7 +1320,7 @@ class OnlineSearchFragment : Fragment() {
             return
         }
 
-        val finalCoverUrl = if (track.cover?.startsWith("/") == true) "http://185.196.41.31${track.cover}" else track.cover
+        val finalCoverUrl = CoverUtils.upgradeCoverQuality(track.cover)
         val extrasBundle = Bundle().apply {
             putFloat("replay_gain", track.replayGain)
             putString("ARTIST_ID", track.artistId)

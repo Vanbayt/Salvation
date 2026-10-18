@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 176" width="720" height="176">
+  <defs>
+    <linearGradient id="progressGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7CA8F8"/>
+      <stop offset="100%" stop-color="#A8C7FA"/>
+    </linearGradient>
+    <clipPath id="albumClip1">
+      <rect x="28" y="24" width="128" height="128" rx="36" ry="36"/>
+    </clipPath>
+  </defs>
+
+  <style>
+    .f-bold { font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", sans-serif; font-weight: 700; }
+    .f-medium { font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", sans-serif; font-weight: 500; }
+    .f-mono { font-family: "Roboto Mono", "SF Mono", monospace; font-weight: 600; }
+  </style>
+
+  <!-- Widget Card Container (Pure Widget Bounds, rx=56 at 2x / 28dp, surfaceContainerHigh #242830, stroke #3E4552) -->
+  <rect x="1" y="1" width="718" height="174" rx="56" fill="#242830" stroke="#3E4552" stroke-width="1.5"/>
+
+  <!-- Squircle Album Art (18dp / 36px corner radius) -->
+  <g clip-path="url(#albumClip1)">
+    <rect x="28" y="24" width="128" height="128" fill="#1C1B19"/>
+    <!-- Stylized NieR Album Cover Graphic -->
+    <circle cx="92" cy="88" r="50" fill="#2E2C27"/>
+    <circle cx="92" cy="88" r="32" fill="#444139"/>
+    <!-- Lunar flower petals -->
+    <g fill="#FFFDF2" opacity="0.95">
+      <ellipse cx="92" cy="64" rx="7" ry="16"/>
+      <ellipse cx="92" cy="112" rx="7" ry="16"/>
+      <ellipse cx="68" cy="88" rx="16" ry="7"/>
+      <ellipse cx="116" cy="88" rx="16" ry="7"/>
+      <ellipse cx="75" cy="71" rx="7" ry="16" transform="rotate(-45 75 71)"/>
+      <ellipse cx="109" cy="71" rx="7" ry="16" transform="rotate(45 109 71)"/>
+      <ellipse cx="75" cy="105" rx="7" ry="16" transform="rotate(45 75 105)"/>
+      <ellipse cx="109" cy="105" rx="7" ry="16" transform="rotate(-45 109 105)"/>
+    </g>
+    <circle cx="92" cy="88" r="10" fill="#F0E5CF"/>
+    <circle cx="92" cy="88" r="4" fill="#6A5F48"/>
+  </g>
+  <!-- Inner border on art -->
+  <rect x="28" y="24" width="128" height="128" rx="36" ry="36" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.12"/>
+
+  <!-- Metadata Column -->
+  <!-- Track Title -->
+  <text x="184" y="54" class="f-bold" font-size="20" fill="#E2E2E9">Alien Manifestation</text>
+  
+  <!-- FLAC Hi-Res Pill Badge -->
+  <rect x="396" y="38" width="52" height="22" rx="11" fill="#182E4F" stroke="#375D94" stroke-width="1"/>
+  <circle cx="406" cy="49" r="2.5" fill="#4ADE80"/>
+  <text x="414" y="53" class="f-mono" font-size="10.5" fill="#A8C7FA" letter-spacing="0.5">FLAC</text>
+
+  <!-- Artist & Album Subtitle -->
+  <text x="184" y="80" class="f-medium" font-size="14.5" fill="#A4A8B5">Keiichi Okabe • NieR:Automata</text>
+
+  <!-- Tactile Progress Bar with Scrub Head -->
+  <rect x="184" y="104" width="264" height="7" rx="3.5" fill="#323640"/>
+  <rect x="184" y="104" width="100" height="7" rx="3.5" fill="url(#progressGrad1)"/>
+  <circle cx="284" cy="107.5" r="6.5" fill="#E2E2E9"/>
+  <circle cx="284" cy="107.5" r="3.5" fill="#7CA8F8"/>
+
+  <!-- Timestamps -->
+  <text x="184" y="128" class="f-mono" font-size="11.5" fill="#8C919D">01:42</text>
+  <text x="448" y="128" text-anchor="end" class="f-mono" font-size="11.5" fill="#8C919D">04:28</text>
+
+  <!-- Interactive Controls Section -->
+  <!-- Favorite (Heart) Button -->
+  <g transform="translate(484, 88)">
+    <circle cx="0" cy="0" r="20" fill="#323640" fill-opacity="0.6"/>
+    <g transform="translate(-12, -12)">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FF5370"/>
+    </g>
+  </g>
+
+  <!-- Previous Track Button -->
+  <g transform="translate(544, 88)" fill="#E2E2E9">
+    <circle cx="0" cy="0" r="20" fill="#282C34"/>
+    <g transform="translate(-12, -12)">
+      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" fill="currentColor"/>
+    </g>
+  </g>
+
+  <!-- Primary Circular FAB Play/Pause Button (#A8C7FA) -->
+  <g transform="translate(608, 88)">
+    <circle cx="0" cy="0" r="32" fill="#A8C7FA"/>
+    <rect x="-6" y="-8" width="4" height="16" rx="2" fill="#041E49"/>
+    <rect x="2" y="-8" width="4" height="16" rx="2" fill="#041E49"/>
+  </g>
+
+  <!-- Next Track Button -->
+  <g transform="translate(672, 88)" fill="#E2E2E9">
+    <circle cx="0" cy="0" r="20" fill="#282C34"/>
+    <g transform="translate(-12, -12)">
+      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" fill="currentColor"/>
+    </g>
+  </g>
+</svg>

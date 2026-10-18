@@ -1,0 +1,523 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Concept 4: Material Expressive Contextual Flow & Smart Presets Widget (4x2)
+    Architecture: Salvation Recommendation Engine (75/25 Head + Contrast Tail)
+    Compliant with Android RemoteViews (AppWidgetProvider compatible)
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_concept_context_presets_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- 1. Header: Contextual Bar (Time + Weather + Audio Device + BPM Signals) -->
+    <LinearLayout
+        android:id="@+id/widget_header_context_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Context Chip 1: Time of Day Flow (🌙 Ночной эмбиент) -->
+        <LinearLayout
+            android:id="@+id/widget_chip_flow_mode"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip_context_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="5dp">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="5dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_moon"
+                android:tint="#FDE047" />
+
+            <TextView
+                android:id="@+id/widget_text_context_mode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Ночной эмбиент"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                tools:text="Ночной эмбиент" />
+        </LinearLayout>
+
+        <!-- Context Chip 2: Open-Meteo Weather Signal (🌧️ Дождь 14°C) -->
+        <LinearLayout
+            android:id="@+id/widget_chip_weather"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="0.85"
+            android:background="@drawable/widget_chip_context_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="5dp">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="5dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_rain"
+                android:tint="#93C5FD" />
+
+            <TextView
+                android:id="@+id/widget_text_context_weather"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Дождь 14°C"
+                android:textColor="@color/md_theme_primary"
+                android:textSize="10.5sp"
+                tools:text="Дождь 14°C" />
+        </LinearLayout>
+
+        <!-- Context Chip 3: Audio Output / Hardware Context Signal (🎧 Sony • LDAC 990k) -->
+        <LinearLayout
+            android:id="@+id/widget_chip_device"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1.2"
+            android:background="@drawable/widget_chip_context_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="5dp">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="5dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_headphones"
+                android:tint="#A8C7FA" />
+
+            <TextView
+                android:id="@+id/widget_text_context_device"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Sony • LDAC 990k"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                tools:text="Sony • LDAC 990k" />
+        </LinearLayout>
+
+        <!-- Context Chip 4: BPM Pulse Signal (🟢 72 BPM • Спокойно) -->
+        <LinearLayout
+            android:id="@+id/widget_chip_bpm"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1.15"
+            android:background="@drawable/widget_chip_context_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="5dp">
+
+            <ImageView
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="5dp"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_dot_green" />
+
+            <TextView
+                android:id="@+id/widget_text_context_bpm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="72 BPM • Спокойно"
+                android:textColor="#4ADE80"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                tools:text="72 BPM • Спокойно" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 2. Hero Middle Section: Expressive CTA Flow Pill ("Запустить Мою Волну") -->
+    <LinearLayout
+        android:id="@+id/widget_btn_launch_flow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="54dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/widget_cta_flow_pill_bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp">
+
+        <!-- Animated-style Wave Equalizer Icon -->
+        <ImageView
+            android:id="@+id/widget_flow_wave_icon"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_wave"
+            android:tint="#FFFFFF" />
+
+        <!-- Flow Titles -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_flow_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Запустить Мою Волну"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                tools:text="Запустить Мою Волну" />
+
+            <TextView
+                android:id="@+id/widget_flow_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:alpha="0.9"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Персональный умный поток • 75/25"
+                android:textColor="#BFDBFE"
+                android:textSize="10.5sp"
+                tools:text="Персональный умный поток • 75/25" />
+        </LinearLayout>
+
+        <!-- White Play Button Circle with Accent Play Icon -->
+        <ImageView
+            android:id="@+id/widget_flow_play_icon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_flow_play_white_bg"
+            android:contentDescription="Launch Flow"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_play_arrow_filled"
+            android:tint="#1D4ED8" />
+    </LinearLayout>
+
+    <!-- 3. Section Label: 75/25 Recommendation Presets -->
+    <TextView
+        android:id="@+id/widget_presets_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:letterSpacing="0.06"
+        android:text="ДИНАМИЧЕСКИЕ ПРЕСЕТЫ (75/25 АРХИТЕКТУРА)"
+        android:textColor="@color/md_theme_outline"
+        android:textSize="9.5sp"
+        android:textStyle="bold"
+        tools:text="ДИНАМИЧЕСКИЕ ПРЕСЕТЫ (75/25 АРХИТЕКТУРА)" />
+
+    <!-- 4. Bottom Section: 3 Dynamic Recommendation Preset Pills (Salvation 75/25 Engine) -->
+    <LinearLayout
+        android:id="@+id/widget_presets_row"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Preset 1: Contextual Head (75% Head: Deep Focus) -->
+        <LinearLayout
+            android:id="@+id/widget_preset_pill_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_preset_pill_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_preset_1_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🧠"
+                    android:textSize="14sp"
+                    tools:text="🧠" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/widget_preset_1_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_match_badge_bg"
+                    android:paddingStart="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingEnd="5dp"
+                    android:paddingBottom="1dp"
+                    android:text="98% МАТЧ"
+                    android:textColor="#4ADE80"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    tools:text="98% МАТЧ" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/widget_preset_1_tag"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="75% HEAD"
+                android:textColor="@color/md_theme_primary"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                tools:text="75% HEAD" />
+
+            <TextView
+                android:id="@+id/widget_preset_1_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Deep Focus"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                tools:text="Deep Focus" />
+
+            <TextView
+                android:id="@+id/widget_preset_1_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Ambient • 72 BPM"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textSize="9.5sp"
+                tools:text="Ambient • 72 BPM" />
+        </LinearLayout>
+
+        <!-- Preset 2: Contextual Head (75% Head: Rain Ambient) -->
+        <LinearLayout
+            android:id="@+id/widget_preset_pill_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_preset_pill_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_preset_2_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🌧️"
+                    android:textSize="14sp"
+                    tools:text="🌧️" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/widget_preset_2_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_match_badge_bg"
+                    android:paddingStart="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingEnd="5dp"
+                    android:paddingBottom="1dp"
+                    android:text="95% МАТЧ"
+                    android:textColor="#4ADE80"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    tools:text="95% МАТЧ" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/widget_preset_2_tag"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="75% HEAD"
+                android:textColor="@color/md_theme_primary"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                tools:text="75% HEAD" />
+
+            <TextView
+                android:id="@+id/widget_preset_2_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Rain Ambient"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                tools:text="Rain Ambient" />
+
+            <TextView
+                android:id="@+id/widget_preset_2_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Piano Drone • 64 BPM"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textSize="9.5sp"
+                tools:text="Piano Drone • 64 BPM" />
+        </LinearLayout>
+
+        <!-- Preset 3: Contrast Tail (25% Contrast Tail: Контраст: Метал) -->
+        <LinearLayout
+            android:id="@+id/widget_preset_pill_3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_preset_contrast_pill_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_preset_3_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔥"
+                    android:textSize="14sp"
+                    tools:text="🔥" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/widget_preset_3_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_contrast_badge_bg"
+                    android:paddingStart="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingEnd="5dp"
+                    android:paddingBottom="1dp"
+                    android:text="25% ХВОСТ"
+                    android:textColor="#FCA5A5"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    tools:text="25% ХВОСТ" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/widget_preset_3_tag"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="25% CONTRAST"
+                android:textColor="#FECDD3"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                tools:text="25% CONTRAST" />
+
+            <TextView
+                android:id="@+id/widget_preset_3_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Контраст: Метал"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                tools:text="Контраст: Метал" />
+
+            <TextView
+                android:id="@+id/widget_preset_3_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:alpha="0.85"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Symphonic • 145 BPM"
+                android:textColor="#FECACA"
+                android:textSize="9.5sp"
+                tools:text="Symphonic • 145 BPM" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

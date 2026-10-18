@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" width="720" height="720">
+  <defs>
+    <style>
+      .widget-card { fill: #211F1D; }
+      .tile-note { fill: #4A4643; }
+      .tile-btn { fill: #54453E; }
+    </style>
+  </defs>
+
+  <rect width="720" height="720" rx="112" class="widget-card"/>
+
+  <rect x="48" y="48" width="288" height="288" rx="72" class="tile-note"/>
+  <g transform="translate(192, 192) scale(7.2) translate(-11, -12)"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" fill="#F5EFEA"/></g>
+
+  <rect x="384" y="48" width="288" height="288" rx="72" class="tile-btn"/>
+  <g transform="translate(528, 192) scale(4.4) translate(-13, -12)"><path d="M8,19L8,5L19,12L8,19Z" fill="#F5EFEA"/></g>
+
+  <rect x="48" y="384" width="288" height="288" rx="72" class="tile-btn"/>
+  <g transform="translate(192, 528) scale(4.0) translate(-12, -12)"><path d="M5.5,18L5.5,6L7.5,6L7.5,18L5.5,18ZM18.5,18L9.5,12L18.5,6L18.5,18Z" fill="#F5EFEA"/></g>
+
+  <rect x="384" y="384" width="288" height="288" rx="72" class="tile-btn"/>
+  <g transform="translate(528, 528) scale(4.0) translate(-12, -12)"><path d="M16.5,18L16.5,6L18.5,6L18.5,18L16.5,18ZM5.5,18L5.5,6L14.5,12L5.5,18Z" fill="#F5EFEA"/></g>
+</svg>

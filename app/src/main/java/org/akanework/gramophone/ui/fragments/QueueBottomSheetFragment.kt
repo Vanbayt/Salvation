@@ -639,7 +639,12 @@ private fun NowPlayingQueueCard(
     val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(trackId, isLosslessExtra)
 
     val originalUri = meta.artworkUri?.toString() ?: ""
-    val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+    val coverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(
+        org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+            originalUri,
+            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId)
+        )
+    ) ?: ""
 
     Surface(
         modifier = Modifier
@@ -765,7 +770,12 @@ private fun QueueTrackItem(
     val isLossless = org.akanework.gramophone.logic.lossless.LosslessStateManager.rememberIsTrackLossless(trackId, isLosslessExtra)
 
     val originalUri = meta.artworkUri?.toString() ?: ""
-    val coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+    val coverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(
+        org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+            originalUri,
+            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId)
+        )
+    ) ?: ""
 
     val containerColor = if (isHistory) {
         colors.surfaceContainerHighest.copy(alpha = 0.35f)

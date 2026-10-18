@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" width="720" height="360">
+  <defs>
+    <style>
+      .widget-card { fill: #211F1D; }
+      .tile-note { fill: #4A4643; }
+      .tile-btn { fill: #54453E; }
+      .txt-title { font-family: "Google Sans", "Product Sans", "Roboto", -apple-system, sans-serif; font-size: 38px; font-weight: 700; fill: #F5EFEA; }
+      .txt-subtitle { font-family: "Google Sans", "Product Sans", "Roboto", -apple-system, sans-serif; font-size: 26px; font-weight: 500; fill: #C8C2BC; }
+    </style>
+  </defs>
+
+  <rect width="720" height="360" rx="56" class="widget-card"/>
+
+  <rect x="32" y="32" width="156" height="156" rx="40" class="tile-note"/>
+  <g transform="translate(110, 110) scale(4.4) translate(-11, -12)"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" fill="#F5EFEA"/></g>
+
+  <text x="216" y="94" class="txt-title">PixelPlayer</text>
+  <text x="216" y="138" class="txt-subtitle">Tap to open</text>
+
+  <rect x="30" y="224" width="120" height="104" rx="36" class="tile-btn"/>
+  <g transform="translate(90, 276) scale(1.8) translate(-12, -12)"><path d="M10.59,9.17L5.41,4 4,5.41l5.17,5.17 1.42,-1.41zM14.5,4l2.04,2.04L4,18.59 5.41,20 17.96,7.46 20,9.5V4h-5.5zm.33,9.41l-1.41,1.41 3.13,3.13L14.5,20H20v-5.5l-2.04,2.04-3.13,-3.13z" fill="#F5EFEA"/></g>
+
+  <rect x="165" y="224" width="120" height="104" rx="36" class="tile-btn"/>
+  <g transform="translate(225, 276) scale(1.8) translate(-12, -12)"><path d="M5.5,18L5.5,6L7.5,6L7.5,18L5.5,18ZM18.5,18L9.5,12L18.5,6L18.5,18Z" fill="#F5EFEA"/></g>
+
+  <rect x="300" y="224" width="120" height="104" rx="42" class="tile-btn"/>
+  <g transform="translate(360, 276) scale(1.9) translate(-13, -12)"><path d="M8,19L8,5L19,12L8,19Z" fill="#F5EFEA"/></g>
+
+  <rect x="435" y="224" width="120" height="104" rx="36" class="tile-btn"/>
+  <g transform="translate(495, 276) scale(1.8) translate(-12, -12)"><path d="M16.5,18L16.5,6L18.5,6L18.5,18L16.5,18ZM5.5,18L5.5,6L14.5,12L5.5,18Z" fill="#F5EFEA"/></g>
+
+  <rect x="570" y="224" width="120" height="104" rx="36" class="tile-btn"/>
+  <g transform="translate(630, 276) scale(1.8) translate(-12, -12)"><path d="M7,22L3,18L7,14L8.4,15.45L6.85,17H17V13H19V19H6.85L8.4,20.55L7,22ZM5,11V5H17.15L15.6,3.45L17,2L21,6L17,10L15.6,8.55L17.15,7H7V11H5Z" fill="#F5EFEA"/></g>
+</svg>

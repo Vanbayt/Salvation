@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_pixel_card_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Top Section: Squircle Album Art + Track Info (Clickable to open App) -->
+    <LinearLayout
+        android:id="@+id/widget_info_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Squircle Album Art / Note Tile (68dp x 68dp) -->
+        <FrameLayout
+            android:id="@+id/widget_art_container"
+            android:layout_width="68dp"
+            android:layout_height="68dp"
+            android:layout_gravity="center_vertical"
+            android:background="@drawable/widget_pixel_art_bg"
+            android:clipToOutline="true">
+
+            <ImageView
+                android:id="@+id/widget_album_art"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/album_cover"
+                android:padding="16dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_pixel_music_note" />
+        </FrameLayout>
+
+        <!-- Metadata Column -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_track_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
+                android:text="PixelPlayer"
+                android:textColor="@color/widget_pixel_on_surface"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                tools:text="Weight of the World" />
+
+            <TextView
+                android:id="@+id/widget_track_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif"
+                android:singleLine="true"
+                android:text="Tap to open"
+                android:textColor="@color/widget_pixel_on_surface_variant"
+                android:textSize="14sp"
+                tools:text="Keiichi Okabe" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom Section: 5 Equal-Weight Squircle Control Buttons in a Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="14dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- 1. Shuffle Button -->
+        <ImageButton
+            android:id="@+id/widget_btn_shuffle"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pixel_tile_bg"
+            android:contentDescription="@string/shuffle"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_shuffle"
+            android:tint="@color/widget_pixel_on_surface" />
+
+        <!-- 2. Previous Track Button -->
+        <ImageButton
+            android:id="@+id/widget_btn_prev"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pixel_tile_bg"
+            android:contentDescription="@string/skip_previous"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_skip_previous_filled"
+            android:tint="@color/widget_pixel_on_surface" />
+
+        <!-- 3. Play / Pause Button -->
+        <ImageButton
+            android:id="@+id/widget_btn_play_pause"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pixel_tile_bg"
+            android:contentDescription="@string/play"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_play_arrow_filled"
+            android:tint="@color/widget_pixel_on_surface" />
+
+        <!-- 4. Next Track Button -->
+        <ImageButton
+            android:id="@+id/widget_btn_next"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pixel_tile_bg"
+            android:contentDescription="@string/skip_next"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_skip_next_filled"
+            android:tint="@color/widget_pixel_on_surface" />
+
+        <!-- 5. Repeat Button -->
+        <ImageButton
+            android:id="@+id/widget_btn_repeat"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pixel_tile_bg"
+            android:contentDescription="@string/repeat_mode"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_repeat"
+            android:tint="@color/widget_pixel_on_surface" />
+
+    </LinearLayout>
+
+</LinearLayout>

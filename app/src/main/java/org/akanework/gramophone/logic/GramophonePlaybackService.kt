@@ -125,7 +125,10 @@ import org.akanework.gramophone.logic.utils.exoplayer.GramophoneExtractorsFactor
 import org.akanework.gramophone.logic.utils.exoplayer.GramophoneMediaSourceFactory
 import org.akanework.gramophone.logic.utils.exoplayer.GramophoneRenderFactory
 import org.akanework.gramophone.ui.LyricWidgetProvider
+import org.akanework.gramophone.ui.KaraokeLyricsWidgetProvider
 import org.akanework.gramophone.ui.MainActivity
+import org.akanework.gramophone.ui.PixelWidgetManager
+import org.akanework.gramophone.ui.HifiCanvasWidgetProvider
 import uk.akane.libphonograph.items.albumId
 import kotlin.math.pow
 
@@ -163,6 +166,25 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             if (trackId == null) return null
             return trackDurationMap[trackId]
         }
+
+        private val trackCoverMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+        fun updateTrackCover(trackId: String, coverUrl: String) {
+            if (trackId.isNotEmpty() && coverUrl.isNotEmpty()) {
+                val upgraded = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(coverUrl) ?: coverUrl
+                trackCoverMap[trackId] = upgraded
+                instanceForWidgetAndLyricsOnly?.let { service ->
+                    service.handler.post {
+                        service.updateCurrentMediaItemCoverIfBetter(trackId, upgraded)
+                    }
+                }
+            }
+        }
+
+        fun getTrackCover(trackId: String?): String? {
+            if (trackId == null) return null
+            return trackCoverMap[trackId]
+        }
     }
 
     private var lastSessionId = 0
@@ -194,6 +216,10 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
     private var afTrackFormat: Pair<Any, AfFormatInfo>? = null
     private val pendingAfTrackFormats = hashMapOf<Any, AfFormatInfo>()
     private var audioSinkInputFormat: Format? = null
+    val currentAudioSinkInputFormat: Format?
+        get() = audioSinkInputFormat
+    val currentDownstreamFormats: Set<Pair<Any, Pair<Int, Format>>>
+        get() = downstreamFormat
     private var audioTrackInfo: AudioTrackInfo? = null
     private var audioTrackInfoCounter = 0
     private var audioTrackReleaseCounter = 0
@@ -249,6 +275,30 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                 intent.extras?.getLong("seekTo", C.INDEX_UNSET.toLong()) ?: C.INDEX_UNSET.toLong()
             if (to != C.INDEX_UNSET.toLong())
                 controller?.seekTo(to)
+        }
+    }
+
+    fun updateCurrentMediaItemCoverIfBetter(trackId: String, coverUrl: String) {
+        val player = mediaSession?.player ?: return
+        val currentItem = player.currentMediaItem ?: return
+        if (currentItem.mediaId == trackId) {
+            val currentArtwork = currentItem.mediaMetadata.artworkUri?.toString() ?: ""
+            if (org.akanework.gramophone.logic.utils.CoverUtils.isLowResOrEmpty(currentArtwork) && !org.akanework.gramophone.logic.utils.CoverUtils.isLowResOrEmpty(coverUrl)) {
+                val highResUri = Uri.parse(org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(coverUrl))
+                val updatedMetadata = currentItem.mediaMetadata.buildUpon()
+                    .setArtworkUri(highResUri)
+                    .build()
+                val updatedItem = currentItem.buildUpon()
+                    .setMediaMetadata(updatedMetadata)
+                    .build()
+                val curIdx = player.currentMediaItemIndex
+                if (curIdx >= 0 && curIdx < player.mediaItemCount) {
+                    player.replaceMediaItem(curIdx, updatedItem)
+                    Log.i(TAG, "🖼️ [PLAYER_COVER_UPGRADED] Replaced currentMediaItem for $trackId with high-res cover: $highResUri")
+                    PixelWidgetManager.updateAll(this)
+                    HifiCanvasWidgetProvider.updateAll(this)
+                }
+            }
         }
     }
 
@@ -418,6 +468,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                     .setPcmEncodingRestrictionLifted(true)
                     .setEnableDecoderFallback(true)
                     .setEnableAudioTrackPlaybackParams(true)
+                    .setMediaCodecSelector(androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF),
                 GramophoneMediaSourceFactory(this,
                     dataSourceFactory,
@@ -452,11 +503,14 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                             .setAudioOffloadPreferences(
                                 TrackSelectionParameters.AudioOffloadPreferences.Builder()
                                     .apply {
-                                        val config = prefs.getStringStrict("offload", "1")?.toIntOrNull() ?: 1
+                                        val config = prefs.getStringStrict("offload", "0")?.toIntOrNull() ?: 0
                                         if (config > 0 && Flags.OFFLOAD) {
                                             rgAp.setOffloadEnabled(true)
                                             setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
                                             setIsGaplessSupportRequired(config == 2)
+                                        } else {
+                                            rgAp.setOffloadEnabled(false)
+                                            setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
                                         }
                                     }
                                     .build()))
@@ -532,11 +586,8 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
                     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
                         val originalUriStr = uri.toString()
-                        val finalUri = if (originalUriStr.startsWith("/")) {
-                            Uri.parse("http://185.196.41.31$originalUriStr")
-                        } else {
-                            uri
-                        }
+                        val upgraded = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(originalUriStr)
+                        val finalUri = if (upgraded != null) Uri.parse(upgraded) else uri
 
                         return CallbackToFutureAdapter.getFuture { completer ->
                             imageLoader.enqueue(
@@ -569,10 +620,18 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
                     }
 
                     override fun loadBitmapFromMetadata(metadata: MediaMetadata): ListenableFuture<Bitmap>? {
+                        val rawUri = metadata.artworkUri?.toString()
+                        val currentId = controller?.currentMediaItem?.mediaId
+                        val betterCover = if (org.akanework.gramophone.logic.utils.CoverUtils.isLowResOrEmpty(rawUri)) {
+                            getTrackCover(currentId) ?: rawUri
+                        } else {
+                            rawUri
+                        }
+                        val finalUri = betterCover?.let { Uri.parse(org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(it)) } ?: metadata.artworkUri
                         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                             return super.loadBitmapFromMetadata(metadata)
                         }
-                        return metadata.artworkUri?.let { loadBitmap(it) }
+                        return finalUri?.let { loadBitmap(it) }
                     }
                 }))
                 .setSessionActivity(
@@ -733,6 +792,9 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         mediaSession = null
         broadcastAudioSessionClose()
         LyricWidgetProvider.update(this)
+        KaraokeLyricsWidgetProvider.update(this)
+        PixelWidgetManager.updateAll(this)
+        HifiCanvasWidgetProvider.updateAll(this)
         internalPlaybackThread.quitSafely()
         super.onDestroy()
         Log.i(TAG, "-onDestroy()")
@@ -793,7 +855,12 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String?) {
         var restart = false
         if (key == null || key == "mono_audio") {
-            monoAp.isMonoEnabled = prefs.getBoolean("mono_audio", false)
+            val oldMono = monoAp.isMonoEnabled
+            val newMono = prefs.getBoolean("mono_audio", false)
+            monoAp.isMonoEnabled = newMono
+            if (key != null && oldMono != newMono) {
+                restart = true
+            }
         }
         if (key == null || key == "rg_mode") {
             rgMode = prefs.getStringStrict("rg_mode", "0")!!.toInt()
@@ -814,6 +881,30 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         if (key == null || key == "rg_boost_gain") {
             val boostGain = prefs.getIntStrict("rg_boost_gain", 0)
             restart = !rgAp.setBoostGain(boostGain) || restart
+        }
+        if (key == null || key == "offload") {
+            val config = prefs.getStringStrict("offload", "0")?.toIntOrNull() ?: 0
+            val isOffloadEnabled = config > 0 && Flags.OFFLOAD
+            rgAp.setOffloadEnabled(isOffloadEnabled)
+            val offloadMode = if (isOffloadEnabled) {
+                TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+            } else {
+                TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+            }
+            controller?.let { player ->
+                val currentParams = player.trackSelectionParameters
+                val newParams = currentParams.buildUpon()
+                    .setAudioOffloadPreferences(
+                        currentParams.audioOffloadPreferences.buildUpon()
+                            .setAudioOffloadMode(offloadMode)
+                            .setIsGaplessSupportRequired(config == 2)
+                            .build()
+                    )
+                    .build()
+                if (currentParams != newParams) {
+                    player.trackSelectionParameters = newParams
+                }
+            }
         }
         if (restart) {
             controller?.stop()
@@ -857,6 +948,13 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
 
     private fun broadcastAudioSession() {
         if (lastSessionId != 0) {
+            val isOffloadTrack = afFormatTracker.format?.mixPortFlags?.let {
+                (it and 0x10) != 0 // AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD = 0x10
+            } ?: false
+            if (isOffloadTrack) {
+                Log.i(TAG, "skipping audio effect broadcast because offload track is active: $lastSessionId")
+                return
+            }
             Log.i(TAG, "broadcast audio session open: $lastSessionId")
             sendBroadcast(Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
                 putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
@@ -1169,9 +1267,12 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             SessionCommand(SERVICE_GET_AUDIO_FORMAT, Bundle.EMPTY),
             Bundle.EMPTY
         )
+        HifiCanvasWidgetProvider.updateAll(this)
     }
 
     override fun onPlaybackStateChanged(state: Int) {
+        PixelWidgetManager.updateAll(this)
+        HifiCanvasWidgetProvider.updateAll(this)
         if (state == Player.STATE_IDLE) {
             var changed = false
             if (afTrackFormat != null) {
@@ -1272,6 +1373,8 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         }
 
         lastPlayedManager.save()
+        PixelWidgetManager.updateAll(this)
+        HifiCanvasWidgetProvider.updateAll(this)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -1290,6 +1393,9 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             endedWorkaroundPlayer?.currentMediaItem
         )
         lastPlayedManager.save()
+        PixelWidgetManager.updateAll(this)
+        HifiCanvasWidgetProvider.updateAll(this)
+        KaraokeLyricsWidgetProvider.update(this)
     }
 
     override fun onEvents(player: Player, events: Player.Events) {
@@ -1449,7 +1555,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         sendLyricNow(new || !updatedLyricAtLeastOnce)
         updatedLyricAtLeastOnce = true
         val isStatusBarLyricsEnabled = prefs.getBooleanStrict("status_bar_lyrics", false)
-        val hnw = !LyricWidgetProvider.hasWidget(this)
+        val hnw = !LyricWidgetProvider.hasWidget(this) && !KaraokeLyricsWidgetProvider.hasWidget(this)
         if (controller?.isPlaying != true || (!isStatusBarLyricsEnabled && hnw)) return
         val cPos = (controller?.contentPosition ?: 0).toULong()
         val nextUpdate = syncedLyrics?.text?.flatMap { line ->
@@ -1470,6 +1576,7 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
             LyricWidgetProvider.update(this)
         else
             LyricWidgetProvider.adapterUpdate(this)
+        KaraokeLyricsWidgetProvider.update(this)
         val isStatusBarLyricsEnabled = prefs.getBooleanStrict("status_bar_lyrics", false)
         val highlightedLyric = if (isStatusBarLyricsEnabled && controller?.playWhenReady == true)
             getCurrentLyricIndex(false)?.let {

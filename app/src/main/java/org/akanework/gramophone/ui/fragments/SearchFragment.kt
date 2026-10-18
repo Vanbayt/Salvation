@@ -12,6 +12,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.appbar.AppBarLayout
 import kotlinx.coroutines.*
+import androidx.core.net.toUri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.ui.MyRecyclerView
@@ -34,11 +37,35 @@ class SearchFragment : BaseFragment(true) {
         val recyclerView = rootView.findViewById<MyRecyclerView>(R.id.recyclerview)
         val returnButton = rootView.findViewById<ImageButton>(R.id.return_button)
 
-        // 🔥 ОБНОВЛЕННЫЕ ВЫЗОВЫ С ПАРАМЕТРОМ VIEW И АНИМАЦИЕЙ
         adapter = OnlineSearchAdapter(
             onClick = { track ->
-                Toast.makeText(requireContext(), "Играем: ${track.title}", Toast.LENGTH_SHORT).show()
-                // Тут будет запуск плеера
+                val player = (requireActivity() as? MainActivity)?.getPlayer()
+                if (player != null) {
+                    val finalCoverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(track.cover)
+                    val extrasBundle = Bundle().apply {
+                        putString("ARTIST_ID", track.artistId)
+                        putString("ALBUM_ID", track.albumId)
+                        putString("PLAYING_FROM", "Поиск")
+                    }
+                    val mediaItem = MediaItem.Builder()
+                        .setMediaId(track.id)
+                        .setUri("http://185.196.41.31/stream/${track.id}".toUri())
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(track.title)
+                                .setArtist(track.artist)
+                                .setArtworkUri(finalCoverUrl?.toUri())
+                                .setAlbumTitle(track.album)
+                                .setDurationMs((track.duration * 1000L).takeIf { it > 0 })
+                                .setExtras(extrasBundle)
+                                .build()
+                        ).build()
+                    player.setMediaItem(mediaItem)
+                    player.prepare()
+                    player.play()
+                } else {
+                    Toast.makeText(requireContext(), "Плеер не готов", Toast.LENGTH_SHORT).show()
+                }
             },
             onArtistClick = { artist, cardView ->
                 val artistFragment = ArtistFragment.newInstance(artist.id.toString())

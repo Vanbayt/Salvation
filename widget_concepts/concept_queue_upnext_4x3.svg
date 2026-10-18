@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" width="720" height="540">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="widgetBg5" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#21252D"/>
+      <stop offset="100%" stop-color="#181B22"/>
+    </linearGradient>
+
+    <linearGradient id="currentCardBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2A2F3B"/>
+      <stop offset="100%" stop-color="#242833"/>
+    </linearGradient>
+
+    <linearGradient id="primaryPlayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A8C7FA"/>
+      <stop offset="100%" stop-color="#7CA8F8"/>
+    </linearGradient>
+
+    <!-- Starboy Cover Gradient -->
+    <linearGradient id="starboyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#550822"/>
+      <stop offset="50%" stop-color="#2B0515"/>
+      <stop offset="100%" stop-color="#0E020A"/>
+    </linearGradient>
+
+    <!-- Midnight City Cover Gradient -->
+    <linearGradient id="m83Bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A204C"/>
+      <stop offset="100%" stop-color="#0B0E23"/>
+    </linearGradient>
+
+    <!-- Instant Crush Cover Gradient -->
+    <linearGradient id="daftBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3A1F08"/>
+      <stop offset="100%" stop-color="#140A02"/>
+    </linearGradient>
+
+    <!-- Nightcall Cover Gradient -->
+    <linearGradient id="kavinskyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3D0B40"/>
+      <stop offset="100%" stop-color="#120215"/>
+    </linearGradient>
+
+    <!-- Clip Paths for Squircles -->
+    <clipPath id="thumbClipNow">
+      <rect x="46" y="48" width="80" height="80" rx="24" ry="24"/>
+    </clipPath>
+    <clipPath id="thumbClip1">
+      <rect x="32" y="206" width="60" height="60" rx="16" ry="16"/>
+    </clipPath>
+    <clipPath id="thumbClip2">
+      <rect x="32" y="284" width="60" height="60" rx="16" ry="16"/>
+    </clipPath>
+    <clipPath id="thumbClip3">
+      <rect x="32" y="362" width="60" height="60" rx="16" ry="16"/>
+    </clipPath>
+  </defs>
+
+  <style>
+    .f-bold { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 700; }
+    .f-medium { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 500; }
+    .f-mono { font-family: "SF Mono", "Roboto Mono", monospace; font-weight: 600; }
+  </style>
+
+  <!-- Root Widget Card Container (Pure Widget Bounds: 720x540, rx=64 at 2x / 32dp) -->
+  <rect x="1" y="1" width="718" height="538" rx="64" fill="url(#widgetBg5)" stroke="#3E4552" stroke-width="1.5" stroke-opacity="0.6"/>
+
+  <!-- Top Section: Elevated Mini-Player Card for Currently Playing (rx="36") -->
+  <rect x="28" y="26" width="664" height="124" rx="36" fill="url(#currentCardBg)" stroke="#3F4656" stroke-width="1.2"/>
+
+  <!-- Squircle Cover Art (80px) -->
+  <g clip-path="url(#thumbClipNow)">
+    <rect x="46" y="48" width="80" height="80" fill="url(#starboyBg)"/>
+    <!-- Glowing Cross Graphic for Starboy -->
+    <circle cx="86" cy="88" r="30" fill="#E11D48" opacity="0.35"/>
+    <rect x="83" y="62" width="6" height="52" rx="3" fill="#FFE082"/>
+    <rect x="68" y="76" width="36" height="6" rx="3" fill="#FFE082"/>
+    <circle cx="86" cy="79" r="4" fill="#FFFFFF"/>
+  </g>
+  <rect x="46" y="48" width="80" height="80" rx="24" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.15"/>
+
+  <!-- Title & Artist -->
+  <text x="144" y="74" class="f-bold" font-size="22" fill="#E2E2E9">Starboy</text>
+  <text x="144" y="98" class="f-medium" font-size="15" fill="#A4A8B5">The Weeknd ft. Daft Punk</text>
+
+  <!-- Progress Bar with Scrub Dot (02:14 / 03:50) -->
+  <rect x="144" y="118" width="330" height="6" rx="3" fill="#383E4D"/>
+  <rect x="144" y="118" width="195" height="6" rx="3" fill="url(#primaryPlayGrad)"/>
+  <circle cx="339" cy="121" r="6" fill="#FFFFFF"/>
+  <text x="488" y="125" class="f-mono" font-size="12" fill="#8C919D">02:14 / 03:50</text>
+
+  <!-- Circular Primary Play/Pause Button -->
+  <g transform="translate(610, 60)">
+    <circle cx="28" cy="28" r="28" fill="url(#primaryPlayGrad)"/>
+    <g transform="translate(18, 17)" fill="#06224E">
+      <rect x="0" y="2" width="6" height="18" rx="2.5" fill="currentColor"/>
+      <rect x="14" y="2" width="6" height="18" rx="2.5" fill="currentColor"/>
+    </g>
+  </g>
+
+  <!-- Queue Header: 'ДАЛЕЕ В ОЧЕРЕДИ' with badge '3 ТРЕКА' -->
+  <text x="34" y="183" class="f-bold" font-size="13" fill="#8C919D" letter-spacing="1.2">ДАЛЕЕ В ОЧЕРЕДИ</text>
+  <g transform="translate(184, 167)">
+    <rect x="0" y="0" width="88" height="24" rx="12" fill="#172F22" stroke="#285638" stroke-width="1"/>
+    <circle cx="14" cy="12" r="3.5" fill="#4ADE80"/>
+    <text x="24" y="16" class="f-mono" font-size="11" fill="#4ADE80" font-weight="700" letter-spacing="0.5">3 ТРЕКА</text>
+  </g>
+
+  <!-- 3 Queue Rows with Squircle Thumbnails (60px, rx="16") -->
+
+  <!-- Queue Row 1: 'Midnight City' (M83) - 04:03 -->
+  <g clip-path="url(#thumbClip1)">
+    <rect x="32" y="206" width="60" height="60" fill="url(#m83Bg)"/>
+    <!-- Stylized Midnight Skyline -->
+    <rect x="40" y="238" width="10" height="28" fill="#141738"/>
+    <rect x="52" y="228" width="14" height="38" fill="#0E112A"/>
+    <rect x="68" y="234" width="12" height="32" fill="#161B40"/>
+    <circle cx="70" cy="220" r="6" fill="#FCD34D"/>
+    <circle cx="48" cy="245" r="1.5" fill="#60A5FA"/>
+    <circle cx="58" cy="235" r="1.5" fill="#A8C7FA"/>
+  </g>
+  <rect x="32" y="206" width="60" height="60" rx="16" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.1"/>
+
+  <text x="108" y="234" class="f-bold" font-size="17" fill="#E2E2E9">Midnight City</text>
+  <text x="108" y="254" class="f-medium" font-size="13" fill="#8C919D">M83 • Hurry Up, We're Dreaming</text>
+  <text x="592" y="242" class="f-mono" font-size="13" fill="#8C919D">04:03</text>
+
+  <!-- Row 1 Play Button Circle -->
+  <g transform="translate(642, 220)">
+    <circle cx="18" cy="18" r="18" fill="#282D38" stroke="#3E4554" stroke-width="1"/>
+    <path d="M14 11l12 7-12 7V11z" fill="#A8C7FA"/>
+  </g>
+
+  <!-- Hairline Divider 1 -->
+  <line x1="108" y1="276" x2="688" y2="276" stroke="#2B303C" stroke-width="1"/>
+
+  <!-- Queue Row 2: 'Instant Crush' (Daft Punk) - 05:37 -->
+  <g clip-path="url(#thumbClip2)">
+    <rect x="32" y="284" width="60" height="60" fill="url(#daftBg)"/>
+    <!-- Stylized Dual Chrome/Gold Helmet -->
+    <path d="M50 300c0-10 6-14 12-14s12 4 12 14v14H50v-14z" fill="#D97706" opacity="0.8"/>
+    <path d="M44 302c0-8 4-12 8-12v24h-8v-12z" fill="#93C5FD" opacity="0.8"/>
+    <rect x="46" y="304" width="32" height="4" rx="2" fill="#000000"/>
+    <circle cx="62" cy="306" r="1.5" fill="#FDE68A"/>
+  </g>
+  <rect x="32" y="284" width="60" height="60" rx="16" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.1"/>
+
+  <text x="108" y="312" class="f-bold" font-size="17" fill="#E2E2E9">Instant Crush</text>
+  <text x="108" y="332" class="f-medium" font-size="13" fill="#8C919D">Daft Punk ft. Julian Casablancas</text>
+  <text x="592" y="320" class="f-mono" font-size="13" fill="#8C919D">05:37</text>
+
+  <!-- Row 2 Play Button Circle -->
+  <g transform="translate(642, 298)">
+    <circle cx="18" cy="18" r="18" fill="#282D38" stroke="#3E4554" stroke-width="1"/>
+    <path d="M14 11l12 7-12 7V11z" fill="#A8C7FA"/>
+  </g>
+
+  <!-- Hairline Divider 2 -->
+  <line x1="108" y1="354" x2="688" y2="354" stroke="#2B303C" stroke-width="1"/>
+
+  <!-- Queue Row 3: 'Nightcall' (Kavinsky) - 04:19 -->
+  <g clip-path="url(#thumbClip3)">
+    <rect x="32" y="362" width="60" height="60" fill="url(#kavinskyBg)"/>
+    <!-- 80s Synthwave Sunset & Grid Line -->
+    <circle cx="62" cy="390" r="14" fill="#F43F5E"/>
+    <rect x="32" y="392" width="60" height="30" fill="#120215"/>
+    <line x1="32" y1="392" x2="92" y2="392" stroke="#22D3EE" stroke-width="1.5"/>
+    <line x1="36" y1="400" x2="88" y2="400" stroke="#E11D48" stroke-width="1" opacity="0.6"/>
+    <line x1="42" y1="408" x2="82" y2="408" stroke="#E11D48" stroke-width="1" opacity="0.4"/>
+  </g>
+  <rect x="32" y="362" width="60" height="60" rx="16" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.1"/>
+
+  <text x="108" y="390" class="f-bold" font-size="17" fill="#E2E2E9">Nightcall</text>
+  <text x="108" y="410" class="f-medium" font-size="13" fill="#8C919D">Kavinsky • Drive Original Soundtrack</text>
+  <text x="592" y="398" class="f-mono" font-size="13" fill="#8C919D">04:19</text>
+
+  <!-- Row 3 Play Button Circle -->
+  <g transform="translate(642, 376)">
+    <circle cx="18" cy="18" r="18" fill="#282D38" stroke="#3E4554" stroke-width="1"/>
+    <path d="M14 11l12 7-12 7V11z" fill="#A8C7FA"/>
+  </g>
+
+  <!-- Footer Action Pills: 'Открыть очередь (14)' and 'Перемешать' -->
+  <g transform="translate(32, 452)">
+    <!-- Open Queue Pill -->
+    <rect x="0" y="0" width="240" height="52" rx="26" fill="#272C37" stroke="#3E4554" stroke-width="1.2"/>
+    <!-- Playlist Icon -->
+    <g transform="translate(22, 16)" fill="#A8C7FA">
+      <rect x="0" y="2" width="12" height="2" rx="1"/>
+      <rect x="0" y="7" width="12" height="2" rx="1"/>
+      <rect x="0" y="12" width="7" height="2" rx="1"/>
+      <path d="M15 8v8.5a2.5 2.5 0 11-2-2.45V10h4V8h-4z"/>
+    </g>
+    <text x="50" y="32" class="f-bold" font-size="14" fill="#E2E2E9">Открыть очередь (14)</text>
+
+    <!-- Shuffle Pill -->
+    <rect x="256" y="0" width="176" height="52" rx="26" fill="#272C37" stroke="#3E4554" stroke-width="1.2"/>
+    <!-- Shuffle Icon -->
+    <g transform="translate(276, 17)" fill="#A8C7FA">
+      <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+    </g>
+    <text x="306" y="32" class="f-bold" font-size="14" fill="#E2E2E9">Перемешать</text>
+  </g>
+</svg>

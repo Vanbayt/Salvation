@@ -166,6 +166,79 @@
                 android:resource="@xml/lyric_widget" />
         </receiver>
 
+        <receiver
+            android:name=".ui.PixelSquareWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PLAY_PAUSE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PREV" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pixel_square_2x2_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.PixelCompactWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PLAY_PAUSE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PREV" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pixel_compact_4x1_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.PixelStandardWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PLAY_PAUSE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_PREV" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_NEXT" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_SHUFFLE" />
+                <action android:name="org.akanework.gramophone.ACTION_PIXEL_REPEAT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pixel_standard_4x2_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.HifiCanvasWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="org.akanework.gramophone.ACTION_HIFI_PLAY_PAUSE" />
+                <action android:name="org.akanework.gramophone.ACTION_HIFI_PREV" />
+                <action android:name="org.akanework.gramophone.ACTION_HIFI_NEXT" />
+                <action android:name="org.akanework.gramophone.ACTION_HIFI_SHUFFLE" />
+                <action android:name="org.akanework.gramophone.ACTION_HIFI_LIKE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hifi_canvas_4x2_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.KaraokeLyricsWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="org.akanework.gramophone.ACTION_KARAOKE_PLAY_PAUSE" />
+                <action android:name="org.akanework.gramophone.ACTION_KARAOKE_NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_lyrics_karaoke_4x3_info" />
+        </receiver>
+
         <service android:name=".ui.LyricWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 

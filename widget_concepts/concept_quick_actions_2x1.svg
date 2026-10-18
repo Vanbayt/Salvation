@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 176" width="720" height="176">
+  <defs>
+    <!-- Widget Container Surface (Material You surfaceContainer #242831) -->
+    <linearGradient id="cardBg6" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242831"/>
+      <stop offset="100%" stop-color="#1A1C22"/>
+    </linearGradient>
+
+    <!-- Tile 1: Coral Gradient (Favorites) -->
+    <linearGradient id="favTileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B1C23"/>
+      <stop offset="100%" stop-color="#541B28"/>
+    </linearGradient>
+
+    <!-- Tile 2: Blue/Violet Gradient (My Wave) -->
+    <linearGradient id="waveTileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E2244"/>
+      <stop offset="100%" stop-color="#2A245C"/>
+    </linearGradient>
+
+    <!-- Tile 3: Teal Gradient (Search) -->
+    <linearGradient id="searchTileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#133333"/>
+      <stop offset="100%" stop-color="#1B4D4D"/>
+    </linearGradient>
+
+    <!-- Tile 4: Amber/Warm Gradient (Recent / Vinyl) -->
+    <linearGradient id="albumTileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#382C18"/>
+      <stop offset="100%" stop-color="#4D3B1D"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .f-bold { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 700; }
+    .f-medium { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 500; }
+    .f-mono { font-family: "SF Mono", "Roboto Mono", monospace; font-weight: 600; }
+  </style>
+
+  <!-- Pure Widget Card Body (rx="54" at 2x / 28dp, surfaceContainer #242831) -->
+  <rect x="1" y="1" width="718" height="174" rx="54" fill="url(#cardBg6)" stroke="#3E4552" stroke-width="1.5" stroke-opacity="0.6"/>
+
+  <!-- 4 Asymmetric Squircle Tiles (Material Expressive, each 160x140 at 2x, rx="32") -->
+  
+  <!-- Tile 1: Coral - 'Любимое' (Heart icon + '1 420 треков') -->
+  <g transform="translate(16, 18)">
+    <rect x="0" y="0" width="160" height="140" rx="32" fill="url(#favTileGrad)" stroke="#FF5370" stroke-width="1.2" stroke-opacity="0.6"/>
+    <!-- Heart Icon Circle -->
+    <circle cx="44" cy="44" r="24" fill="#FF5370" fill-opacity="0.2"/>
+    <g transform="translate(24, 24) scale(1.65)">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FF5370"/>
+    </g>
+    <!-- Label -->
+    <text x="20" y="100" class="f-bold" font-size="17" fill="#FFE4E8">Любимое</text>
+    <text x="20" y="122" class="f-medium" font-size="11" fill="#FF94A6">1 420 треков</text>
+  </g>
+
+  <!-- Tile 2: Blue/Violet - 'Моя волна' (Soundwave icon + 'Умный поток') -->
+  <g transform="translate(192, 18)">
+    <rect x="0" y="0" width="160" height="140" rx="32" fill="url(#waveTileGrad)" stroke="#818CF8" stroke-width="1.2" stroke-opacity="0.6"/>
+    <!-- Wave Icon Circle -->
+    <circle cx="44" cy="44" r="24" fill="#6366F1" fill-opacity="0.25"/>
+    <g transform="translate(26, 26)" fill="#A5B4FC">
+      <rect x="0" y="10" width="4" height="16" rx="2"/>
+      <rect x="8" y="4" width="4" height="28" rx="2"/>
+      <rect x="16" y="0" width="4" height="36" rx="2"/>
+      <rect x="24" y="8" width="4" height="20" rx="2"/>
+      <rect x="32" y="14" width="4" height="8" rx="2"/>
+    </g>
+    <text x="20" y="100" class="f-bold" font-size="17" fill="#E0E7FF">Моя волна</text>
+    <text x="20" y="122" class="f-medium" font-size="11" fill="#A5B4FC">Умный поток</text>
+  </g>
+
+  <!-- Tile 3: Teal - 'Поиск' (Magnifier icon + 'Радар + голос') -->
+  <g transform="translate(368, 18)">
+    <rect x="0" y="0" width="160" height="140" rx="32" fill="url(#searchTileGrad)" stroke="#2DD4BF" stroke-width="1.2" stroke-opacity="0.6"/>
+    <!-- Search Magnifier Icon Circle -->
+    <circle cx="44" cy="44" r="24" fill="#0D9488" fill-opacity="0.25"/>
+    <g transform="translate(30, 30)">
+      <circle cx="11" cy="11" r="8" fill="none" stroke="#5EEAD4" stroke-width="3"/>
+      <line x1="17" y1="17" x2="26" y2="26" stroke="#5EEAD4" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <text x="20" y="100" class="f-bold" font-size="17" fill="#CCFBF1">Поиск</text>
+    <text x="20" y="122" class="f-medium" font-size="11" fill="#5EEAD4">Радар + голос</text>
+  </g>
+
+  <!-- Tile 4: Amber/Vinyl - 'Недавнее' (Vinyl record icon + 'Продолжить') -->
+  <g transform="translate(544, 18)">
+    <rect x="0" y="0" width="160" height="140" rx="32" fill="url(#albumTileGrad)" stroke="#F59E0B" stroke-width="1.2" stroke-opacity="0.6"/>
+    <!-- Vinyl Disc Graphic -->
+    <circle cx="44" cy="44" r="24" fill="#1C1917" stroke="#92400E" stroke-width="1.5"/>
+    <circle cx="44" cy="44" r="19" fill="none" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="0.8"/>
+    <circle cx="44" cy="44" r="14" fill="#292524"/>
+    <circle cx="44" cy="44" r="6" fill="#F59E0B"/>
+    <circle cx="44" cy="44" r="2" fill="#1C1917"/>
+    <text x="20" y="100" class="f-bold" font-size="17" fill="#FEF3C7">Недавнее</text>
+    <text x="20" y="122" class="f-medium" font-size="11" fill="#FCD34D">Продолжить</text>
+  </g>
+</svg>

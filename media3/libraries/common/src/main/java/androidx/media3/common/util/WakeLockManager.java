@@ -100,20 +100,12 @@ public final class WakeLockManager {
   }
 
   private void postUpdateWakeLock(boolean enabled, boolean stayAwake) {
+    mainHandler.removeCallbacksAndMessages(null);
     if (shouldAcquireWakelock(enabled, stayAwake)) {
       wakeLockHandler.post(() -> wakeLockManagerInternal.updateWakeLock(enabled, stayAwake));
     } else {
-      // When we are about to release a wakelock, add emergency safeguard on main thread in case
-      // the wakelock handler thread is unresponsive.
-      AtomicBoolean emergencyReleaseNeeded = new AtomicBoolean(true);
-      mainHandler.postDelayed(
-          () -> wakeLockManagerInternal.forceReleaseWakeLock(emergencyReleaseNeeded),
-          UNREACTIVE_WAKELOCK_HANDLER_RELEASE_DELAY_MS);
-      wakeLockHandler.post(
-          () -> {
-            emergencyReleaseNeeded.set(false);
-            wakeLockManagerInternal.updateWakeLock(enabled, stayAwake);
-          });
+      // Release wake lock immediately to prevent battery drain on pause/stop/idle
+      wakeLockHandler.post(() -> wakeLockManagerInternal.updateWakeLock(enabled, stayAwake));
     }
   }
 
@@ -137,30 +129,38 @@ public final class WakeLockManager {
     // reasonable timeout that would not affect the user.
     @SuppressLint("WakelockTimeout")
     private synchronized void updateWakeLock(boolean enabled, boolean stayAwake) {
-      if (enabled && wakeLock == null) {
-        if (applicationContext.checkSelfPermission(Manifest.permission.WAKE_LOCK)
-            != PackageManager.PERMISSION_GRANTED) {
-          Log.w(TAG, "WAKE_LOCK permission not granted, can't acquire wake lock for playback");
-          return;
-        }
-        PowerManager powerManager =
-            (PowerManager) applicationContext.getSystemService(Context.POWER_SERVICE);
-        if (powerManager == null) {
-          Log.w(TAG, "PowerManager is null, therefore not creating the WakeLock.");
-          return;
-        }
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
-        wakeLock.setReferenceCounted(false);
-      }
-
-      if (wakeLock == null) {
-        return;
-      }
-
       if (shouldAcquireWakelock(enabled, stayAwake)) {
-        wakeLock.acquire();
+        if (wakeLock == null) {
+          if (applicationContext.checkSelfPermission(Manifest.permission.WAKE_LOCK)
+              != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "WAKE_LOCK permission not granted, can't acquire wake lock for playback");
+            return;
+          }
+          PowerManager powerManager =
+              (PowerManager) applicationContext.getSystemService(Context.POWER_SERVICE);
+          if (powerManager == null) {
+            Log.w(TAG, "PowerManager is null, therefore not creating the WakeLock.");
+            return;
+          }
+          wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
+          wakeLock.setReferenceCounted(false);
+        }
+
+        if (!wakeLock.isHeld()) {
+          try {
+            wakeLock.acquire();
+          } catch (Exception e) {
+            Log.w(TAG, "Failed to acquire wake lock", e);
+          }
+        }
       } else {
-        wakeLock.release();
+        if (wakeLock != null && wakeLock.isHeld()) {
+          try {
+            wakeLock.release();
+          } catch (Exception e) {
+            Log.w(TAG, "Failed to release wake lock", e);
+          }
+        }
       }
     }
 
@@ -171,8 +171,12 @@ public final class WakeLockManager {
     }
 
     private synchronized void forceReleaseWakeLockInternal(AtomicBoolean shouldForceRelease) {
-      if (shouldForceRelease.get() && wakeLock != null) {
-        wakeLock.release();
+      if (shouldForceRelease.get() && wakeLock != null && wakeLock.isHeld()) {
+        try {
+          wakeLock.release();
+        } catch (Exception e) {
+          Log.w(TAG, "Failed to force release wake lock", e);
+        }
       }
     }
   }

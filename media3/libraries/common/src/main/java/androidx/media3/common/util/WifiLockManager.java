@@ -99,20 +99,12 @@ public final class WifiLockManager {
   }
 
   private void postUpdateWifiLock(boolean enabled, boolean stayAwake) {
+    mainHandler.removeCallbacksAndMessages(null);
     if (shouldAcquireWifilock(enabled, stayAwake)) {
       wifiLockHandler.post(() -> wifiLockManagerInternal.updateWifiLock(enabled, stayAwake));
     } else {
-      // When we are about to release a Wifi lock, add emergency safeguard on main thread in case
-      // the lock handler thread is unresponsive.
-      AtomicBoolean emergencyReleaseNeeded = new AtomicBoolean(true);
-      mainHandler.postDelayed(
-          () -> wifiLockManagerInternal.forceReleaseWifiLock(emergencyReleaseNeeded),
-          UNREACTIVE_WIFILOCK_HANDLER_RELEASE_DELAY_MS);
-      wifiLockHandler.post(
-          () -> {
-            emergencyReleaseNeeded.set(false);
-            wifiLockManagerInternal.updateWifiLock(enabled, stayAwake);
-          });
+      // Release wifi lock immediately to prevent battery drain on pause/stop/idle
+      wifiLockHandler.post(() -> wifiLockManagerInternal.updateWifiLock(enabled, stayAwake));
     }
   }
 
@@ -131,32 +123,40 @@ public final class WifiLockManager {
       this.applicationContext = applicationContext;
     }
 
-    public void updateWifiLock(boolean enabled, boolean stayAwake) {
-      if (enabled && wifiLock == null) {
-        if (applicationContext.checkSelfPermission(Manifest.permission.WAKE_LOCK)
-            != PackageManager.PERMISSION_GRANTED) {
-          Log.w(TAG, "WAKE_LOCK permission not granted, can't acquire wake lock for playback");
-          return;
-        }
-        WifiManager wifiManager =
-            (WifiManager)
-                applicationContext.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        if (wifiManager == null) {
-          Log.w(TAG, "WifiManager is null, therefore not creating the WifiLock.");
-          return;
-        }
-        wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, WIFI_LOCK_TAG);
-        wifiLock.setReferenceCounted(false);
-      }
-
-      if (wifiLock == null) {
-        return;
-      }
-
+    public synchronized void updateWifiLock(boolean enabled, boolean stayAwake) {
       if (shouldAcquireWifilock(enabled, stayAwake)) {
-        wifiLock.acquire();
+        if (wifiLock == null) {
+          if (applicationContext.checkSelfPermission(Manifest.permission.WAKE_LOCK)
+              != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "WAKE_LOCK permission not granted, can't acquire wake lock for playback");
+            return;
+          }
+          WifiManager wifiManager =
+              (WifiManager)
+                  applicationContext.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+          if (wifiManager == null) {
+            Log.w(TAG, "WifiManager is null, therefore not creating the WifiLock.");
+            return;
+          }
+          wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, WIFI_LOCK_TAG);
+          wifiLock.setReferenceCounted(false);
+        }
+
+        if (!wifiLock.isHeld()) {
+          try {
+            wifiLock.acquire();
+          } catch (Exception e) {
+            Log.w(TAG, "Failed to acquire wifi lock", e);
+          }
+        }
       } else {
-        wifiLock.release();
+        if (wifiLock != null && wifiLock.isHeld()) {
+          try {
+            wifiLock.release();
+          } catch (Exception e) {
+            Log.w(TAG, "Failed to release wifi lock", e);
+          }
+        }
       }
     }
 
@@ -167,8 +167,12 @@ public final class WifiLockManager {
     }
 
     private synchronized void forceReleaseWifiLockInternal(AtomicBoolean shouldForceRelease) {
-      if (shouldForceRelease.get() && wifiLock != null) {
-        wifiLock.release();
+      if (shouldForceRelease.get() && wifiLock != null && wifiLock.isHeld()) {
+        try {
+          wifiLock.release();
+        } catch (Exception e) {
+          Log.w(TAG, "Failed to force release wifi lock", e);
+        }
       }
     }
   }

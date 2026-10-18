@@ -40,6 +40,9 @@ data class Album(
     @SerializedName("has_flac")
     val hasFlac: Boolean = false,
 
+    @SerializedName("is_playable")
+    val isPlayable: Boolean = true,
+
     @SerializedName("info")
     val info: AlbumInfo? = null
 ) : Serializable

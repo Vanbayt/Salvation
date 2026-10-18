@@ -259,6 +259,18 @@ class MainActivity : BaseActivity() {
         lifecycle.addObserver(controllerViewModel)
         enableEdgeToEdgeProperly()
 
+        org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.addCoverListener { trId, newCover ->
+            runOnUiThread {
+                val currentTrId = getPlayer()?.currentMediaItem?.mediaId
+                if (currentTrId == trId) {
+                    val better = org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(coverUrl, newCover)
+                    if (!better.isNullOrEmpty() && better != coverUrl) {
+                        coverUrl = better
+                    }
+                }
+            }
+        }
+
         if (savedInstanceState?.containsKey("AddToPlaylistPendingRequest") == true) pendingRequest = savedInstanceState.getBundle("AddToPlaylistPendingRequest")
         if (savedInstanceState?.containsKey("DeletePendingRequest") == true) pendingDeleteRequest = savedInstanceState.getBundle("DeletePendingRequest")
         intentDelete = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -636,8 +648,15 @@ class MainActivity : BaseActivity() {
                                 val currentMediaItem = player?.currentMediaItem
                                 val trackTitle = currentMediaItem?.mediaMetadata?.title?.toString() ?: ""
                                 val trackArtist = currentMediaItem?.mediaMetadata?.artist?.toString() ?: ""
-                                val coverUri = currentMediaItem?.mediaMetadata?.artworkUri
+                                val rawCoverUri = currentMediaItem?.mediaMetadata?.artworkUri
                                 val trackId = currentMediaItem?.mediaId
+                                val coverUri = remember(rawCoverUri, trackId, coverUrl) {
+                                    val best = org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+                                        rawCoverUri?.toString(),
+                                        coverUrl.ifEmpty { org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId) }
+                                    )
+                                    best?.let { android.net.Uri.parse(org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(it)) } ?: rawCoverUri
+                                }
 
                                 var isPlaying by remember { mutableStateOf(player?.isPlaying == true) }
                                 var currentPositionMs by remember { mutableLongStateOf(player?.currentPosition ?: 0L) }
@@ -1150,8 +1169,13 @@ class MainActivity : BaseActivity() {
 
             fun getCoverUrl(index: Int): String {
                 if (index == androidx.media3.common.C.INDEX_UNSET || index < 0 || index >= player.mediaItemCount) return ""
-                val uri = player.getMediaItemAt(index).mediaMetadata.artworkUri?.toString() ?: ""
-                return if (uri.startsWith("/")) "http://185.196.41.31$uri" else uri
+                val item = player.getMediaItemAt(index)
+                val uri = item.mediaMetadata.artworkUri?.toString() ?: ""
+                val best = org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+                    uri,
+                    org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(item.mediaId)
+                ) ?: ""
+                return org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(best) ?: ""
             }
 
             val nextIdx = player.nextMediaItemIndex
@@ -2892,7 +2916,11 @@ class MainActivity : BaseActivity() {
         isLoop = controller.repeatMode != Player.REPEAT_MODE_OFF
 
         val originalUri = metadata.artworkUri?.toString() ?: ""
-        coverUrl = if (originalUri.startsWith("/")) "http://185.196.41.31$originalUri" else originalUri
+        val resolvedCover = org.akanework.gramophone.logic.utils.CoverUtils.getBestCover(
+            originalUri,
+            org.akanework.gramophone.logic.utils.exoplayer.ClientTrackResolver.getTrackCover(trackId)
+        ) ?: ""
+        coverUrl = org.akanework.gramophone.logic.utils.CoverUtils.upgradeCoverQuality(resolvedCover) ?: ""
 
         val currentId = controller.currentMediaItem?.mediaId
         val dynamicDur = currentId?.let { org.akanework.gramophone.logic.GramophonePlaybackService.getTrackDuration(it) }
