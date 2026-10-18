@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -134,6 +135,9 @@ fun ArtistDetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isLiked by remember { mutableStateOf(false) }
 
+    // Анонсы и будущие релизы артиста (Spotify Countdown аналог)
+    val upcomingReleases = remember { mutableStateListOf<UpcomingRelease>() }
+
     // Стейты ограничения количества популярных треков
     var showAllTracks by remember { mutableStateOf(false) }
 
@@ -198,6 +202,9 @@ fun ArtistDetailScreen(
 
                         albums.clear()
                         loadedArtist.albums?.let { albums.addAll(it) }
+
+                        upcomingReleases.clear()
+                        loadedArtist.upcoming?.let { upcomingReleases.addAll(it) }
                     }
                 } else {
                     android.util.Log.e("GramoDebug", "Artist error: ${response.code()} ${response.message()}")
@@ -599,6 +606,18 @@ fun ArtistDetailScreen(
                                 Icon(painterResource(R.drawable.ic_library), contentDescription = "Дискография", modifier = Modifier.size(20.dp))
                             }
                         }
+                    }
+                }
+
+                // 1.5 АНОНСЫ И БЛИЖАЙШИЕ РЕЛИЗЫ (SPOTIFY COUNTDOWN)
+                if (upcomingReleases.isNotEmpty()) {
+                    item(key = "artist_upcoming_releases") {
+                        ArtistUpcomingReleasesSection(
+                            releases = upcomingReleases,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
                     }
                 }
 
@@ -1528,5 +1547,273 @@ fun ArtistMemberItem(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun ArtistUpcomingReleasesSection(
+    releases: List<UpcomingRelease>,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "Ближайшие релизы",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Text(
+                    text = "${releases.size}",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        if (releases.size == 1) {
+            UpcomingReleaseCard(release = releases.first(), modifier = Modifier.fillMaxWidth())
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(releases) { release ->
+                    UpcomingReleaseCard(
+                        release = release,
+                        modifier = Modifier.width(320.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpcomingReleaseCard(
+    release: UpcomingRelease,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    var isSubscribed by remember { mutableStateOf(false) }
+
+    val formattedDate = remember(release.releaseDate) {
+        formatUpcomingDate(release.releaseDate)
+    }
+    val daysText = remember(release.daysLeft) {
+        getDaysDeclension(release.daysLeft)
+    }
+
+    val coverUrl = release.cover?.let {
+        if (it.startsWith("/")) "http://185.196.41.31$it" else it
+    }
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        tonalElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Обложка релиза
+            Card(
+                modifier = Modifier.size(80.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (!coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = release.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Album,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Таймер / обратный отсчет (Spotify Countdown pill)
+                Surface(
+                    shape = CircleShape,
+                    color = if (release.daysLeft <= 1) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Timer,
+                            contentDescription = null,
+                            tint = if (release.daysLeft <= 1) MaterialTheme.colorScheme.onErrorContainer
+                                   else MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = daysText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (release.daysLeft <= 1) MaterialTheme.colorScheme.onErrorContainer
+                                    else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Text(
+                    text = release.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = listOfNotNull(
+                        release.recordType?.replaceFirstChar { it.uppercase() } ?: "Релиз",
+                        formattedDate.takeIf { it.isNotBlank() }
+                    ).joinToString(" • "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                FilledTonalButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        isSubscribed = !isSubscribed
+                        val msg = if (isSubscribed) {
+                            "Вы получите уведомление о релизе «${release.title}»!"
+                        } else {
+                            "Уведомление отменено"
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.height(34.dp),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    colors = if (isSubscribed) {
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        ButtonDefaults.filledTonalButtonColors()
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (isSubscribed) Icons.Rounded.NotificationsActive else Icons.Rounded.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isSubscribed) "Сохранено" else "Напомнить",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+        }
+    }
+}
+
+fun getDaysDeclension(days: Int): String {
+    return when {
+        days == 0 -> "Сегодня релиз"
+        days == 1 -> "Завтра"
+        days % 10 == 1 && days % 100 != 11 -> "Через $days день"
+        days % 10 in 2..4 && (days % 100 !in 12..14) -> "Через $days дня"
+        else -> "Через $days дней"
+    }
+}
+
+fun formatUpcomingDate(dateStr: String): String {
+    if (dateStr.isBlank()) return ""
+    return try {
+        val parts = dateStr.split("-")
+        if (parts.size == 3) {
+            val year = parts[0]
+            val month = parts[1].toIntOrNull() ?: return dateStr
+            val day = parts[2].toIntOrNull() ?: return dateStr
+            val monthNames = listOf(
+                "января", "февраля", "марта", "апреля", "мая", "июня",
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            )
+            val monthName = if (month in 1..12) monthNames[month - 1] else parts[1]
+            "$day $monthName $year"
+        } else if (parts.size == 2) {
+            val year = parts[0]
+            val month = parts[1].toIntOrNull() ?: return dateStr
+            val monthNames = listOf(
+                "января", "февраля", "марта", "апреля", "мая", "июня",
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            )
+            val monthName = if (month in 1..12) monthNames[month - 1] else parts[1]
+            "$monthName $year"
+        } else {
+            dateStr
+        }
+    } catch (e: Exception) {
+        dateStr
     }
 }

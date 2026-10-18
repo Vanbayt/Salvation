@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
@@ -109,12 +110,17 @@ class OnlineSearchFragment : Fragment() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun SearchScreenContent() {
+        val context = LocalContext.current
         var searchQuery by remember { mutableStateOf("") }
         var isSearching by remember { mutableStateOf(false) }
         var selectedFilterIndex by remember { mutableIntStateOf(0) } // 0 = Все, 1 = Треки, 2 = Артисты, 3 = Альбомы
         var searchResult by remember { mutableStateOf<SearchResponse?>(null) }
         var historyList by remember { mutableStateOf(getHistory()) }
+        var recentItems by remember { mutableStateOf(HistoryManager.getHistory(context)) }
         var selectedTrackForSheet by remember { mutableStateOf<Track?>(null) }
+
+        val searchCache = remember { android.util.LruCache<String, SearchResponse>(50) }
+        var activeSearchCall by remember { mutableStateOf<Call<SearchResponse>?>(null) }
 
         val focusRequester = remember { FocusRequester() }
         val focusManager = LocalFocusManager.current
@@ -134,14 +140,27 @@ class OnlineSearchFragment : Fragment() {
             }
         }
 
-        // Live Debounced Search with automatic cancellation of previous queries
+        // Live Debounced Search with in-memory caching and automatic cancellation
         LaunchedEffect(searchQuery) {
             val q = searchQuery.trim()
             if (q.length > 1) {
-                delay(300)
+                // Check memory cache first for instant results
+                val cached = searchCache.get(q.lowercase())
+                if (cached != null) {
+                    searchResult = cached
+                    isSearching = false
+                    return@LaunchedEffect
+                }
+
+                delay(450)
+
+                // Cancel in-flight Retrofit call before launching a new one
+                activeSearchCall?.cancel()
+
                 isSearching = true
+                val call = NetworkClient.getApi(requireContext()).searchMusic(q)
+                activeSearchCall = call
                 try {
-                    val call = NetworkClient.getApi(requireContext()).searchMusic(q)
                     val response = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             call.execute()
@@ -150,16 +169,22 @@ class OnlineSearchFragment : Fragment() {
                         }
                     }
                     if (isAdded && response != null && response.isSuccessful) {
-                        searchResult = response.body()
-                        saveToHistory(q)
-                        historyList = getHistory()
+                        val body = response.body()
+                        if (body != null) {
+                            searchCache.put(q.lowercase(), body)
+                            searchResult = body
+                            saveToHistory(q)
+                            historyList = getHistory()
+                        }
                     }
                 } finally {
                     isSearching = false
                 }
             } else if (q.isEmpty()) {
+                activeSearchCall?.cancel()
                 isSearching = false
                 searchResult = null
+                recentItems = HistoryManager.getHistory(context)
             }
         }
 
@@ -225,9 +250,10 @@ class OnlineSearchFragment : Fragment() {
 
             // 4. MAIN CONTENT AREA
             if (searchQuery.isBlank()) {
-                // DISCOVERY MODE (History + Genre Categories)
+                // DISCOVERY MODE (Recent Items + Search History + Genre Categories)
                 DiscoveryContent(
                     historyList = historyList,
+                    recentItems = recentItems,
                     genres = genres,
                     onHistoryClick = { query ->
                         searchQuery = query
@@ -242,6 +268,15 @@ class OnlineSearchFragment : Fragment() {
                     },
                     onGenreClick = { genre ->
                         searchQuery = genre.query
+                    },
+                    onTrackClick = { track ->
+                        playTrack(track, listOf(track), "История")
+                    },
+                    onArtistClick = { artist ->
+                        openArtist(artist.id.toString())
+                    },
+                    onAlbumClick = { album ->
+                        openAlbum(album.id)
                     }
                 )
             } else {
@@ -258,6 +293,7 @@ class OnlineSearchFragment : Fragment() {
                         EmptyResultsView(searchQuery = searchQuery)
                     } else {
                         SearchResultsList(
+                            searchQuery = searchQuery,
                             filterIndex = selectedFilterIndex,
                             tracks = tracks,
                             artists = artists,
@@ -266,6 +302,7 @@ class OnlineSearchFragment : Fragment() {
                             isPlaying = isCurrentPlaying,
                             onTrackClick = { clickedTrack ->
                                 HistoryManager.saveToHistory(requireContext(), clickedTrack)
+                                recentItems = HistoryManager.getHistory(context)
                                 playTrack(clickedTrack, tracks, "Поиск")
                             },
                             onTrackMoreClick = { track ->
@@ -273,10 +310,12 @@ class OnlineSearchFragment : Fragment() {
                             },
                             onArtistClick = { artist ->
                                 HistoryManager.saveToHistory(requireContext(), artist)
+                                recentItems = HistoryManager.getHistory(context)
                                 openArtist(artist.id.toString())
                             },
                             onAlbumClick = { album ->
                                 HistoryManager.saveToHistory(requireContext(), album)
+                                recentItems = HistoryManager.getHistory(context)
                                 openAlbum(album.id)
                             }
                         )
@@ -442,19 +481,255 @@ class OnlineSearchFragment : Fragment() {
     }
 
     @Composable
+    private fun RecentArtistCard(artist: Artist, onClick: () -> Unit) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.width(120.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val rawCover = artist.cover?.takeIf { it.isNotBlank() } ?: artist.picture?.takeIf { it.isNotBlank() }
+                val coverUrl = CoverUtils.upgradeCoverQuality(rawCover)
+                Surface(
+                    shape = CircleShape,
+                    modifier = Modifier.size(76.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest
+                ) {
+                    if (!coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Исполнитель",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun RecentAlbumCard(album: Album, onClick: () -> Unit) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.width(120.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val coverUrl = CoverUtils.upgradeCoverQuality(album.cover)
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.size(76.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    if (!coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Album,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = album.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = album.artistName.ifBlank { "Альбом" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun RecentTrackCard(track: Track, onClick: () -> Unit) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.width(120.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val coverUrl = CoverUtils.upgradeCoverQuality(track.cover)
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.size(76.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (!coverUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = coverUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_equalizer),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.BottomEnd)
+                                .padding(2.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_play),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = track.artist.ifBlank { "Трек" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+
+    @Composable
     private fun DiscoveryContent(
         historyList: List<String>,
+        recentItems: List<Any>,
         genres: List<GenreCategory>,
         onHistoryClick: (String) -> Unit,
         onRemoveHistoryItem: (String) -> Unit,
         onClearAllHistory: () -> Unit,
-        onGenreClick: (GenreCategory) -> Unit
+        onGenreClick: (GenreCategory) -> Unit,
+        onTrackClick: (Track) -> Unit,
+        onArtistClick: (Artist) -> Unit,
+        onAlbumClick: (Album) -> Unit
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 260.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            // 0. Недавно просмотрено (Карточки артистов, альбомов, треков)
+            if (recentItems.isNotEmpty()) {
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Недавно просмотрено",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            items(recentItems) { item ->
+                                when (item) {
+                                    is Artist -> RecentArtistCard(artist = item, onClick = { onArtistClick(item) })
+                                    is Album -> RecentAlbumCard(album = item, onClick = { onAlbumClick(item) })
+                                    is Track -> RecentTrackCard(track = item, onClick = { onTrackClick(item) })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Search History
             if (historyList.isNotEmpty()) {
                 item {
@@ -610,6 +885,7 @@ class OnlineSearchFragment : Fragment() {
 
     @Composable
     private fun SearchResultsList(
+        searchQuery: String,
         filterIndex: Int,
         tracks: List<Track>,
         artists: List<Artist>,
@@ -628,14 +904,31 @@ class OnlineSearchFragment : Fragment() {
         ) {
             // 1. TOP RESULT CARD (When "Все" is selected)
             if (filterIndex == 0) {
-                if (artists.isNotEmpty()) {
+                val qTrim = searchQuery.trim()
+                val exactArtist = artists.firstOrNull { it.name.equals(qTrim, ignoreCase = true) }
+                val exactTrack = tracks.firstOrNull { it.title.equals(qTrim, ignoreCase = true) }
+                val topArtist = exactArtist ?: artists.firstOrNull()
+                val topTrack = exactTrack ?: tracks.firstOrNull()
+
+                if (exactArtist != null) {
                     item {
-                        val topArtist = artists.first()
+                        TopResultArtistCard(artist = exactArtist, onClick = { onArtistClick(exactArtist) })
+                    }
+                } else if (exactTrack != null) {
+                    item {
+                        TopResultTrackCard(
+                            track = exactTrack,
+                            isCurrentlyPlaying = exactTrack.id == currentPlayingTrackId,
+                            isPlaying = isPlaying,
+                            onClick = { onTrackClick(exactTrack) }
+                        )
+                    }
+                } else if (topArtist != null) {
+                    item {
                         TopResultArtistCard(artist = topArtist, onClick = { onArtistClick(topArtist) })
                     }
-                } else if (tracks.isNotEmpty()) {
+                } else if (topTrack != null) {
                     item {
-                        val topTrack = tracks.first()
                         TopResultTrackCard(
                             track = topTrack,
                             isCurrentlyPlaying = topTrack.id == currentPlayingTrackId,
@@ -728,15 +1021,31 @@ class OnlineSearchFragment : Fragment() {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val coverUrl = CoverUtils.upgradeCoverQuality(artist.cover)
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                )
+                val rawCover = artist.cover?.takeIf { it.isNotBlank() } ?: artist.picture?.takeIf { it.isNotBlank() }
+                val coverUrl = CoverUtils.upgradeCoverQuality(rawCover)
+                Surface(
+                    shape = CircleShape,
+                    modifier = Modifier.size(72.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    if (!coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
@@ -884,13 +1193,28 @@ class OnlineSearchFragment : Fragment() {
                 tonalElevation = 2.dp,
                 modifier = Modifier.size(86.dp)
             ) {
-                val coverUrl = CoverUtils.upgradeCoverQuality(artist.cover)
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val rawCover = artist.cover?.takeIf { it.isNotBlank() } ?: artist.picture?.takeIf { it.isNotBlank() }
+                val coverUrl = CoverUtils.upgradeCoverQuality(rawCover)
+                if (!coverUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(

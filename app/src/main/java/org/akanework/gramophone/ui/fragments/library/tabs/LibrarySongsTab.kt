@@ -275,10 +275,20 @@ fun LibrarySongsTab(
                         is_lossless = rec.isLossless
                     )
                 }
+                val resultList = if (searchQuery.isBlank()) {
+                    offlineTracksList
+                } else {
+                    val q = searchQuery.trim().lowercase()
+                    offlineTracksList.filter {
+                        it.title.lowercase().contains(q) ||
+                        it.artist.lowercase().contains(q) ||
+                        (it.album?.lowercase()?.contains(q) == true)
+                    }
+                }
                 withContext(Dispatchers.Main) {
                     tracks.clear()
-                    tracks.addAll(offlineTracksList)
-                    totalTrackCount = offlineTracksList.size
+                    tracks.addAll(resultList)
+                    totalTrackCount = resultList.size
                     isLoading = false
                     isRefreshing = false
                     isLastPage = true
@@ -295,6 +305,22 @@ fun LibrarySongsTab(
                         tracks.clear()
                         tracks.addAll(cached)
                         totalTrackCount = cached.size
+                    }
+                }
+            } else if (isInitial && searchQuery.isNotBlank()) {
+                val memory = LibraryCacheManager.getMemoryTracks(currentSortOption.key)
+                val base = if (!memory.isNullOrEmpty()) memory else LibraryCacheManager.loadCachedTracks(context, currentSortOption.key)
+                if (base.isNotEmpty()) {
+                    val q = searchQuery.trim().lowercase()
+                    val immediateMatches = base.filter {
+                        it.title.lowercase().contains(q) ||
+                        it.artist.lowercase().contains(q) ||
+                        (it.album?.lowercase()?.contains(q) == true)
+                    }
+                    withContext(Dispatchers.Main) {
+                        tracks.clear()
+                        tracks.addAll(immediateMatches)
+                        totalTrackCount = immediateMatches.size
                     }
                 }
             }
@@ -369,6 +395,9 @@ fun LibrarySongsTab(
     }
 
     LaunchedEffect(currentSortOption, searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            kotlinx.coroutines.delay(300)
+        }
         isLastPage = false
         loadTracks(isInitial = true)
     }
