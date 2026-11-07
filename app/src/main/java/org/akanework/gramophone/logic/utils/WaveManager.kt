@@ -246,11 +246,13 @@ object WaveManager {
                         PlaybackLogger.log("WAVE_PRESET", "Preset '$presetTitle' loaded with ${tracks.size} tracks")
                     } else {
                         PlaybackLogger.log("WAVE_PRESET", "No tracks returned for preset '$presetTitle'")
+                        Toast.makeText(appContext, "Не удалось сформировать «$presetTitle»", Toast.LENGTH_SHORT).show()
                     }
                 }
 
                 override fun onFailure(call: Call<RadioResponse>, t: Throwable) {
                     PlaybackLogger.log("WAVE_PRESET", "Network failure loading preset '$presetTitle': ${t.message}")
+                    Toast.makeText(appContext, "Ошибка загрузки: ${t.localizedMessage ?: "сеть недоступна"}", Toast.LENGTH_SHORT).show()
                 }
             })
     }

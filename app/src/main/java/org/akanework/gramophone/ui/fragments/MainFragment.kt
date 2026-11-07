@@ -197,11 +197,8 @@ class MainFragment : Fragment() {
                                     presets = contextPresetsState.value,
                                     selectedPreset = selectedPreset,
                                     onSelect = { preset ->
-                                        if (selectedPreset?.id == preset.id) {
-                                            playPreset(preset)
-                                        } else {
-                                            selectedPreset = preset
-                                        }
+                                        selectedPreset = preset
+                                        playPreset(preset)
                                     }
                                 )
                             }
@@ -1386,13 +1383,12 @@ class MainFragment : Fragment() {
 
     private fun playPreset(preset: PresetCard) {
         val player = (activity as? MainActivity)?.getPlayer()
-        val initialTrack = favoriteTracksState.value.firstOrNull()
         org.akanework.gramophone.logic.utils.WaveManager.startPresetWave(
             context = requireContext().applicationContext,
             player = player,
             presetId = preset.id,
             presetTitle = preset.title,
-            initialTrack = initialTrack
+            initialTrack = null
         )
     }
 }
