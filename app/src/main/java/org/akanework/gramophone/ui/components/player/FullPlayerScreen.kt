@@ -19,6 +19,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,12 +52,14 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.runtime.produceState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -149,6 +152,11 @@ fun FullPlayerScreen(
     var durationMs by remember { mutableLongStateOf(1000L) }
     var shuffleEnabled by remember { mutableStateOf(false) }
     var repeatMode by remember { mutableIntStateOf(Player.REPEAT_MODE_OFF) }
+    val isSmartShuffle by produceState(initialValue = false, context) {
+        value = withContext(Dispatchers.IO) {
+            org.akanework.gramophone.logic.utils.ShuffleUtils.isSmartShuffleActive(context)
+        }
+    }
 
     // Тексты караоке
     var isLyricsVisible by remember { mutableStateOf(false) }
@@ -652,12 +660,20 @@ fun FullPlayerScreen(
                     // 6. Капсула
                     BottomSegmentedCapsuleRow(
                         isShuffleEnabled = shuffleEnabled,
+                        isSmartShuffle = isSmartShuffle,
                         onShuffleToggle = {
                             val p = player ?: return@BottomSegmentedCapsuleRow
-                            val nextShuffle = !p.shuffleModeEnabled
-                            p.shuffleModeEnabled = nextShuffle
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val nextShuffle = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, context)
                             shuffleEnabled = nextShuffle
-                            if (nextShuffle) org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
+                        },
+                        onShuffleReshuffle = {
+                            val p = player ?: return@BottomSegmentedCapsuleRow
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            org.akanework.gramophone.logic.utils.ShuffleUtils.reshuffleActiveQueue(p, context)
+                            shuffleEnabled = true
+                            val msg = if (isSmartShuffle) "Умное перемешивание обновлено ✨" else "Очередь перемешана заново"
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                         },
                         repeatMode = repeatMode,
                         onRepeatToggle = {
@@ -1068,14 +1084,20 @@ fun FullPlayerScreen(
                 // 6. Нижняя сегментированная капсула (PixelPlayer BottomToggleRow Capsule)
                 BottomSegmentedCapsuleRow(
                     isShuffleEnabled = shuffleEnabled,
+                    isSmartShuffle = isSmartShuffle,
                     onShuffleToggle = {
                         val p = player ?: return@BottomSegmentedCapsuleRow
-                        val nextShuffle = !p.shuffleModeEnabled
-                        p.shuffleModeEnabled = nextShuffle
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val nextShuffle = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, context)
                         shuffleEnabled = nextShuffle
-                        if (nextShuffle) {
-                            org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
-                        }
+                    },
+                    onShuffleReshuffle = {
+                        val p = player ?: return@BottomSegmentedCapsuleRow
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        org.akanework.gramophone.logic.utils.ShuffleUtils.reshuffleActiveQueue(p, context)
+                        shuffleEnabled = true
+                        val msg = if (isSmartShuffle) "Умное перемешивание обновлено ✨" else "Очередь перемешана заново"
+                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                     },
                     repeatMode = repeatMode,
                     onRepeatToggle = {
@@ -1267,6 +1289,8 @@ private fun ExpressivePlaybackControlsRow(
 private fun BottomSegmentedCapsuleRow(
     isShuffleEnabled: Boolean,
     onShuffleToggle: () -> Unit,
+    onShuffleReshuffle: () -> Unit = {},
+    isSmartShuffle: Boolean = false,
     repeatMode: Int,
     onRepeatToggle: () -> Unit,
     isFavorite: Boolean,
@@ -1294,11 +1318,13 @@ private fun BottomSegmentedCapsuleRow(
             // 1. Shuffle
             SegmentedCapsuleItem(
                 icon = Icons.Rounded.Shuffle,
-                contentDescription = "Shuffle",
+                contentDescription = if (isSmartShuffle && isShuffleEnabled) "Умное перемешивание" else "Перемешать",
                 isActive = isShuffleEnabled,
                 activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
                 activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = onShuffleToggle,
+                onLongClick = onShuffleReshuffle,
+                showSmartBadge = isSmartShuffle,
                 modifier = Modifier.weight(1f)
             )
 
@@ -1351,6 +1377,7 @@ private fun BottomSegmentedCapsuleRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SegmentedCapsuleItem(
     icon: ImageVector,
@@ -1359,6 +1386,8 @@ private fun SegmentedCapsuleItem(
     activeContainerColor: Color,
     activeContentColor: Color,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    showSmartBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
@@ -1378,10 +1407,11 @@ private fun SegmentedCapsuleItem(
         modifier = modifier
             .fillMaxHeight()
             .clip(CircleShape)
-            .clickable(
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true),
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick
             )
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1391,6 +1421,17 @@ private fun SegmentedCapsuleItem(
                 tint = contentColor,
                 modifier = Modifier.size(22.dp)
             )
+            if (showSmartBadge && isActive) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = "Smart Shuffle",
+                    tint = contentColor,
+                    modifier = Modifier
+                        .size(10.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 3.dp, y = (-3).dp)
+                )
+            }
         }
     }
 }

@@ -392,9 +392,15 @@ fun PlaylistDetailScreen(
         }
 
         if (shuffle) {
-            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems)
+            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(
+                player = player,
+                mediaItems = mediaItems,
+                context = context,
+                collectionKey = "playlist_${playlist.id}"
+            )
         } else {
             player.shuffleModeEnabled = false
+            org.akanework.gramophone.logic.utils.ShuffleUtils.setOriginalQueue(mediaItems)
             player.setMediaItems(mediaItems, startIndex, 0)
             player.prepare()
             player.play()

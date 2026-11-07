@@ -231,17 +231,19 @@ class FavoritesFragment : BaseFragment(null) {
             }
 
             if (shuffle) {
-                val shuffledItems = org.akanework.gramophone.logic.utils.ShuffleUtils.balancedShuffle(mediaItems) { item ->
-                    item.mediaMetadata.artist?.toString()?.lowercase() ?: ""
-                }
-                controller.setMediaItems(shuffledItems, 0, 0L)
+                org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(
+                    player = controller,
+                    mediaItems = mediaItems,
+                    context = requireContext(),
+                    collectionKey = "favorites"
+                )
             } else {
+                controller.shuffleModeEnabled = false
+                org.akanework.gramophone.logic.utils.ShuffleUtils.setOriginalQueue(mediaItems)
                 controller.setMediaItems(mediaItems, startIdx, 0L)
+                controller.prepare()
+                controller.play()
             }
-
-            controller.prepare()
-            controller.shuffleModeEnabled = shuffle
-            controller.play()
 
         } catch (e: Exception) {
             e.printStackTrace()

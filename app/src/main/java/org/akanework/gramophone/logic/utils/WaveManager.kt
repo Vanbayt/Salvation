@@ -175,8 +175,23 @@ object WaveManager {
             Toast.makeText(appContext, "Подбираем волну «$presetTitle»...", Toast.LENGTH_SHORT).show()
         }
 
-        // Фоновая генерация и наполнение очереди микса
-        NetworkClient.getApi(appContext).getPresetTracks(presetId, limit = 25)
+        // Фоновая генерация и наполнение очереди микса с богатым контекстом
+        val telemetry = org.akanework.gramophone.logic.recommendation.ContextManager.gatherTelemetry(appContext)
+        NetworkClient.getApi(appContext).getPresetTracks(
+            presetId = presetId,
+            limit = 25,
+            deviceType = telemetry.deviceType,
+            latitude = telemetry.latitude,
+            longitude = telemetry.longitude,
+            localHour = telemetry.localHour,
+            dayOfWeek = telemetry.dayOfWeek,
+            isCharging = telemetry.isCharging,
+            batteryPct = telemetry.batteryPct,
+            ambientLux = telemetry.ambientLux,
+            recentSkipCount = telemetry.recentSkipCount,
+            skipVelocity = telemetry.skipVelocity,
+            sessionDurationSec = telemetry.sessionDurationSec
+        )
             .enqueue(object : Callback<RadioResponse> {
                 override fun onResponse(call: Call<RadioResponse>, response: Response<RadioResponse>) {
                     val radio = response.body()
@@ -307,7 +322,24 @@ object WaveManager {
 
         if (!presetId.isNullOrEmpty()) {
             val currentCount = player.mediaItemCount
-            NetworkClient.getApi(context).getPresetTracks(presetId, limit = 20, offset = currentCount, wave = true)
+            val telemetry = org.akanework.gramophone.logic.recommendation.ContextManager.gatherTelemetry(context)
+            NetworkClient.getApi(context).getPresetTracks(
+                presetId = presetId,
+                limit = 20,
+                offset = currentCount,
+                wave = true,
+                deviceType = telemetry.deviceType,
+                latitude = telemetry.latitude,
+                longitude = telemetry.longitude,
+                localHour = telemetry.localHour,
+                dayOfWeek = telemetry.dayOfWeek,
+                isCharging = telemetry.isCharging,
+                batteryPct = telemetry.batteryPct,
+                ambientLux = telemetry.ambientLux,
+                recentSkipCount = telemetry.recentSkipCount,
+                skipVelocity = telemetry.skipVelocity,
+                sessionDurationSec = telemetry.sessionDurationSec
+            )
                 .enqueue(object : Callback<RadioResponse> {
                     override fun onResponse(call: Call<RadioResponse>, response: Response<RadioResponse>) {
                         onNewCandidates(response.body()?.tracks ?: emptyList())
@@ -322,7 +354,13 @@ object WaveManager {
             val nextSeedArtist = lastMediaItem?.mediaMetadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: radioArtist
             val nextSeedTitle = lastMediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: radioTitle
 
-            NetworkClient.getApi(context).getRadio(artist = nextSeedArtist, title = nextSeedTitle, limit = 20)
+            NetworkClient.getApi(context).getRadio(
+                artist = nextSeedArtist,
+                title = nextSeedTitle,
+                rootSeedArtist = radioArtist,
+                rootSeedTitle = radioTitle,
+                limit = 20
+            )
                 .enqueue(object : Callback<RadioResponse> {
                     override fun onResponse(call: Call<RadioResponse>, response: Response<RadioResponse>) {
                         onNewCandidates(response.body()?.tracks ?: emptyList())

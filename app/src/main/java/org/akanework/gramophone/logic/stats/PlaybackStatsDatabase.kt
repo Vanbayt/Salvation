@@ -54,6 +54,17 @@ data class StatsSummary(
     val hourlyDistribution: List<Float> = List(24) { 0.05f }
 )
 
+data class AffinityProfile(
+    val megaRepeatTrackIds: Set<String> = emptySet(),
+    val hotTrackIds: Set<String> = emptySet(),
+    val hotArtists: Set<String> = emptySet(),
+    val hotAlbums: Set<String> = emptySet(),
+    val penalizedTrackIds: Set<String> = emptySet()
+) {
+    val isSmart: Boolean
+        get() = megaRepeatTrackIds.isNotEmpty() || hotTrackIds.isNotEmpty() || hotArtists.isNotEmpty() || hotAlbums.isNotEmpty()
+}
+
 class PlaybackStatsDatabase private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -270,6 +281,153 @@ class PlaybackStatsDatabase private constructor(context: Context) :
             favoriteDayOfWeek = favoriteDay,
             dayDistribution = dayDistribution,
             hourlyDistribution = hourlyDistribution
+        )
+    }
+
+    /**
+     * Быстрое извлечение Affinity-профиля с экспоненциальным затуханием (Half-Life 5 дней),
+     * резонансом времени суток (Time-of-Day ±3ч) и фильтрацией быстрых пропусков (Skip Penalty).
+     */
+    fun getRecentAffinityProfile(userId: String? = null, days: Int = 30): AffinityProfile {
+        val now = System.currentTimeMillis()
+        val since = now - (days * 24L * 60L * 60L * 1000L)
+        val megaTracks = mutableSetOf<String>()
+        val hotTracks = mutableSetOf<String>()
+        val hotArtists = mutableSetOf<String>()
+        val hotAlbums = mutableSetOf<String>()
+        val penalizedTracks = mutableSetOf<String>()
+
+        val halfLifeMs = 5.0 * 24.0 * 60.0 * 60.0 * 1000.0 // 5 дней период полураспада
+        val curHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val eventCal = Calendar.getInstance()
+
+        try {
+            val db = readableDatabase
+            val trackScores = mutableMapOf<String, Double>()
+            val trackSkips = mutableMapOf<String, Int>()
+            val trackPlays = mutableMapOf<String, Int>()
+            val artistScores = mutableMapOf<String, Double>()
+            val albumScores = mutableMapOf<String, Double>()
+
+            val eventsQuery = """
+                SELECT track_id, artist, album, duration_ms, listened_ms, timestamp, is_completed
+                FROM playback_events
+                WHERE timestamp >= ?
+            """.trimIndent()
+
+            db.rawQuery(eventsQuery, arrayOf(since.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val tid = cursor.getString(0)
+                    if (tid.isNullOrBlank()) continue
+
+                    val artist = cursor.getString(1)?.trim()?.lowercase()
+                    val album = cursor.getString(2)?.trim()?.lowercase()
+                    val durationMs = cursor.getLong(3)
+                    val listenedMs = cursor.getLong(4)
+                    val ts = cursor.getLong(5)
+                    val isCompleted = cursor.getInt(6) == 1
+
+                    val dt = (now - ts).coerceAtLeast(0L)
+                    // 1. Exponential Half-Life Decay
+                    val decay = Math.pow(2.0, -dt / halfLifeMs)
+
+                    // 2. Time-of-day Resonance (+35% буст при прослушивании в этот же слот суток)
+                    eventCal.timeInMillis = ts
+                    val eventHour = eventCal.get(Calendar.HOUR_OF_DAY)
+                    val hourDiff = minOf(Math.abs(eventHour - curHour), 24 - Math.abs(eventHour - curHour))
+                    val todMultiplier = if (hourDiff <= 3) 1.0 + (0.35 * (1.0 - hourDiff / 4.0)) else 1.0
+
+                    // 3. Skip Penalty: пропуск < 20 сек и < 25% длительности без завершения
+                    val isSkip = (!isCompleted && listenedMs < 20000L && (durationMs == 0L || listenedMs < durationMs * 0.25))
+                    if (isSkip) {
+                        trackSkips[tid] = (trackSkips[tid] ?: 0) + 1
+                        if (dt < 48L * 3600L * 1000L) { // штраф за недавний пропуск
+                            trackScores[tid] = (trackScores[tid] ?: 0.0) - (1.5 * decay)
+                        }
+                    } else {
+                        trackPlays[tid] = (trackPlays[tid] ?: 0) + 1
+                        val completionRatio = Math.min(1.0, listenedMs.toDouble() / Math.max(60000.0, if (durationMs > 0) durationMs.toDouble() else 180000.0))
+                        val eventScore = decay * todMultiplier * (1.0 + 0.5 * completionRatio)
+                        trackScores[tid] = (trackScores[tid] ?: 0.0) + eventScore
+
+                        if (!artist.isNullOrBlank()) {
+                            artistScores[artist] = (artistScores[artist] ?: 0.0) + eventScore
+                        }
+                        if (!album.isNullOrBlank()) {
+                            albumScores[album] = (albumScores[album] ?: 0.0) + eventScore
+                        }
+                    }
+                }
+            }
+
+            // Выделяем оштрафованные треки (2+ пропуска при <= 1 полном воспроизведении или отрицательный скор)
+            for ((tid, score) in trackScores) {
+                val skips = trackSkips[tid] ?: 0
+                val plays = trackPlays[tid] ?: 0
+                if ((skips >= 2 && plays <= 1) || score <= 0.0) {
+                    penalizedTracks.add(tid)
+                }
+            }
+            for ((tid, skips) in trackSkips) {
+                if (skips >= 2 && (trackPlays[tid] ?: 0) == 0) {
+                    penalizedTracks.add(tid)
+                }
+            }
+
+            val eligibleTracks = trackScores
+                .filterKeys { !penalizedTracks.contains(it) }
+                .toList()
+                .sortedByDescending { it.second }
+
+            for ((rank, entry) in eligibleTracks.withIndex()) {
+                val (tid, score) = entry
+                val plays = trackPlays[tid] ?: 0
+                if (rank < 15 && (score >= 3.0 || plays >= 3)) {
+                    megaTracks.add(tid)
+                } else if (rank < 75 && (score >= 1.2 || plays >= 2)) {
+                    hotTracks.add(tid)
+                }
+            }
+
+            // Каскадный добор: если строгих мега-репитов мало (< 5), добираем топ с playCount >= 3
+            if (megaTracks.size < 5) {
+                for (entry in eligibleTracks) {
+                    val tid = entry.first
+                    val plays = trackPlays[tid] ?: 0
+                    if (plays >= 3 && !megaTracks.contains(tid)) {
+                        megaTracks.add(tid)
+                        if (megaTracks.size >= 10) break
+                    }
+                }
+            }
+
+            // Топ-30 артистов
+            artistScores.toList()
+                .sortedByDescending { it.second }
+                .take(30)
+                .forEach { hotArtists.add(it.first) }
+
+            // Топ-20 альбомов
+            albumScores.toList()
+                .sortedByDescending { it.second }
+                .take(20)
+                .forEach { hotAlbums.add(it.first) }
+
+            android.util.Log.i(
+                "ShuffleUtils",
+                "Loaded Smart AffinityProfile: ${megaTracks.size} mega-repeats, ${hotTracks.size} hot tracks, " +
+                    "${hotArtists.size} hot artists, ${hotAlbums.size} hot albums, ${penalizedTracks.size} penalized (half-life=5d, todHour=$curHour)"
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("ShuffleUtils", "Failed to query affinity profile: ${e.message}", e)
+        }
+
+        return AffinityProfile(
+            megaRepeatTrackIds = megaTracks,
+            hotTrackIds = hotTracks,
+            hotArtists = hotArtists,
+            hotAlbums = hotAlbums,
+            penalizedTrackIds = penalizedTracks
         )
     }
 

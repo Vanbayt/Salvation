@@ -1695,10 +1695,8 @@ class MainActivity : BaseActivity() {
                                         onClick = {
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             getPlayer()?.let { p ->
-                                                val next = !p.shuffleModeEnabled
-                                                p.shuffleModeEnabled = next
+                                                val next = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, this@MainActivity)
                                                 isShuffle = next
-                                                if (next) org.akanework.gramophone.logic.utils.ShuffleUtils.applySmartShuffleToActiveQueue(p)
                                             }
                                         },
                                         modifier = Modifier.weight(1f)
@@ -2436,9 +2434,8 @@ class MainActivity : BaseActivity() {
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     val p = getPlayer() ?: return@SegmentedCapsuleBtn
-                                    val newState = !p.shuffleModeEnabled
-                                    p.shuffleModeEnabled = newState
-                                    if (newState) applyPhysicalShuffle(p)
+                                    val next = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, this@MainActivity)
+                                    isShuffle = next
                                 },
                                 modifier = Modifier.weight(1f)
                             )
@@ -2931,7 +2928,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun applyPhysicalShuffle(player: MediaController) {
-        org.akanework.gramophone.logic.utils.ShuffleUtils.applyPhysicalShuffle(player)
+        org.akanework.gramophone.logic.utils.ShuffleUtils.applyPhysicalShuffle(player, this)
     }
 
     private fun syncLikedTracksCache() {

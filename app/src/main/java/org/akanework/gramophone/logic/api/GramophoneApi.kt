@@ -78,7 +78,14 @@ interface GramophoneApi {
         @Query("device_type") deviceType: String? = null,
         @Query("latitude") latitude: Double? = null,
         @Query("longitude") longitude: Double? = null,
-        @Query("recent_skip_count") recentSkipCount: Int = 0
+        @Query("local_hour") localHour: Float? = null,
+        @Query("day_of_week") dayOfWeek: Int? = null,
+        @Query("is_charging") isCharging: Boolean? = null,
+        @Query("battery_pct") batteryPct: Int? = null,
+        @Query("ambient_lux") ambientLux: Float? = null,
+        @Query("recent_skip_count") recentSkipCount: Int = 0,
+        @Query("skip_velocity") skipVelocity: Float? = null,
+        @Query("session_duration_sec") sessionDurationSec: Long? = null
     ): Call<List<PresetCard>>
 
     @GET("/api/v1/recommendations/presets/{preset_id}/tracks")
@@ -86,7 +93,18 @@ interface GramophoneApi {
         @retrofit2.http.Path("preset_id") presetId: String,
         @Query("limit") limit: Int = 25,
         @Query("offset") offset: Int = 0,
-        @Query("wave") wave: Boolean = false
+        @Query("wave") wave: Boolean = false,
+        @Query("device_type") deviceType: String? = null,
+        @Query("latitude") latitude: Double? = null,
+        @Query("longitude") longitude: Double? = null,
+        @Query("local_hour") localHour: Float? = null,
+        @Query("day_of_week") dayOfWeek: Int? = null,
+        @Query("is_charging") isCharging: Boolean? = null,
+        @Query("battery_pct") batteryPct: Int? = null,
+        @Query("ambient_lux") ambientLux: Float? = null,
+        @Query("recent_skip_count") recentSkipCount: Int = 0,
+        @Query("skip_velocity") skipVelocity: Float? = null,
+        @Query("session_duration_sec") sessionDurationSec: Long? = null
     ): Call<RadioResponse>
 
     @GET("/api/v1/recommendations/radio")
@@ -95,6 +113,8 @@ interface GramophoneApi {
         @Query("source_id") sourceId: String? = null,
         @Query("artist") artist: String? = null,
         @Query("title") title: String? = null,
+        @Query("root_seed_artist") rootSeedArtist: String? = null,
+        @Query("root_seed_title") rootSeedTitle: String? = null,
         @Query("limit") limit: Int = 25
     ): Call<RadioResponse>
 

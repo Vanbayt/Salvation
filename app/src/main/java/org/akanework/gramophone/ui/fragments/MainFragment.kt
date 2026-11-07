@@ -1316,9 +1316,14 @@ class MainFragment : Fragment() {
                     if (isAdded && response.isSuccessful) {
                         val tracks = response.body() ?: emptyList()
                         if (tracks.isNotEmpty()) {
-                            val shuffledTracks = org.akanework.gramophone.logic.utils.ShuffleUtils.balancedShuffle(tracks) { item ->
-                                item.artist.lowercase()
-                            }
+                            val shuffledTracks = org.akanework.gramophone.logic.utils.ShuffleUtils.smartShuffle(
+                                items = tracks,
+                                getArtist = { it.artist },
+                                getAlbum = { it.album ?: "" },
+                                getId = { it.id },
+                                collectionKey = "my_mix",
+                                affinityProfile = org.akanework.gramophone.logic.utils.ShuffleUtils.getAffinityProfile(requireContext())
+                            )
                             playTrack(shuffledTracks.first(), shuffledTracks, "Мой микс")
                         } else {
                             Toast.makeText(context, "Ваш список избранного пуст", Toast.LENGTH_SHORT).show()
@@ -1336,11 +1341,22 @@ class MainFragment : Fragment() {
 
     private fun loadContextPresets() {
         val ctx = context ?: return
-        val deviceType = ContextManager.detectDeviceType(ctx)
-        val skipCount = ContextManager.getRecentSkipCount()
+        val telemetry = ContextManager.gatherTelemetry(ctx)
 
         isPresetsLoading.value = true
-        NetworkClient.getApi(ctx).getContextPresets(deviceType = deviceType, recentSkipCount = skipCount)
+        NetworkClient.getApi(ctx).getContextPresets(
+            deviceType = telemetry.deviceType,
+            latitude = telemetry.latitude,
+            longitude = telemetry.longitude,
+            localHour = telemetry.localHour,
+            dayOfWeek = telemetry.dayOfWeek,
+            isCharging = telemetry.isCharging,
+            batteryPct = telemetry.batteryPct,
+            ambientLux = telemetry.ambientLux,
+            recentSkipCount = telemetry.recentSkipCount,
+            skipVelocity = telemetry.skipVelocity,
+            sessionDurationSec = telemetry.sessionDurationSec
+        )
             .enqueue(object : Callback<List<PresetCard>> {
                 override fun onResponse(call: Call<List<PresetCard>>, response: Response<List<PresetCard>>) {
                     isPresetsLoading.value = false

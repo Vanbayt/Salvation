@@ -222,18 +222,36 @@ fun DesktopBottomPlayerBar(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             mainActivity.getPlayer()?.let { p ->
-                                p.shuffleModeEnabled = !p.shuffleModeEnabled
+                                org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, mainActivity)
                             }
                         },
                         modifier = Modifier.size(34.dp)
                     ) {
                         val shuffleOn = mainActivity.getPlayer()?.shuffleModeEnabled == true
-                        Icon(
-                            imageVector = Icons.Rounded.Shuffle,
-                            contentDescription = "Перемешать",
-                            tint = if (shuffleOn) colors.primary else colors.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(19.dp)
-                        )
+                        val isSmartShuffle by produceState(initialValue = false, mainActivity) {
+                            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                org.akanework.gramophone.logic.utils.ShuffleUtils.isSmartShuffleActive(mainActivity)
+                            }
+                        }
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shuffle,
+                                contentDescription = if (shuffleOn && isSmartShuffle) "Умное перемешивание" else "Перемешать",
+                                tint = if (shuffleOn) colors.primary else colors.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(19.dp)
+                            )
+                            if (shuffleOn && isSmartShuffle) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = "Smart Shuffle",
+                                    tint = colors.primary,
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 2.dp, y = (-2).dp)
+                                )
+                            }
+                        }
                     }
 
                     IconButton(

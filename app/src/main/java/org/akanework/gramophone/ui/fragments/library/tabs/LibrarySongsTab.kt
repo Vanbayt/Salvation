@@ -189,10 +189,11 @@ fun LibrarySongsTab(
         }
 
         if (shuffle) {
-            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems, track.id)
+            org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems, track.id, context = context)
         } else {
             val clickedIndex = currentList.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
             player.shuffleModeEnabled = false
+            org.akanework.gramophone.logic.utils.ShuffleUtils.setOriginalQueue(mediaItems)
             player.setMediaItems(mediaItems, clickedIndex, 0)
             player.prepare()
             player.play()
@@ -541,7 +542,7 @@ fun LibrarySongsTab(
                                             }
 
                                             withContext(Dispatchers.Main) {
-                                                org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems)
+                                                org.akanework.gramophone.logic.utils.ShuffleUtils.playWithSmartShuffle(player, mediaItems, context = context)
                                             }
                                         }
                                     },

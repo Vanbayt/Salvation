@@ -120,7 +120,7 @@ class AndroidSalvationPlayer(
 
     override fun toggleShuffle() {
         val p = getPlayer() ?: return
-        p.shuffleModeEnabled = !p.shuffleModeEnabled
+        org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p)
     }
 
     override fun removeTrackFromQueue(index: Int) {

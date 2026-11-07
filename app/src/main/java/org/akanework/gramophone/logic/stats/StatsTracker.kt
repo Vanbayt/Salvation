@@ -31,7 +31,7 @@ object StatsTracker {
     private var accumulatedListenedMs: Long = 0L
     private var isPlaying: Boolean = false
 
-    private fun getUserId(context: Context): String {
+    internal fun getUserId(context: Context): String {
         val token = AuthManager.getToken(context)
         return if (!token.isNullOrBlank()) {
             // Используем хэш/подстроку токена или уникальный ID для изоляции пользователя
