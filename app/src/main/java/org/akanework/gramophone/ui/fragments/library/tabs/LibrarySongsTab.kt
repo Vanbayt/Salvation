@@ -564,6 +564,76 @@ fun LibrarySongsTab(
                                             }
                                         }
                                     },
+                                    onMyMixClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        val player = activity?.getPlayer() ?: return@LibraryActionRow
+                                        if (tracks.isEmpty()) return@LibraryActionRow
+
+                                        Toast.makeText(context, "Собираем персональный микс...", Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            val fullList = if (tracks.size < totalTrackCount && totalTrackCount > 0) {
+                                                try {
+                                                    val resp = NetworkClient.getApi(context).getFavorites(
+                                                        skip = 0,
+                                                        limit = 2000,
+                                                        query = searchQuery.ifBlank { null }
+                                                    ).execute()
+                                                    if (resp.isSuccessful && !resp.body().isNullOrEmpty()) {
+                                                        resp.body()!!
+                                                    } else {
+                                                        tracks.toList()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    tracks.toList()
+                                                }
+                                            } else {
+                                                tracks.toList()
+                                            }
+
+                                            if (fullList.isEmpty()) return@launch
+
+                                            val shuffledTracks = org.akanework.gramophone.logic.utils.ShuffleUtils.smartShuffle(
+                                                items = fullList,
+                                                getArtist = { it.artist },
+                                                getAlbum = { it.album ?: "" },
+                                                getId = { it.id },
+                                                collectionKey = "my_mix",
+                                                affinityProfile = org.akanework.gramophone.logic.utils.ShuffleUtils.getAffinityProfile(context)
+                                            )
+
+                                            val mediaItems = shuffledTracks.map { item ->
+                                                val streamUrl = "http://185.196.41.31/stream/${item.id}"
+                                                val coverUri = item.cover?.let {
+                                                    (if (it.startsWith("/")) "http://185.196.41.31$it" else it).toUri()
+                                                }
+                                                MediaItem.Builder()
+                                                    .setMediaId(item.id)
+                                                    .setUri(streamUrl.toUri())
+                                                    .setMediaMetadata(
+                                                        MediaMetadata.Builder()
+                                                            .setTitle(item.title)
+                                                            .setArtist(item.artist)
+                                                            .setAlbumTitle(item.album)
+                                                            .setArtworkUri(coverUri)
+                                                            .setExtras(Bundle().apply {
+                                                                putLong("DURATION", item.duration.toLong())
+                                                                putBoolean("IS_LOSSLESS", item.is_lossless)
+                                                                putString("PLAYING_FROM", "Мой микс")
+                                                            })
+                                                            .build()
+                                                    )
+                                                    .build()
+                                            }
+
+                                            withContext(Dispatchers.Main) {
+                                                player.stop()
+                                                player.clearMediaItems()
+                                                player.setMediaItems(mediaItems, 0, 0)
+                                                player.prepare()
+                                                player.play()
+                                            }
+                                        }
+                                    },
                                     onSortClick = { showSortSheet = true },
                                     onLocateClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)

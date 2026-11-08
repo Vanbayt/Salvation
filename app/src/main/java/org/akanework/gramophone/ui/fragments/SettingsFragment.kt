@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import org.akanework.gramophone.BuildConfig
 import org.akanework.gramophone.ui.MainActivity
 import java.io.File
+import org.akanework.gramophone.ui.components.AnimatedListItem
 import androidx.preference.PreferenceManager
 
 class SettingsFragment : BaseFragment(true) {
@@ -203,7 +204,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                         letterSpacing = (-0.8).sp,
                         fontSize = 32.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -231,9 +232,10 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             item {
                 AnimatedListItem(index = 1) {
                     SettingsGroupCard(title = "Кастомизация") {
-                        val themeSubtitle = when (currentThemeMode) {
-                            "1" -> "Тёмная"
-                            "2" -> "Светлая"
+                        val themeSubtitle = when {
+                            currentThemeMode == "3" || (currentThemeMode == "1" && isPureDarkEnabled) -> "Тёмная (OLED Pure Black)"
+                            currentThemeMode == "1" -> "Тёмная"
+                            currentThemeMode == "2" -> "Светлая"
                             else -> "Системная"
                         }
                         SettingsRow(
@@ -241,16 +243,6 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                             title = "Тема оформления",
                             subtitle = themeSubtitle,
                             onClick = { showThemeDialog = true }
-                        )
-                        SettingsSwitchRow(
-                            icon = Icons.Rounded.Contrast,
-                            title = "OLED (Pure Black) тема",
-                            subtitle = "Глубокий чёрный цвет для максимального контраста и экономии заряда",
-                            checked = isPureDarkEnabled,
-                            onCheckedChange = { isChecked ->
-                                isPureDarkEnabled = isChecked
-                                defaultPrefs.edit().putBoolean("pureDark", isChecked).apply()
-                            }
                         )
                         SettingsSwitchRow(
                             icon = Icons.Rounded.Palette,
@@ -584,8 +576,9 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     if (showThemeDialog) {
         val options = listOf(
             "0" to "Системная",
+            "2" to "Светлая",
             "1" to "Тёмная",
-            "2" to "Светлая"
+            "3" to "Тёмная (OLED Pure Black)"
         )
         AlertDialog(
             onDismissRequest = { showThemeDialog = false },
@@ -599,16 +592,21 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     options.forEach { (mode, label) ->
-                        val isSelected = currentThemeMode == mode
+                        val isSelected = currentThemeMode == mode || (mode == "3" && currentThemeMode == "1" && isPureDarkEnabled)
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .clickable {
+                                    val isOled = mode == "3"
                                     currentThemeMode = mode
-                                    defaultPrefs.edit().putString("theme_mode", mode).apply()
+                                    isPureDarkEnabled = isOled
+                                    defaultPrefs.edit()
+                                        .putString("theme_mode", mode)
+                                        .putBoolean("pureDark", isOled)
+                                        .apply()
                                     when (mode) {
-                                        "1" -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+                                        "1", "3" -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
                                         "2" -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
                                         else -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
                                     }
@@ -827,26 +825,5 @@ fun SettingsSwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange
         )
-    }
-}
-
-@Composable
-fun AnimatedListItem(index: Int, content: @Composable () -> Unit) {
-    val offsetY = remember { Animatable(100f) }
-    val alpha = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        delay((index * 50).toLong().coerceAtMost(300L))
-        launch { alpha.animateTo(1f, tween(300)) }
-        launch { offsetY.animateTo(0f, tween(durationMillis = 400, easing = FastOutSlowInEasing)) }
-    }
-
-    Box(
-        modifier = Modifier.graphicsLayer {
-            translationY = offsetY.value
-            this.alpha = alpha.value
-        }
-    ) {
-        content()
     }
 }

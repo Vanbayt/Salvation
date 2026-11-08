@@ -65,6 +65,7 @@ import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.api.SearchResponse
 import org.akanework.gramophone.logic.api.Track
 import org.akanework.gramophone.ui.MainActivity
+import org.akanework.gramophone.ui.components.AnimatedListItem
 import org.akanework.gramophone.ui.components.PlayingEqIcon
 import retrofit2.Call
 import retrofit2.Callback
@@ -193,11 +194,15 @@ class OnlineSearchFragment : Fragment() {
             )
         }
 
-        Box(
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
+            color = MaterialTheme.colorScheme.background
         ) {
-            Column(
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .widthIn(max = 1100.dp)
@@ -353,6 +358,7 @@ class OnlineSearchFragment : Fragment() {
             }
         }
         }
+        }
     }
 
     // --- Search UI Components ---
@@ -371,7 +377,8 @@ class OnlineSearchFragment : Fragment() {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 2.dp
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+            tonalElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
@@ -711,23 +718,25 @@ class OnlineSearchFragment : Fragment() {
             // 0. Недавно просмотрено (Карточки артистов, альбомов, треков)
             if (recentItems.isNotEmpty()) {
                 item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Недавно просмотрено",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(vertical = 4.dp)
-                        ) {
-                            items(recentItems) { item ->
-                                when (item) {
-                                    is Artist -> RecentArtistCard(artist = item, onClick = { onArtistClick(item) })
-                                    is Album -> RecentAlbumCard(album = item, onClick = { onAlbumClick(item) })
-                                    is Track -> RecentTrackCard(track = item, onClick = { onTrackClick(item) })
+                    AnimatedListItem(index = 0) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Недавно просмотрено",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                items(recentItems) { item ->
+                                    when (item) {
+                                        is Artist -> RecentArtistCard(artist = item, onClick = { onArtistClick(item) })
+                                        is Album -> RecentAlbumCard(album = item, onClick = { onAlbumClick(item) })
+                                        is Track -> RecentTrackCard(track = item, onClick = { onTrackClick(item) })
+                                    }
                                 }
                             }
                         }
@@ -738,67 +747,70 @@ class OnlineSearchFragment : Fragment() {
             // Search History
             if (historyList.isNotEmpty()) {
                 item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Недавние запросы",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            TextButton(onClick = onClearAllHistory) {
+                    AnimatedListItem(index = 1) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "Очистить",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
+                                    text = "Недавние запросы",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
+                                TextButton(onClick = onClearAllHistory) {
+                                    Text(
+                                        text = "Очистить",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
-                        }
 
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            historyList.forEach { query ->
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    tonalElevation = 1.dp,
-                                    onClick = { onHistoryClick(query) }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                historyList.forEach { query ->
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
+                                        tonalElevation = 0.dp,
+                                        onClick = { onHistoryClick(query) }
                                     ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_search),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = query,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = { onRemoveHistoryItem(query) },
-                                            modifier = Modifier.size(24.dp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.Close,
-                                                contentDescription = "Удалить",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                painter = painterResource(id = R.drawable.ic_search),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(14.dp)
                                             )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = query,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            IconButton(
+                                                onClick = { onRemoveHistoryItem(query) },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = "Удалить",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -810,30 +822,34 @@ class OnlineSearchFragment : Fragment() {
 
             // Genre & Mood Explore Grid
             item {
-                Text(
-                    text = "Обзор жанров и настроений",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(vertical = 6.dp)
-                )
+                AnimatedListItem(index = 2) {
+                    Text(
+                        text = "Обзор жанров и настроений",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
+                }
             }
 
             // 2-Column Grid of Curated Genres
             val chunkedGenres = genres.chunked(2)
-            items(chunkedGenres) { rowGenres ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    rowGenres.forEach { genre ->
-                        GenreExploreCard(
-                            genre = genre,
-                            onClick = { onGenreClick(genre) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowGenres.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
+            itemsIndexed(chunkedGenres) { rowIndex, rowGenres ->
+                AnimatedListItem(index = 3 + rowIndex) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowGenres.forEach { genre ->
+                            GenreExploreCard(
+                                genre = genre,
+                                onClick = { onGenreClick(genre) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowGenres.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -852,7 +868,7 @@ class OnlineSearchFragment : Fragment() {
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
-            tonalElevation = 1.dp
+            tonalElevation = 0.dp
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -935,29 +951,37 @@ class OnlineSearchFragment : Fragment() {
 
                 if (exactArtist != null) {
                     item {
-                        TopResultArtistCard(artist = exactArtist, onClick = { onArtistClick(exactArtist) })
+                        AnimatedListItem(index = 0) {
+                            TopResultArtistCard(artist = exactArtist, onClick = { onArtistClick(exactArtist) })
+                        }
                     }
                 } else if (exactTrack != null) {
                     item {
-                        TopResultTrackCard(
-                            track = exactTrack,
-                            isCurrentlyPlaying = exactTrack.id == currentPlayingTrackId,
-                            isPlaying = isPlaying,
-                            onClick = { onTrackClick(exactTrack) }
-                        )
+                        AnimatedListItem(index = 0) {
+                            TopResultTrackCard(
+                                track = exactTrack,
+                                isCurrentlyPlaying = exactTrack.id == currentPlayingTrackId,
+                                isPlaying = isPlaying,
+                                onClick = { onTrackClick(exactTrack) }
+                            )
+                        }
                     }
                 } else if (topArtist != null) {
                     item {
-                        TopResultArtistCard(artist = topArtist, onClick = { onArtistClick(topArtist) })
+                        AnimatedListItem(index = 0) {
+                            TopResultArtistCard(artist = topArtist, onClick = { onArtistClick(topArtist) })
+                        }
                     }
                 } else if (topTrack != null) {
                     item {
-                        TopResultTrackCard(
-                            track = topTrack,
-                            isCurrentlyPlaying = topTrack.id == currentPlayingTrackId,
-                            isPlaying = isPlaying,
-                            onClick = { onTrackClick(topTrack) }
-                        )
+                        AnimatedListItem(index = 0) {
+                            TopResultTrackCard(
+                                track = topTrack,
+                                isCurrentlyPlaying = topTrack.id == currentPlayingTrackId,
+                                isPlaying = isPlaying,
+                                onClick = { onTrackClick(topTrack) }
+                            )
+                        }
                     }
                 }
             }
@@ -965,18 +989,22 @@ class OnlineSearchFragment : Fragment() {
             // 2. ARTISTS SECTION
             if ((filterIndex == 0 || filterIndex == 2) && artists.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "Исполнители",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    LazyRow(
-                        contentPadding = PaddingValues(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        itemsIndexed(artists, key = { idx, artist -> "${artist.id}_$idx" }) { _, artist ->
-                            ArtistSearchAvatar(artist = artist, onClick = { onArtistClick(artist) })
+                    AnimatedListItem(index = 1) {
+                        Column {
+                            Text(
+                                text = "Исполнители",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                itemsIndexed(artists, key = { idx, artist -> "${artist.id}_$idx" }) { _, artist ->
+                                    ArtistSearchAvatar(artist = artist, onClick = { onArtistClick(artist) })
+                                }
+                            }
                         }
                     }
                 }
@@ -985,18 +1013,22 @@ class OnlineSearchFragment : Fragment() {
             // 3. ALBUMS SECTION
             if ((filterIndex == 0 || filterIndex == 3) && albums.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "Альбомы",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    LazyRow(
-                        contentPadding = PaddingValues(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        itemsIndexed(albums, key = { idx, album -> "${album.id}_$idx" }) { _, album ->
-                            AlbumSearchCard(album = album, onClick = { onAlbumClick(album) })
+                    AnimatedListItem(index = 2) {
+                        Column {
+                            Text(
+                                text = "Альбомы",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                itemsIndexed(albums, key = { idx, album -> "${album.id}_$idx" }) { _, album ->
+                                    AlbumSearchCard(album = album, onClick = { onAlbumClick(album) })
+                                }
+                            }
                         }
                     }
                 }
@@ -1006,23 +1038,27 @@ class OnlineSearchFragment : Fragment() {
             if (filterIndex == 0 || filterIndex == 1) {
                 if (tracks.isNotEmpty()) {
                     item {
-                        Text(
-                            text = "Треки",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        AnimatedListItem(index = 3) {
+                            Text(
+                                text = "Треки",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
                     }
 
                     val tracksToDisplay = if (filterIndex == 0 && artists.isNotEmpty()) tracks.take(15) else tracks
-                    itemsIndexed(tracksToDisplay, key = { idx, track -> "${track.id}_$idx" }) { _, track ->
-                        TrackSearchRow(
-                            track = track,
-                            isCurrentlyPlaying = track.id == currentPlayingTrackId,
-                            isPlaying = isPlaying,
-                            onClick = { onTrackClick(track) },
-                            onMoreClick = { onTrackMoreClick(track) }
-                        )
+                    itemsIndexed(tracksToDisplay, key = { idx, track -> "${track.id}_$idx" }) { idx, track ->
+                        AnimatedListItem(index = 4 + idx) {
+                            TrackSearchRow(
+                                track = track,
+                                isCurrentlyPlaying = track.id == currentPlayingTrackId,
+                                isPlaying = isPlaying,
+                                onClick = { onTrackClick(track) },
+                                onMoreClick = { onTrackMoreClick(track) }
+                            )
+                        }
                     }
                 }
             }
@@ -1036,7 +1072,8 @@ class OnlineSearchFragment : Fragment() {
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            tonalElevation = 2.dp
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            tonalElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
@@ -1124,7 +1161,8 @@ class OnlineSearchFragment : Fragment() {
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            tonalElevation = 2.dp
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            tonalElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
@@ -1213,7 +1251,7 @@ class OnlineSearchFragment : Fragment() {
             Surface(
                 shape = CircleShape,
                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.primaryContainer),
-                tonalElevation = 2.dp,
+                tonalElevation = 0.dp,
                 modifier = Modifier.size(86.dp)
             ) {
                 val rawCover = artist.cover?.takeIf { it.isNotBlank() } ?: artist.picture?.takeIf { it.isNotBlank() }

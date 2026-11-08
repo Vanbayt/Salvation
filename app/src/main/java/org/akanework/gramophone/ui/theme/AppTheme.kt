@@ -38,6 +38,8 @@ object AppThemeHelper {
 
     fun isPureDark(context: Context): Boolean {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
+        val mode = prefs.getString("theme_mode", "0")
+        if (mode == "3") return true
         return prefs.getBooleanStrict("pureDark", false)
     }
 
@@ -45,7 +47,7 @@ object AppThemeHelper {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
         val mode = prefs.getString("theme_mode", "0")
         return when (mode) {
-            "1" -> true
+            "1", "3" -> true
             "2" -> false
             else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         }

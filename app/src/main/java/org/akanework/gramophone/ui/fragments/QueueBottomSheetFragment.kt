@@ -488,36 +488,111 @@ private fun QueueScreenContent(
                 }
             }
 
-            // Сегментированный тулбар действий (2 группы PillSegmentButton)
+            // 1. Первый ряд тулбара: Режимы воспроизведения [ Перемешать | Повтор ]
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 20.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Группа 1: Воспроизведение [ Перемешать | Повтор ]
-                Row(
+                val shuffleBg by animateColorAsState(
+                    if (isShuffle) colors.primaryContainer else colors.surfaceContainerHigh,
+                    tween(200), label = "qShufBg"
+                )
+                val shuffleFg by animateColorAsState(
+                    if (isShuffle) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                    tween(200), label = "qShufFg"
+                )
+                PillSegmentButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onToggleShuffle()
+                    },
+                    position = PillPosition.START,
+                    containerColor = shuffleBg,
+                    contentColor = shuffleFg,
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    width = null,
+                    height = 40.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
                 ) {
-                    val shuffleBg by animateColorAsState(
-                        if (isShuffle) colors.primaryContainer else colors.surfaceContainerHigh,
-                        tween(200), label = "qShufBg"
-                    )
-                    val shuffleFg by animateColorAsState(
-                        if (isShuffle) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                        tween(200), label = "qShufFg"
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Rounded.Shuffle, contentDescription = "Перемешать", modifier = Modifier.size(18.dp))
+                        Text(
+                            text = "Перемешать",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                val isLoop = repeatMode != Player.REPEAT_MODE_OFF
+                val loopBg by animateColorAsState(
+                    if (isLoop) colors.secondaryContainer else colors.surfaceContainerHigh,
+                    tween(200), label = "qLoopBg"
+                )
+                val loopFg by animateColorAsState(
+                    if (isLoop) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                    tween(200), label = "qLoopFg"
+                )
+                PillSegmentButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onToggleRepeat()
+                    },
+                    position = PillPosition.END,
+                    containerColor = loopBg,
+                    contentColor = loopFg,
+                    modifier = Modifier.weight(1f),
+                    width = null,
+                    height = 40.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                            contentDescription = "Повтор",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = if (repeatMode == Player.REPEAT_MODE_ONE) "Повтор 1" else "Повтор",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            // 2. Второй ряд тулбара: Действия с очередью [ К текущему | В плейлист | Очистить ]
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val hasLocate = currentIndex >= 0
+                if (hasLocate) {
                     PillSegmentButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleShuffle()
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(0)
+                            }
                         },
                         position = PillPosition.START,
-                        containerColor = shuffleBg,
-                        contentColor = shuffleFg,
-                        modifier = Modifier.weight(1f),
+                        containerColor = colors.surfaceContainerHigh,
+                        contentColor = colors.primary,
+                        modifier = Modifier.weight(0.9f),
                         width = null,
                         height = 40.dp,
                         cornerRadius = 20.dp,
@@ -527,131 +602,67 @@ private fun QueueScreenContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Rounded.Shuffle, contentDescription = "Перемешать", modifier = Modifier.size(17.dp))
+                            Icon(Icons.Rounded.MyLocation, contentDescription = "К текущему треку", modifier = Modifier.size(17.dp))
                             Text(
-                                text = "Микс",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                            )
-                        }
-                    }
-
-                    val isLoop = repeatMode != Player.REPEAT_MODE_OFF
-                    val loopBg by animateColorAsState(
-                        if (isLoop) colors.secondaryContainer else colors.surfaceContainerHigh,
-                        tween(200), label = "qLoopBg"
-                    )
-                    val loopFg by animateColorAsState(
-                        if (isLoop) colors.onSecondaryContainer else colors.onSurfaceVariant,
-                        tween(200), label = "qLoopFg"
-                    )
-                    PillSegmentButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleRepeat()
-                        },
-                        position = PillPosition.END,
-                        containerColor = loopBg,
-                        contentColor = loopFg,
-                        modifier = Modifier.weight(1f),
-                        width = null,
-                        height = 40.dp,
-                        cornerRadius = 20.dp,
-                        innerRadius = 5.dp
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                                contentDescription = "Повтор",
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Text(
-                                text = if (repeatMode == Player.REPEAT_MODE_ONE) "1 трек" else "Повтор",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                                text = "Текущий",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                                maxLines = 1
                             )
                         }
                     }
                 }
 
-                // Группа 2: Управление очередью [ Найти трек (опционально) | Сохранить | Очистить ]
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                PillSegmentButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onSavePlaylist()
+                    },
+                    position = if (hasLocate) PillPosition.MIDDLE else PillPosition.START,
+                    containerColor = colors.surfaceContainerHigh,
+                    contentColor = colors.onSurface,
+                    modifier = Modifier.weight(1.1f),
+                    width = null,
+                    height = 40.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
                 ) {
-                    val hasLocate = currentIndex >= 0
-                    if (hasLocate) {
-                        PillSegmentButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(0)
-                                }
-                            },
-                            position = PillPosition.START,
-                            containerColor = colors.surfaceContainerHigh,
-                            contentColor = colors.primary,
-                            modifier = Modifier.weight(0.7f),
-                            width = null,
-                            height = 40.dp,
-                            cornerRadius = 20.dp,
-                            innerRadius = 5.dp
-                        ) {
-                            Icon(Icons.Rounded.MyLocation, contentDescription = "К текущему треку", modifier = Modifier.size(17.dp))
-                        }
-                    }
-
-                    PillSegmentButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onSavePlaylist()
-                        },
-                        position = if (hasLocate) PillPosition.MIDDLE else PillPosition.START,
-                        containerColor = colors.surfaceContainerHigh,
-                        contentColor = colors.onSurface,
-                        modifier = Modifier.weight(1f),
-                        width = null,
-                        height = 40.dp,
-                        cornerRadius = 20.dp,
-                        innerRadius = 5.dp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Сохранить", modifier = Modifier.size(17.dp))
-                            Text(
-                                text = "Плейлист",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                            )
-                        }
+                        Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Сохранить", modifier = Modifier.size(17.dp))
+                        Text(
+                            text = "В плейлист",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                            maxLines = 1
+                        )
                     }
+                }
 
-                    PillSegmentButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onClearQueue()
-                        },
-                        position = PillPosition.END,
-                        containerColor = colors.surfaceContainerHigh,
-                        contentColor = colors.error,
-                        modifier = Modifier.weight(1f),
-                        width = null,
-                        height = 40.dp,
-                        cornerRadius = 20.dp,
-                        innerRadius = 5.dp
+                PillSegmentButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClearQueue()
+                    },
+                    position = PillPosition.END,
+                    containerColor = colors.surfaceContainerHigh,
+                    contentColor = colors.error,
+                    modifier = Modifier.weight(1.1f),
+                    width = null,
+                    height = 40.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Rounded.DeleteSweep, contentDescription = "Очистить", modifier = Modifier.size(17.dp))
-                            Text(
-                                text = "Очистить",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                            )
-                        }
+                        Icon(Icons.Rounded.DeleteSweep, contentDescription = "Очистить", modifier = Modifier.size(17.dp))
+                        Text(
+                            text = "Очистить",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                            maxLines = 1
+                        )
                     }
                 }
             }

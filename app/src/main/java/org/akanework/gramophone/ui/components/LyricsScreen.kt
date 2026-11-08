@@ -373,22 +373,28 @@ fun LyricsScreen(
                     }
 
                     // Translation Toggle Button
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = {
                             val next = !isAutoTranslateEnabled
                             isAutoTranslateEnabled = next
                             defaultPrefs.edit().putBoolean("lyrics_auto_translate", next).apply()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (isAutoTranslateEnabled) headerPrimaryColor.copy(alpha = 0.25f) else Color.Transparent,
+                            contentColor = if (isAutoTranslateEnabled) headerPrimaryColor else headerOnCardColor.copy(alpha = 0.5f)
+                        ),
                         modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Translate,
                             contentDescription = "Translate",
-                            tint = if (isAutoTranslateEnabled) headerPrimaryColor else headerOnCardColor.copy(alpha = 0.45f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(6.dp))
 
                     // Play/Pause Button
                     FilledIconButton(
@@ -412,7 +418,63 @@ fun LyricsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            // M3 Expressive Source Switcher Segmented Bar [ Все | LRCLIB | NetEase | Kugou ]
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val sources = listOf(
+                    LyricsSource.ALL to "Все",
+                    LyricsSource.LRCLIB to "LRCLIB",
+                    LyricsSource.NETEASE to "NetEase",
+                    LyricsSource.KUGOU to "Kugou"
+                )
+                sources.forEachIndexed { idx, (src, label) ->
+                    val isSelected = selectedSource == src
+                    val pos = when (idx) {
+                        0 -> PillPosition.START
+                        sources.lastIndex -> PillPosition.END
+                        else -> PillPosition.MIDDLE
+                    }
+                    val bg by animateColorAsState(
+                        if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                        tween(200), label = "srcBg"
+                    )
+                    val fg by animateColorAsState(
+                        if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tween(200), label = "srcFg"
+                    )
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSourceSelected(src)
+                        },
+                        position = pos,
+                        containerColor = bg,
+                        contentColor = fg,
+                        modifier = Modifier.weight(1f),
+                        width = null,
+                        height = 36.dp,
+                        cornerRadius = 18.dp,
+                        innerRadius = 4.dp
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.5.sp
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
 
             // Main Content Area
             Box(
@@ -661,17 +723,24 @@ fun LyricsScreen(
                                     .padding(horizontal = 20.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                TextButton(
+                                FilledTonalButton(
                                     onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         val fullText = validUnsyncedLines.joinToString("\n") { it.first }
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         clipboard.setPrimaryClip(ClipData.newPlainText("Lyrics", fullText))
                                         Toast.makeText(context, "Текст скопирован в буфер", Toast.LENGTH_SHORT).show()
-                                    }
+                                    },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Скопировать текст")
+                                    Text("Скопировать текст", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                                 }
                             }
 
@@ -882,22 +951,26 @@ private fun EmptyLyricsState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onRetry,
-            shape = RoundedCornerShape(24.dp),
-            colors = ButtonDefaults.buttonColors(
+        val haptic = LocalHapticFeedback.current
+        FilledTonalButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onRetry()
+            },
+            shape = CircleShape,
+            colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            ),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Обновить поиск", fontWeight = FontWeight.Bold)
+            Text("Обновить поиск", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
         }
     }
 }

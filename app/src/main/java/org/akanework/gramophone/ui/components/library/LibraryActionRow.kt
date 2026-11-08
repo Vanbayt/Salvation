@@ -37,12 +37,15 @@ import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.res.painterResource
+import org.akanework.gramophone.R
 import org.akanework.gramophone.ui.components.PillPosition
 import org.akanework.gramophone.ui.components.PillSegmentButton
 
 @Composable
 fun LibraryActionRow(
     onShuffleClick: () -> Unit,
+    onMyMixClick: () -> Unit = {},
     onSortClick: () -> Unit,
     onLocateClick: () -> Unit = {},
     showLocateButton: Boolean = false,
@@ -57,45 +60,90 @@ fun LibraryActionRow(
 ) {
     val colors = MaterialTheme.colorScheme
 
-    Row(
+    androidx.compose.foundation.layout.Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Левая группа: Кнопка Shuffle и Счетчик
+        // Ряд 1: Основные действия воспроизведения [ Перемешать | Мой микс ]
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            FilledTonalButton(
+            PillSegmentButton(
                 onClick = onShuffleClick,
-                shape = CircleShape,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = colors.tertiaryContainer,
-                    contentColor = colors.onTertiaryContainer
-                ),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                modifier = Modifier.height(38.dp)
+                position = PillPosition.START,
+                containerColor = colors.tertiaryContainer,
+                contentColor = colors.onTertiaryContainer,
+                modifier = Modifier.weight(1f),
+                width = null,
+                height = 42.dp,
+                cornerRadius = 21.dp,
+                innerRadius = 5.dp
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Shuffle,
-                    contentDescription = "Shuffle Play",
-                    modifier = Modifier.size(17.dp)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = "Перемешать",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.5.sp
-                    ),
-                    maxLines = 1
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle Play",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Перемешать",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
+            PillSegmentButton(
+                onClick = onMyMixClick,
+                position = PillPosition.END,
+                containerColor = colors.primaryContainer,
+                contentColor = colors.onPrimaryContainer,
+                modifier = Modifier.weight(1f),
+                width = null,
+                height = 42.dp,
+                cornerRadius = 21.dp,
+                innerRadius = 5.dp
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_widget_sparkle),
+                        contentDescription = "Мой микс",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Мой микс",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // Ряд 2: Счетчик треков слева и инструменты (Локация, Сортировка, Скачивание) справа
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Левая часть: Количество треков
             if (itemCountLabel != null && itemCount > 0) {
                 Surface(
                     shape = CircleShape,
@@ -105,115 +153,117 @@ fun LibraryActionRow(
                         text = itemCountLabel,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.5.sp
+                            fontSize = 12.sp
                         ),
                         color = colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
             }
-        }
 
-        // Правая группа: Кнопка прыжка к треку, фильтрации и скачивания (в стиле референса)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            val hasLocate = showLocateButton
-            val hasDownload = onDownloadClick != null
+            // Правая часть: Сегментированная группа инструментов
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                val hasLocate = showLocateButton
+                val hasDownload = onDownloadClick != null
 
-            // 1. Кнопка быстрого перехода к играющему треку (Найти трек)
-            if (hasLocate) {
+                // 1. Кнопка быстрого перехода к играющему треку (Найти трек)
+                if (hasLocate) {
+                    PillSegmentButton(
+                        onClick = onLocateClick,
+                        position = PillPosition.START,
+                        containerColor = colors.surfaceContainerHigh,
+                        contentColor = colors.primary,
+                        width = 44.dp,
+                        height = 36.dp,
+                        cornerRadius = 18.dp,
+                        innerRadius = 4.dp
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MyLocation,
+                            contentDescription = "Locate Playing Track",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // 2. Кнопка параметров сортировки и фильтрации (Фильтрация)
+                val sortPos = when {
+                    hasLocate && hasDownload -> PillPosition.MIDDLE
+                    hasLocate && !hasDownload -> PillPosition.END
+                    !hasLocate && hasDownload -> PillPosition.START
+                    else -> PillPosition.STANDALONE
+                }
                 PillSegmentButton(
-                    onClick = onLocateClick,
-                    position = PillPosition.START,
-                    containerColor = colors.primaryContainer,
-                    contentColor = colors.onPrimaryContainer,
-                    width = 42.dp,
-                    height = 38.dp,
-                    cornerRadius = 20.dp,
-                    innerRadius = 5.dp
+                    onClick = onSortClick,
+                    position = sortPos,
+                    containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
+                    contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant,
+                    width = 44.dp,
+                    height = 36.dp,
+                    cornerRadius = 18.dp,
+                    innerRadius = 4.dp
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.MyLocation,
-                        contentDescription = "Locate Playing Track",
-                        modifier = Modifier.size(19.dp)
+                        imageVector = Icons.AutoMirrored.Rounded.Sort,
+                        contentDescription = "Sort Options",
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-            }
 
-            // 2. Кнопка параметров сортировки и фильтрации (Фильтрация)
-            val sortPos = when {
-                hasLocate && hasDownload -> PillPosition.MIDDLE
-                hasLocate && !hasDownload -> PillPosition.END
-                !hasLocate && hasDownload -> PillPosition.START
-                else -> PillPosition.STANDALONE
-            }
-            PillSegmentButton(
-                onClick = onSortClick,
-                position = sortPos,
-                containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
-                contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant,
-                width = 42.dp,
-                height = 38.dp,
-                cornerRadius = 20.dp,
-                innerRadius = 5.dp
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.Sort,
-                    contentDescription = "Sort Options",
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-
-            // 3. Кнопка скачивания медиатеки (Скачивание треков)
-            if (onDownloadClick != null) {
-                PillSegmentButton(
-                    onClick = onDownloadClick,
-                    position = PillPosition.END,
-                    containerColor = if (isAllDownloaded) colors.primaryContainer else colors.surfaceContainerHigh,
-                    contentColor = if (isAllDownloaded) colors.primary else colors.onSurfaceVariant,
-                    width = 42.dp,
-                    height = 38.dp,
-                    cornerRadius = 20.dp,
-                    innerRadius = 5.dp
-                ) {
-                    when {
-                        isDownloading -> {
-                            Box(contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(
-                                    progress = { downloadPercent / 100f },
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.5.dp,
-                                    color = colors.primary
-                                )
-                                Text(
-                                    text = "${downloadPercent.toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 7.5.sp,
-                                        fontWeight = FontWeight.Black
-                                    ),
-                                    color = colors.primary
+                // 3. Кнопка скачивания медиатеки (Скачивание треков)
+                if (onDownloadClick != null) {
+                    PillSegmentButton(
+                        onClick = onDownloadClick,
+                        position = PillPosition.END,
+                        containerColor = if (isAllDownloaded) colors.primaryContainer else colors.surfaceContainerHigh,
+                        contentColor = if (isAllDownloaded) colors.primary else colors.onSurfaceVariant,
+                        width = 44.dp,
+                        height = 36.dp,
+                        cornerRadius = 18.dp,
+                        innerRadius = 4.dp
+                    ) {
+                        when {
+                            isDownloading -> {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(
+                                        progress = { downloadPercent / 100f },
+                                        modifier = Modifier.size(22.dp),
+                                        strokeWidth = 2.5.dp,
+                                        color = colors.primary
+                                    )
+                                    Text(
+                                        text = "${downloadPercent.toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 7.sp,
+                                            fontWeight = FontWeight.Black
+                                        ),
+                                        color = colors.primary
+                                    )
+                                }
+                            }
+                            isAllDownloaded -> {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
+                                    contentDescription = "Медиатека скачана",
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
-                        }
-                        isAllDownloaded -> {
-                            Icon(
-                                painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
-                                contentDescription = "Медиатека скачана",
-                                tint = colors.primary,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                        else -> {
-                            Icon(
-                                painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_download),
-                                contentDescription = "Скачать медиатеку",
-                                tint = colors.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            else -> {
+                                Icon(
+                                    painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_download),
+                                    contentDescription = "Скачать медиатеку",
+                                    tint = colors.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }

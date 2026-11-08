@@ -524,12 +524,12 @@ private fun PlayerMenuSheetContent(
                         Icon(
                             imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = "Лайк",
-                            tint = if (isLiked) Color(0xFFFF4081) else colors.onSurfaceVariant,
+                            tint = if (isLiked) colors.primary else colors.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (isLiked) "Любимое" else "Нравится",
+                            text = if (isLiked) "В избранном" else "В избранное",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
                             color = if (isLiked) colors.primary else colors.onSurfaceVariant,
                             maxLines = 1,
@@ -567,45 +567,6 @@ private fun PlayerMenuSheetContent(
                             text = "В очередь",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
                             color = colors.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                val dlBg by animateColorAsState(
-                    if (isLossless) colors.primaryContainer.copy(alpha = 0.35f) else colors.surfaceContainerHigh,
-                    tween(200), label = "pmDlBg"
-                )
-                PillSegmentButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onDownload()
-                    },
-                    position = PillPosition.MIDDLE,
-                    containerColor = dlBg,
-                    contentColor = colors.onSurface,
-                    modifier = Modifier.weight(1f),
-                    width = null,
-                    height = 50.dp,
-                    cornerRadius = 24.dp,
-                    innerRadius = 6.dp
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isLossless) Icons.Rounded.CheckCircle else Icons.Rounded.Download,
-                            contentDescription = "Скачать",
-                            tint = if (isLossless) colors.primary else colors.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isLossless) "FLAC ✓" else "Скачать",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
-                            color = if (isLossless) colors.primary else colors.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -712,21 +673,6 @@ private fun PlayerMenuSheetContent(
                         iconBg = colors.primaryContainer.copy(alpha = 0.6f),
                         iconTint = colors.primary,
                         onClick = onOpenLyrics
-                    )
-                    HorizontalDivider(
-                        color = colors.outlineVariant.copy(alpha = 0.12f),
-                        modifier = Modifier.padding(start = 52.dp, end = 12.dp)
-                    )
-                    BentoMenuItem(
-                        icon = Icons.Rounded.GraphicEq,
-                        title = "Аудиопоток & Hi-Res",
-                        subtitle = if (isLossless) "FLAC Lossless • 44.1 kHz / 16-bit" else "High Quality AAC / MP3",
-                        badge = if (isLossless) {
-                            { AudioQualityBadge(text = "FLAC") }
-                        } else null,
-                        iconBg = colors.secondaryContainer.copy(alpha = 0.6f),
-                        iconTint = colors.secondary,
-                        onClick = onOpenAudioFidelity
                     )
                     HorizontalDivider(
                         color = colors.outlineVariant.copy(alpha = 0.12f),

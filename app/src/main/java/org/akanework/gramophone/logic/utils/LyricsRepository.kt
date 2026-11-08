@@ -27,9 +27,11 @@ data class LyricsResult(
 )
 
 object LyricsRepository {
+    private val lyricsCache = android.util.LruCache<String, LyricsResult>(120)
+
     private val client = OkHttpClient.Builder()
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
+        .connectTimeout(4, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
         .build()
 
     private fun sanitizeTitle(rawTitle: String): String {
@@ -73,8 +75,15 @@ object LyricsRepository {
             return@withContext null
         }
 
-        val titlesToTry = listOfNotNull(cleanTitle, rawTitle).distinct()
-        val artistsToTry = listOfNotNull(cleanArtist, rawArtist).distinct()
+        val cacheKey = "${preferredSource.name}|$rawArtist|$rawTitle|$durationMs"
+        val cached = lyricsCache.get(cacheKey)
+        if (cached != null) {
+            return@withContext cached
+        }
+
+        // Try clean first (most accurate and fastest), then raw if different
+        val titlesToTry = listOfNotNull(cleanTitle.ifEmpty { null }, rawTitle.ifEmpty { null }).distinct()
+        val artistsToTry = listOfNotNull(cleanArtist.ifEmpty { null }, rawArtist.ifEmpty { null }).distinct()
 
         var result: LyricsResult? = null
 
@@ -124,6 +133,10 @@ object LyricsRepository {
             translateLyricsToRussianIfNeeded(result.lyrics as SemanticLyrics.SyncedLyrics)
         }
 
+        if (result != null) {
+            lyricsCache.put(cacheKey, result)
+        }
+
         return@withContext result
     }
 
@@ -132,8 +145,32 @@ object LyricsRepository {
             val linesToTranslate = syncedLyrics.text.filter { it.text.isNotBlank() && it.translation.isNullOrBlank() }
             if (linesToTranslate.isEmpty()) return
 
+            // If text is already predominantly Cyrillic (e.g. Russian song), skip translation
+            val russianLettersCount = linesToTranslate.sumOf { line ->
+                line.text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+            }
+            val totalLettersCount = linesToTranslate.sumOf { line ->
+                line.text.count { it.isLetter() }
+            }
+            if (totalLettersCount > 0 && (russianLettersCount.toFloat() / totalLettersCount.toFloat()) > 0.35f) {
+                return
+            }
+
+            // Batch into chunks of 15 lines max to avoid HTTP 414 URI Too Long
+            val chunkSize = 15
+            for (chunkStart in linesToTranslate.indices step chunkSize) {
+                val chunk = linesToTranslate.subList(chunkStart, (chunkStart + chunkSize).coerceAtMost(linesToTranslate.size))
+                translateChunk(chunk)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun translateChunk(chunk: List<SemanticLyrics.LyricLine>) {
+        try {
             val batchText = StringBuilder()
-            linesToTranslate.forEach { line ->
+            chunk.forEach { line ->
                 batchText.append(line.text.replace("\n", " ").trim()).append("\n")
             }
 
@@ -160,7 +197,7 @@ object LyricsRepository {
 
                 val translatedLines = translatedTextBuilder.toString().split("\n")
                 var transIdx = 0
-                linesToTranslate.forEach { line ->
+                chunk.forEach { line ->
                     if (transIdx < translatedLines.size) {
                         val trans = translatedLines[transIdx].trim()
                         if (trans.isNotEmpty() && trans.lowercase() != line.text.trim().lowercase()) {

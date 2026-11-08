@@ -85,12 +85,12 @@ class DiscographyFragment : Fragment() {
 
     override fun onStart() {
         super.onStart()
-        (activity as? MainActivity)?.isBottomNavVisible = false
+        (activity as? MainActivity)?.updateBottomNavVisibility()
     }
 
     override fun onStop() {
         super.onStop()
-        (activity as? MainActivity)?.isBottomNavVisible = true
+        (activity as? MainActivity)?.updateBottomNavVisibility()
     }
 
     private fun getThemeColorScheme(): ColorScheme {

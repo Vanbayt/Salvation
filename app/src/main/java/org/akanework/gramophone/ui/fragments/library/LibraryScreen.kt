@@ -147,7 +147,7 @@ fun LibraryScreen(
                                 fontSize = 32.sp,
                                 letterSpacing = (-0.5).sp
                             ),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }

@@ -190,9 +190,26 @@ class MainActivity : BaseActivity() {
         AppTab.LIBRARY to mutableListOf()
     )
 
+    fun updateBottomNavVisibility() {
+        val stack = tabBackStacks[currentBottomTab]
+        if (stack.isNullOrEmpty()) {
+            isBottomNavVisible = true
+        } else {
+            val topTag = stack.lastOrNull()
+            val topFrag = topTag?.let { supportFragmentManager.findFragmentByTag(it) }
+            val isDetail = topFrag is org.akanework.gramophone.ui.fragments.AlbumFragment ||
+                    topFrag is org.akanework.gramophone.ui.fragments.ArtistFragment ||
+                    topFrag is org.akanework.gramophone.ui.fragments.DiscographyFragment
+            isBottomNavVisible = !isDetail
+        }
+    }
+
     fun popCurrentTabBackStack(): Boolean {
         val stack = tabBackStacks[currentBottomTab] ?: return false
-        if (stack.isEmpty()) return false
+        if (stack.isEmpty()) {
+            updateBottomNavVisibility()
+            return false
+        }
 
         val topTag = stack.removeAt(stack.lastIndex)
         val topFrag = supportFragmentManager.findFragmentByTag(topTag)
@@ -210,6 +227,7 @@ class MainActivity : BaseActivity() {
                 }
             }
         }
+        updateBottomNavVisibility()
         return true
     }
 
@@ -331,21 +349,23 @@ class MainActivity : BaseActivity() {
             }
         }
         mainPager.offscreenPageLimit = 2 // Держим в памяти, чтобы было плавно
-        // 🔥 ПРАВИЛЬНАЯ ПРЕМИАЛЬНАЯ АНИМАЦИЯ (Без наложения экранов)
+        // 🔥 M3 EXPRESSIVE ПРУЖИНИСТАЯ АНИМАЦИЯ СМЕНЫ ВКЛАДОК (Shared Axis & Parallax)
         mainPager.setPageTransformer { page, position ->
             val absPos = Math.abs(position)
             page.apply {
                 if (absPos >= 1f) {
-                    alpha = 0f // Полностью прячем соседние экраны
+                    alpha = 0f
+                    visibility = View.INVISIBLE
                 } else {
-                    // Плавное затухание до 0
-                    alpha = 1f - absPos
-                    // Микро-масштабирование (эффект глубины)
-                    val scale = 0.95f + (1f - 0.95f) * (1f - absPos)
+                    visibility = View.VISIBLE
+                    // Плавный параллакс-сдвиг (30% смещения)
+                    translationX = -position * width * 0.30f
+                    // Быстрое и плавное затухание по канонам Material You
+                    alpha = (1f - absPos).coerceIn(0f, 1f)
+                    // Пружинящая глубина (масштабирование 0.92 -> 1.0)
+                    val scale = 0.92f + 0.08f * (1f - absPos)
                     scaleX = scale
                     scaleY = scale
-                    // ОБЯЗАТЕЛЬНО СБРАСЫВАЕМ СДВИГ, чтобы они не наезжали друг на друга!
-                    translationX = 0f
                 }
             }
         }
@@ -353,8 +373,18 @@ class MainActivity : BaseActivity() {
             override fun onPageSelected(position: Int) {
                 // Синхронизируем Compose-стейт с пейджером
                 currentBottomTab = AppTab.values()[position]
+                updateBottomNavVisibility()
             }
         })
+
+        supportFragmentManager.registerFragmentLifecycleCallbacks(object : androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
+            override fun onFragmentResumed(fm: androidx.fragment.app.FragmentManager, f: Fragment) {
+                updateBottomNavVisibility()
+            }
+            override fun onFragmentDestroyed(fm: androidx.fragment.app.FragmentManager, f: Fragment) {
+                updateBottomNavVisibility()
+            }
+        }, false)
 
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -2788,6 +2818,7 @@ class MainActivity : BaseActivity() {
         }
 
         currentBottomTab = tab
+        updateBottomNavVisibility()
 
         if (mainPager.currentItem != tab.ordinal) {
             mainPager.setCurrentItem(tab.ordinal, true)
@@ -2818,6 +2849,7 @@ class MainActivity : BaseActivity() {
             add(R.id.container, frag.apply { args?.let { arguments = Bundle().apply(it) } }, tag)
         }
         stack.add(tag)
+        updateBottomNavVisibility()
     }
 
     @OptIn(FlowPreview::class)
