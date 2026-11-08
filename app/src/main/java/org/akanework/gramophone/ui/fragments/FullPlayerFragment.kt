@@ -30,18 +30,7 @@ class FullPlayerFragment : BottomSheetDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
-                val context = requireContext()
-                val darkTheme = isSystemInDarkTheme()
-                val hasDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
-                val colorScheme = when {
-                    hasDynamicColor && darkTheme -> dynamicDarkColorScheme(context)
-                    hasDynamicColor && !darkTheme -> dynamicLightColorScheme(context)
-                    darkTheme -> darkColorScheme()
-                    else -> lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = colorScheme) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     FullPlayerScreen(
                         onDismiss = { dismiss() },
                         fragmentManager = parentFragmentManager

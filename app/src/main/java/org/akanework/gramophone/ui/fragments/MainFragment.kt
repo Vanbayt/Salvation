@@ -117,20 +117,12 @@ class MainFragment : Fragment() {
     }
 
     private fun getThemeColorScheme(): ColorScheme {
-        val context = requireContext()
-        val darkTheme = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val hasDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        return when {
-            hasDynamicColor && darkTheme -> dynamicDarkColorScheme(context)
-            hasDynamicColor && !darkTheme -> dynamicLightColorScheme(context)
-            darkTheme -> darkColorScheme()
-            else -> lightColorScheme()
-        }
+        return org.akanework.gramophone.ui.theme.AppThemeHelper.getColorScheme(requireContext())
     }
 
     private fun setupComposeContent(view: View) {
         view.findViewById<ComposeView>(R.id.compose_content).setContent {
-            MaterialTheme(colorScheme = getThemeColorScheme()) {
+            org.akanework.gramophone.ui.theme.AppTheme {
                 val nestedScrollConnection = rememberNestedScrollInteropConnection()
 
                 var isVisible by remember { mutableStateOf(false) }

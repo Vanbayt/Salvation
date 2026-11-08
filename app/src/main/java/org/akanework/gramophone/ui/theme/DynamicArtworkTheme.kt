@@ -99,19 +99,21 @@ object DynamicArtworkTheme {
         palette: Palette?,
         isDarkTheme: Boolean,
         defaultSurface: Color,
-        defaultSurfaceContainer: Color
+        defaultSurfaceContainer: Color,
+        isPureDark: Boolean = false
     ): ArtworkColors {
         val selectedSwatch = selectBestSwatch(palette)
 
         if (selectedSwatch == null) {
             val fallbackPrimary = if (isDarkTheme) Color(0xFFD0BCFF) else Color(0xFF6750A4)
             val fallbackOnPrimary = if (isDarkTheme) Color(0xFF381E72) else Color(0xFFFFFFFF)
+            val bgBottom = if (isDarkTheme && isPureDark) Color.Black else defaultSurface
             return ArtworkColors(
                 seedColor = defaultSurfaceContainer,
                 miniPlayerContainer = defaultSurfaceContainer,
                 fullPlayerGradientTop = defaultSurface,
                 fullPlayerSecondaryGlow = defaultSurface,
-                fullPlayerGradientBottom = defaultSurface,
+                fullPlayerGradientBottom = bgBottom,
                 accentColor = fallbackPrimary,
                 playerPrimary = fallbackPrimary,
                 playerOnPrimary = fallbackOnPrimary,
@@ -160,16 +162,16 @@ object DynamicArtworkTheme {
         if (isMonochrome) {
             // === 🌟 ПРЕМИАЛЬНЫЙ МОНОХРОМНЫЙ РЕЖИМ (Ч/Б И СЕРЫЕ ОБЛОЖКИ) ===
             if (isDarkTheme) {
-                val monoSurfaceTop = Color(0xFF1E2025)
-                val monoSecondaryGlow = Color(0xFF16171B)
-                val monoSurfaceBottom = Color(0xFF0F1013)
-                val monoMiniContainer = Color(0xFF222429)
+                val monoSurfaceTop = if (isPureDark) Color(0xFF101014) else Color(0xFF1E2025)
+                val monoSecondaryGlow = if (isPureDark) Color(0xFF0A0A0C) else Color(0xFF16171B)
+                val monoSurfaceBottom = if (isPureDark) Color.Black else Color(0xFF0F1013)
+                val monoMiniContainer = if (isPureDark) Color(0xFF141418) else Color(0xFF222429)
 
                 val monoPrimary = Color(0xFFFFFFFF)
                 val monoOnPrimary = Color(0xFF121316)
-                val monoContainer = Color(0xFF2C2E35)
+                val monoContainer = if (isPureDark) Color(0xFF18181E) else Color(0xFF2C2E35)
                 val monoOnContainer = Color(0xFFF1F5F9)
-                val monoActiveContainer = Color(0xFF474A54)
+                val monoActiveContainer = if (isPureDark) Color(0xFF2E313A) else Color(0xFF474A54)
                 val monoOnActiveContainer = Color(0xFFFFFFFF)
                 val monoAccent = Color(0xFFFFFFFF)
 
@@ -231,11 +233,11 @@ object DynamicArtworkTheme {
             // Вторичное свечение (+20° по цветовому кругу)
             val secondaryHue = (hue + 20f) % 360f
             val secondaryGlowArgb = ColorUtils.HSLToColor(floatArrayOf(secondaryHue, controlledSat * 0.80f, (gradientTopLight * 0.75f).coerceAtLeast(0.09f)))
-            val gradientBottomArgb = ColorUtils.blendARGB(surfaceArgb, gradientTopArgb, 0.20f)
+            val gradientBottomArgb = if (isPureDark) 0xFF000000.toInt() else ColorUtils.blendARGB(surfaceArgb, gradientTopArgb, 0.20f)
 
             // 2. Мини-плеер (мягкий тонированный контейнер)
-            val miniContainerArgb = ColorUtils.HSLToColor(floatArrayOf(hue, controlledSat * 0.60f, 0.15f))
-            val finalMiniArgb = ColorUtils.blendARGB(surfaceContainerArgb, miniContainerArgb, 0.70f)
+            val miniContainerArgb = ColorUtils.HSLToColor(floatArrayOf(hue, controlledSat * 0.60f, if (isPureDark) 0.10f else 0.15f))
+            val finalMiniArgb = if (isPureDark) ColorUtils.blendARGB(0xFF121214.toInt(), miniContainerArgb, 0.50f) else ColorUtils.blendARGB(surfaceContainerArgb, miniContainerArgb, 0.70f)
 
             // 3. Главная кнопка Play/Pause и слайдер (акцентная подсветка)
             val playLight = 0.76f.coerceAtLeast(rawLight * 0.85f).coerceIn(0.70f, 0.84f)

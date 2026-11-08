@@ -362,16 +362,10 @@ class MainActivity : BaseActivity() {
 
         composeOverlay.setContent {
             val context = LocalContext.current
-            val isDarkTheme = isSystemInDarkTheme()
-            val dynamicColorScheme = when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                    if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-                }
-                isDarkTheme -> darkColorScheme()
-                else -> lightColorScheme()
-            }
+            val isDarkTheme = org.akanework.gramophone.ui.theme.AppThemeHelper.isDarkTheme(context)
+            val isPureDark = org.akanework.gramophone.ui.theme.AppThemeHelper.isPureDark(context)
 
-            MaterialTheme(colorScheme = dynamicColorScheme) {
+            org.akanework.gramophone.ui.theme.AppTheme {
                 val coroutineScope = rememberCoroutineScope()
                 val density = LocalDensity.current
                 val configuration = LocalConfiguration.current
@@ -470,7 +464,8 @@ class MainActivity : BaseActivity() {
                                             palette = palette,
                                             isDarkTheme = isDarkTheme,
                                             defaultSurface = fullColor,
-                                            defaultSurfaceContainer = baseMiniColor
+                                            defaultSurfaceContainer = baseMiniColor,
+                                            isPureDark = isPureDark
                                         )
                                     }
                                 }

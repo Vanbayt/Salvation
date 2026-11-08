@@ -67,25 +67,35 @@
 
     <style name="Theme.Gramophone.PureDark" parent="Theme.Gramophone">
         <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="colorSurface">@android:color/black</item>
-        <item name="colorSurfaceVariant">@android:color/black</item>
+        <item name="colorSurfaceDim">@android:color/black</item>
+        <item name="colorSurfaceBright">#1E1E22</item>
+        <item name="colorSurfaceVariant">#16161A</item>
         <item name="colorSurfaceContainerLowest">@android:color/black</item>
-        <item name="colorSurfaceContainerLow">@android:color/black</item>
-        <item name="colorSurfaceContainer">@android:color/black</item>
-        <item name="colorSurfaceContainerHigh">@android:color/black</item>
-        <item name="colorSurfaceContainerHighest">@android:color/black</item>
+        <item name="colorSurfaceContainerLow">#0A0A0C</item>
+        <item name="colorSurfaceContainer">#121214</item>
+        <item name="colorSurfaceContainerHigh">#18181C</item>
+        <item name="colorSurfaceContainerHighest">#202026</item>
+        <item name="colorOutline">#2E2E34</item>
+        <item name="colorOutlineVariant">#222228</item>
         <item name="previewPlayerElevation">0dp</item>
     </style>
 
     <style name="ThemeOverlay.PureDark" parent="">
         <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="colorSurface">@android:color/black</item>
-        <item name="colorSurfaceVariant">@android:color/black</item>
+        <item name="colorSurfaceDim">@android:color/black</item>
+        <item name="colorSurfaceBright">#1E1E22</item>
+        <item name="colorSurfaceVariant">#16161A</item>
         <item name="colorSurfaceContainerLowest">@android:color/black</item>
-        <item name="colorSurfaceContainerLow">@android:color/black</item>
-        <item name="colorSurfaceContainer">@android:color/black</item>
-        <item name="colorSurfaceContainerHigh">@android:color/black</item>
-        <item name="colorSurfaceContainerHighest">@android:color/black</item>
+        <item name="colorSurfaceContainerLow">#0A0A0C</item>
+        <item name="colorSurfaceContainer">#121214</item>
+        <item name="colorSurfaceContainerHigh">#18181C</item>
+        <item name="colorSurfaceContainerHighest">#202026</item>
+        <item name="colorOutline">#2E2E34</item>
+        <item name="colorOutlineVariant">#222228</item>
         <item name="previewPlayerElevation">0dp</item>
     </style>
 

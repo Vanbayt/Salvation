@@ -60,17 +60,7 @@ class LibraryPlaylistsFragment : androidx.fragment.app.Fragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
 
             setContent {
-                val context = LocalContext.current
-                val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-                val dynamicColorScheme = when {
-                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
-                        if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-                    }
-                    isDarkTheme -> darkColorScheme()
-                    else -> lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = dynamicColorScheme) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     PlaylistsScreen(
                         onPlaylistClick = { playlist ->
                             // Открываем экран плейлиста

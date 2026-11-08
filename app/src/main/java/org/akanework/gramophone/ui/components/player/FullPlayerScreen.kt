@@ -298,7 +298,8 @@ fun FullPlayerScreen(
                                     palette = palette,
                                     isDarkTheme = isDarkTheme,
                                     defaultSurface = defaultSurface,
-                                    defaultSurfaceContainer = defaultSurfaceContainer
+                                    defaultSurfaceContainer = defaultSurfaceContainer,
+                                    isPureDark = org.akanework.gramophone.ui.theme.AppThemeHelper.isPureDark(context)
                                 )
                             }
                         }

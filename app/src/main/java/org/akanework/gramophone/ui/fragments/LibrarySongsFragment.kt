@@ -110,16 +110,7 @@ class LibrarySongsFragment : BaseFragment(true) {
         val composeView = ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
-                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-                val dynamicColor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-                val colors = when {
-                    dynamicColor && isDark -> androidx.compose.material3.dynamicDarkColorScheme(requireContext())
-                    dynamicColor && !isDark -> androidx.compose.material3.dynamicLightColorScheme(requireContext())
-                    isDark -> darkColorScheme()
-                    else -> lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = colors) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     val track = selectedTrackForMenu.value
                     if (track != null) {
                         TrackContextMenu(

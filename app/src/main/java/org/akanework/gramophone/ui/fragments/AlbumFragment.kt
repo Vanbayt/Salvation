@@ -86,11 +86,10 @@ class AlbumFragment : Fragment() {
         val composeView = ComposeView(requireContext())
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
         composeView.setContent {
-            val colorScheme = getThemeColorScheme()
-            MaterialTheme(colorScheme = colorScheme) {
+            org.akanework.gramophone.ui.theme.AppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = colorScheme.surface
+                    color = MaterialTheme.colorScheme.surface
                 ) {
                     AlbumDetailScreen(
                         albumId = albumId ?: "",
@@ -103,15 +102,7 @@ class AlbumFragment : Fragment() {
     }
 
     private fun getThemeColorScheme(): ColorScheme {
-        val context = requireContext()
-        val darkTheme = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val hasDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        return when {
-            hasDynamicColor && darkTheme -> dynamicDarkColorScheme(context)
-            hasDynamicColor && !darkTheme -> dynamicLightColorScheme(context)
-            darkTheme -> darkColorScheme()
-            else -> lightColorScheme()
-        }
+        return org.akanework.gramophone.ui.theme.AppThemeHelper.getColorScheme(requireContext())
     }
 
     companion object {

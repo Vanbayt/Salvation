@@ -54,15 +54,7 @@ class PlayerMenuBottomSheet : BottomSheetDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
-                val context = LocalContext.current
-                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-                val colorScheme = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-                } else {
-                    if (isDark) darkColorScheme() else lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = colorScheme) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     val activity = requireActivity() as MainActivity
                     val player = activity.getPlayer()
 

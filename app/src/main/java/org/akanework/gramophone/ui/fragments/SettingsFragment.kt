@@ -66,16 +66,7 @@ class SettingsFragment : BaseFragment(true) {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
             setContent {
-                val isDark = isSystemInDarkTheme()
-                val dynamicColor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-                val colors = when {
-                    dynamicColor && isDark -> dynamicDarkColorScheme(requireContext())
-                    dynamicColor && !isDark -> dynamicLightColorScheme(requireContext())
-                    isDark -> darkColorScheme()
-                    else -> lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = colors) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     SettingsScreen(
                         onBackClick = { requireActivity().onBackPressed() }
                     )
@@ -135,6 +126,14 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     var isDynamicCoverColorEnabled by remember {
         mutableStateOf(defaultPrefs.getBoolean("dynamic_cover_color", true))
     }
+
+    var isPureDarkEnabled by remember {
+        mutableStateOf(defaultPrefs.getBoolean("pureDark", false))
+    }
+    var currentThemeMode by remember {
+        mutableStateOf(defaultPrefs.getString("theme_mode", "0") ?: "0")
+    }
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     // --- ОФФЛАЙН РЕЖИМ И ПАМЯТЬ ---
     var isOfflineOnlyModeEnabled by remember {
@@ -204,6 +203,27 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             item {
                 AnimatedListItem(index = 1) {
                     SettingsGroupCard(title = "Кастомизация") {
+                        val themeSubtitle = when (currentThemeMode) {
+                            "1" -> "Тёмная"
+                            "2" -> "Светлая"
+                            else -> "Системная"
+                        }
+                        SettingsRow(
+                            icon = Icons.Rounded.DarkMode,
+                            title = "Тема оформления",
+                            subtitle = themeSubtitle,
+                            onClick = { showThemeDialog = true }
+                        )
+                        SettingsSwitchRow(
+                            icon = Icons.Rounded.Contrast,
+                            title = "OLED (Pure Black) тема",
+                            subtitle = "Глубокий чёрный цвет для максимального контраста и экономии заряда",
+                            checked = isPureDarkEnabled,
+                            onCheckedChange = { isChecked ->
+                                isPureDarkEnabled = isChecked
+                                defaultPrefs.edit().putBoolean("pureDark", isChecked).apply()
+                            }
+                        )
                         SettingsSwitchRow(
                             icon = Icons.Rounded.Palette,
                             title = "Динамический цвет фона",
@@ -213,24 +233,6 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                                 isDynamicCoverColorEnabled = isChecked
                                 defaultPrefs.edit().putBoolean("dynamic_cover_color", isChecked).apply()
                             }
-                        )
-                        SettingsRow(
-                            icon = Icons.Rounded.DarkMode,
-                            title = "Тема",
-                            subtitle = "Системная",
-                            onClick = { Toast.makeText(context, "Выбор темы (в разработке)", Toast.LENGTH_SHORT).show() }
-                        )
-                        SettingsRow(
-                            icon = Icons.Rounded.RoundedCorner,
-                            title = "Скругление элементов",
-                            subtitle = "Стандартное (16dp)",
-                            onClick = { Toast.makeText(context, "Скругления (в разработке)", Toast.LENGTH_SHORT).show() }
-                        )
-                        SettingsRow(
-                            icon = Icons.Rounded.Dashboard,
-                            title = "Стиль навигации и плеера",
-                            subtitle = "Современный плавающий",
-                            onClick = { Toast.makeText(context, "Стиль (в разработке)", Toast.LENGTH_SHORT).show() }
                         )
                     }
                 }
@@ -548,6 +550,79 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 }
             },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    }
+
+    if (showThemeDialog) {
+        val options = listOf(
+            "0" to "Системная",
+            "1" to "Тёмная",
+            "2" to "Светлая"
+        )
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = {
+                Text(
+                    text = "Выбор темы оформления",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { (mode, label) ->
+                        val isSelected = currentThemeMode == mode
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    currentThemeMode = mode
+                                    defaultPrefs.edit().putString("theme_mode", mode).apply()
+                                    when (mode) {
+                                        "1" -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+                                        "2" -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+                                        else -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+                                    }
+                                    showThemeDialog = false
+                                },
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Закрыть")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            shape = RoundedCornerShape(24.dp)
         )
     }
 }

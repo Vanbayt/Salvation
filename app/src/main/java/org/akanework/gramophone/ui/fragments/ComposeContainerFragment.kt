@@ -39,17 +39,7 @@ class ComposeContainerFragment : Fragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner))
             setContent {
-                val context = LocalContext.current
-                val isDarkTheme = isSystemInDarkTheme()
-                val dynamicColorScheme = when {
-                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
-                        if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-                    }
-                    isDarkTheme -> darkColorScheme()
-                    else -> lightColorScheme()
-                }
-
-                MaterialTheme(colorScheme = dynamicColorScheme) {
+                org.akanework.gramophone.ui.theme.AppTheme {
                     androidx.compose.material3.Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.surface
