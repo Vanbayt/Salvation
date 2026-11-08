@@ -1338,14 +1338,32 @@ class MainActivity : BaseActivity() {
             val isLandscapeLayout = (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp >= 600) && fraction > 0.5f
 
             if (isLandscapeLayout) {
-                val playingFrom = remember(trackTitle, trackArtist) {
+                val (sourceIcon, playingFrom) = remember(trackTitle, trackArtist) {
                     val meta = getPlayer()?.currentMediaItem?.mediaMetadata
                     val fromExtra = meta?.extras?.getString("PLAYING_FROM")
-                    when {
+                    val album = meta?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
+
+                    val raw = when {
+                        !fromExtra.isNullOrBlank() && fromExtra != "Очередь" -> fromExtra
+                        fromExtra == "Очередь" && album != null -> "Очередь ($album)"
                         !fromExtra.isNullOrBlank() -> fromExtra
-                        !meta?.albumTitle.isNullOrBlank() -> "Альбом: ${meta.albumTitle}"
+                        album != null -> "Альбом: $album"
                         else -> "Медиатека"
                     }
+
+                    val icon = when {
+                        raw.startsWith("Альбом") || raw.contains("Альбом") -> R.drawable.ic_album
+                        raw.startsWith("Артист") || raw.contains("Артист") -> R.drawable.ic_person
+                        raw.startsWith("Плейлист") || raw.contains("Плейлист") -> R.drawable.ic_playlist_play
+                        raw.startsWith("Волна") || raw.contains("Радио") -> R.drawable.ic_widget_wave
+                        raw.startsWith("Избранное") -> R.drawable.ic_favorite
+                        raw.startsWith("Поиск") -> R.drawable.ic_search
+                        raw.startsWith("Статистика") -> R.drawable.ic_equalizer
+                        raw.startsWith("Очередь") -> R.drawable.ic_playlist_play
+                        else -> R.drawable.ic_library
+                    }
+
+                    Pair(icon, raw)
                 }
 
                 Box(
@@ -1500,7 +1518,7 @@ class MainActivity : BaseActivity() {
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.ic_library),
+                                            painter = painterResource(sourceIcon),
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(13.dp)
@@ -1798,29 +1816,32 @@ class MainActivity : BaseActivity() {
                 // 1. FULL HEADER (Portrait)
                 val headerAlpha = ((fraction - 0.2f) / 0.8f).coerceIn(0f, 1f)
                 if (headerAlpha > 0f) {
-                    val (sourceIcon, sourceTitle) = remember(trackTitle, trackArtist) {
+                    val (sourceIcon, playingFrom) = remember(trackTitle, trackArtist) {
                         val meta = getPlayer()?.currentMediaItem?.mediaMetadata
                         val fromExtra = meta?.extras?.getString("PLAYING_FROM")
                         val album = meta?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
-                        val artist = meta?.artist?.toString()?.takeIf { it.isNotBlank() }
 
-                        when {
-                            !fromExtra.isNullOrBlank() && fromExtra != "Медиатека" && fromExtra != "Очередь" -> {
-                                when {
-                                    fromExtra.startsWith("Альбом") -> Pair(R.drawable.ic_album, fromExtra.removePrefix("Альбом: ").removePrefix("Альбом ").trim())
-                                    fromExtra.startsWith("Артист") -> Pair(R.drawable.ic_person, fromExtra.removePrefix("Артист: ").removePrefix("Артист ").trim())
-                                    fromExtra.startsWith("Плейлист") -> Pair(R.drawable.ic_playlist_play, fromExtra.removePrefix("Плейлист: ").removePrefix("Плейлист ").trim())
-                                    fromExtra.startsWith("Волна") || fromExtra.startsWith("Радио") -> Pair(R.drawable.ic_widget_wave, fromExtra)
-                                    fromExtra.startsWith("Избранное") -> Pair(R.drawable.ic_favorite, "Любимые треки")
-                                    fromExtra.startsWith("Поиск") -> Pair(R.drawable.ic_search, fromExtra)
-                                    else -> Pair(R.drawable.ic_library, fromExtra)
-                                }
-                            }
-                            album != null -> Pair(R.drawable.ic_album, album)
-                            artist != null -> Pair(R.drawable.ic_person, artist)
-                            !fromExtra.isNullOrBlank() -> Pair(R.drawable.ic_library, fromExtra)
-                            else -> Pair(R.drawable.ic_library, "Медиатека")
+                        val raw = when {
+                            !fromExtra.isNullOrBlank() && fromExtra != "Очередь" -> fromExtra
+                            fromExtra == "Очередь" && album != null -> "Очередь ($album)"
+                            !fromExtra.isNullOrBlank() -> fromExtra
+                            album != null -> "Альбом: $album"
+                            else -> "Медиатека"
                         }
+
+                        val icon = when {
+                            raw.startsWith("Альбом") || raw.contains("Альбом") -> R.drawable.ic_album
+                            raw.startsWith("Артист") || raw.contains("Артист") -> R.drawable.ic_person
+                            raw.startsWith("Плейлист") || raw.contains("Плейлист") -> R.drawable.ic_playlist_play
+                            raw.startsWith("Волна") || raw.contains("Радио") -> R.drawable.ic_widget_wave
+                            raw.startsWith("Избранное") -> R.drawable.ic_favorite
+                            raw.startsWith("Поиск") -> R.drawable.ic_search
+                            raw.startsWith("Статистика") -> R.drawable.ic_equalizer
+                            raw.startsWith("Очередь") -> R.drawable.ic_playlist_play
+                            else -> R.drawable.ic_library
+                        }
+
+                        Pair(icon, raw)
                     }
 
                 Row(
@@ -1876,7 +1897,7 @@ class MainActivity : BaseActivity() {
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = sourceTitle,
+                                text = playingFrom,
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp

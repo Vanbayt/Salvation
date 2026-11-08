@@ -98,7 +98,18 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
                     }
 
                     val currentItem = player?.currentMediaItem
-                    val playingFrom = currentItem?.mediaMetadata?.extras?.getString("PLAYING_FROM") ?: "Медиатека"
+                    val playingFrom = remember(currentItem) {
+                        val meta = currentItem?.mediaMetadata
+                        val fromExtra = meta?.extras?.getString("PLAYING_FROM")
+                        val album = meta?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
+                        when {
+                            !fromExtra.isNullOrBlank() && fromExtra != "Очередь" -> fromExtra
+                            fromExtra == "Очередь" && album != null -> "Очередь ($album)"
+                            !fromExtra.isNullOrBlank() -> fromExtra
+                            album != null -> "Альбом: $album"
+                            else -> "Медиатека"
+                        }
+                    }
 
                     val allItems = remember(currentMediaIndex, mediaItemCount) {
                         val list = mutableListOf<MediaItem>()
@@ -195,7 +206,18 @@ fun DesktopQueueView(
     }
 
     val currentItem = player.currentMediaItem
-    val playingFrom = currentItem?.mediaMetadata?.extras?.getString("PLAYING_FROM") ?: "Медиатека"
+    val playingFrom = remember(currentItem) {
+        val meta = currentItem?.mediaMetadata
+        val fromExtra = meta?.extras?.getString("PLAYING_FROM")
+        val album = meta?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
+        when {
+            !fromExtra.isNullOrBlank() && fromExtra != "Очередь" -> fromExtra
+            fromExtra == "Очередь" && album != null -> "Очередь ($album)"
+            !fromExtra.isNullOrBlank() -> fromExtra
+            album != null -> "Альбом: $album"
+            else -> "Медиатека"
+        }
+    }
 
     val allItems = remember(currentMediaIndex, mediaItemCount) {
         val list = mutableListOf<MediaItem>()
