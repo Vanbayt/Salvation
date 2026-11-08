@@ -1795,16 +1795,31 @@ class MainActivity : BaseActivity() {
                 }
             }
             } else {
-                // 1. FULL HEADER (Close, Playing From Source, Menu)
+                // 1. FULL HEADER (Portrait)
                 val headerAlpha = ((fraction - 0.2f) / 0.8f).coerceIn(0f, 1f)
                 if (headerAlpha > 0f) {
-                    val playingFrom = remember(trackTitle, trackArtist) {
+                    val (sourceIcon, sourceTitle) = remember(trackTitle, trackArtist) {
                         val meta = getPlayer()?.currentMediaItem?.mediaMetadata
                         val fromExtra = meta?.extras?.getString("PLAYING_FROM")
+                        val album = meta?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
+                        val artist = meta?.artist?.toString()?.takeIf { it.isNotBlank() }
+
                         when {
-                            !fromExtra.isNullOrBlank() -> fromExtra
-                            !meta?.albumTitle.isNullOrBlank() -> "Альбом: ${meta.albumTitle}"
-                            else -> "Медиатека"
+                            !fromExtra.isNullOrBlank() && fromExtra != "Медиатека" && fromExtra != "Очередь" -> {
+                                when {
+                                    fromExtra.startsWith("Альбом") -> Pair(R.drawable.ic_album, fromExtra.removePrefix("Альбом: ").removePrefix("Альбом ").trim())
+                                    fromExtra.startsWith("Артист") -> Pair(R.drawable.ic_person, fromExtra.removePrefix("Артист: ").removePrefix("Артист ").trim())
+                                    fromExtra.startsWith("Плейлист") -> Pair(R.drawable.ic_playlist_play, fromExtra.removePrefix("Плейлист: ").removePrefix("Плейлист ").trim())
+                                    fromExtra.startsWith("Волна") || fromExtra.startsWith("Радио") -> Pair(R.drawable.ic_widget_wave, fromExtra)
+                                    fromExtra.startsWith("Избранное") -> Pair(R.drawable.ic_favorite, "Любимые треки")
+                                    fromExtra.startsWith("Поиск") -> Pair(R.drawable.ic_search, fromExtra)
+                                    else -> Pair(R.drawable.ic_library, fromExtra)
+                                }
+                            }
+                            album != null -> Pair(R.drawable.ic_album, album)
+                            artist != null -> Pair(R.drawable.ic_person, artist)
+                            !fromExtra.isNullOrBlank() -> Pair(R.drawable.ic_library, fromExtra)
+                            else -> Pair(R.drawable.ic_library, "Медиатека")
                         }
                     }
 
@@ -1819,13 +1834,14 @@ class MainActivity : BaseActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Слева: "СЕЙЧАС ИГРАЕТ" и источник в одной строке
+                    // Слева: "СЕЙЧАС ИГРАЕТ" и источник в гармоничной капсуле единой высоты (42dp)
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                        color = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1f, fill = false)
                             .padding(end = 12.dp)
+                            .height(42.dp)
                             .clip(CircleShape)
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1834,40 +1850,41 @@ class MainActivity : BaseActivity() {
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp)
                         ) {
                             Text(
                                 text = "СЕЙЧАС ИГРАЕТ",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Black,
+                                    fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.8.sp,
-                                    fontSize = 10.sp
+                                    fontSize = 10.5.sp
                                 ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                color = dynamicArtworkColors?.playerOnContainer?.copy(alpha = 0.7f) ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "•",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                color = dynamicArtworkColors?.playerOnContainer?.copy(alpha = 0.45f) ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Icon(
-                                painter = painterResource(R.drawable.ic_library),
+                                painter = painterResource(sourceIcon),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(13.dp)
+                                tint = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = playingFrom,
+                                text = sourceTitle,
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 11.5.sp
+                                    fontSize = 12.sp
                                 ),
-                                color = MaterialTheme.colorScheme.primary,
+                                color = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                         }
                     }
@@ -1891,15 +1908,17 @@ class MainActivity : BaseActivity() {
                             containerColor = if (showLyricsScreen) {
                                 dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer
                             } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
+                                dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f)
                             },
                             contentColor = if (showLyricsScreen) {
                                 dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer
                             } else {
-                                MaterialTheme.colorScheme.onSurface
+                                dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface
                             },
-                            width = 48.dp,
-                            height = 42.dp
+                            width = 46.dp,
+                            height = 42.dp,
+                            cornerRadius = 21.dp,
+                            innerRadius = 5.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Lyrics,
@@ -1915,10 +1934,12 @@ class MainActivity : BaseActivity() {
                                 org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
                             },
                             position = PillPosition.END,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            width = 48.dp,
-                            height = 42.dp
+                            containerColor = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+                            contentColor = dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurface,
+                            width = 46.dp,
+                            height = 42.dp,
+                            cornerRadius = 21.dp,
+                            innerRadius = 5.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
@@ -2445,77 +2466,121 @@ class MainActivity : BaseActivity() {
 
                     Spacer(modifier = Modifier.height(actionsToControlsGap))
 
-                    // Нижняя сегментированная капсула 4 переключателей (PixelPlayer BottomToggleRow Style)
-                    Surface(
-                        shape = CircleShape,
-                        color = dynamicArtworkColors?.playerContainer?.copy(alpha = 0.65f) ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
+                    // Нижняя сегментированная группа 3 переключателей (PillSegmentButton)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
-                            .padding(horizontal = 6.dp)
-                            .clip(CircleShape)
+                            .height(52.dp)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // 1. Shuffle
+                        val shuffleActiveBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer
+                        val shuffleInactiveBg = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f)
+                        val shuffleBg by animateColorAsState(if (isShuffle) shuffleActiveBg else shuffleInactiveBg, tween(250), label = "shufBg")
+                        val shuffleFg by animateColorAsState(
+                            if (isShuffle) (dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer)
+                            else (dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurfaceVariant),
+                            tween(250), label = "shufFg"
+                        )
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val p = getPlayer() ?: return@PillSegmentButton
+                                val next = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, this@MainActivity)
+                                isShuffle = next
+                            },
+                            position = PillPosition.START,
+                            containerColor = shuffleBg,
+                            contentColor = shuffleFg,
+                            modifier = Modifier.weight(1f),
+                            width = null,
+                            height = 52.dp,
+                            cornerRadius = 26.dp,
+                            innerRadius = 6.dp
                         ) {
-                            // 1. Shuffle
-                            SegmentedCapsuleBtn(
-                                icon = Icons.Rounded.Shuffle,
-                                isActive = isShuffle,
-                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
-                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val p = getPlayer() ?: return@SegmentedCapsuleBtn
-                                    val next = org.akanework.gramophone.logic.utils.ShuffleUtils.toggleShuffle(p, this@MainActivity)
-                                    isShuffle = next
-                                },
-                                modifier = Modifier.weight(1f)
+                            Icon(
+                                imageVector = Icons.Rounded.Shuffle,
+                                contentDescription = "Shuffle",
+                                modifier = Modifier.size(24.dp)
                             )
+                        }
 
-                            // 2. Loop
-                            val currentRepeatMode = getPlayer()?.repeatMode ?: androidx.media3.common.Player.REPEAT_MODE_OFF
-                            SegmentedCapsuleBtn(
-                                icon = if (currentRepeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                                isActive = isLoop,
-                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.secondaryContainer,
-                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onSecondaryContainer,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val p = getPlayer() ?: return@SegmentedCapsuleBtn
-                                    val newMode = when (p.repeatMode) {
-                                        androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                                        androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                                        else -> androidx.media3.common.Player.REPEAT_MODE_OFF
-                                    }
-                                    p.repeatMode = newMode
-                                },
-                                modifier = Modifier.weight(1f)
+                        // 2. Loop
+                        val currentRepeatMode = getPlayer()?.repeatMode ?: androidx.media3.common.Player.REPEAT_MODE_OFF
+                        val loopActiveBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.secondaryContainer
+                        val loopInactiveBg = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f)
+                        val loopBg by animateColorAsState(if (isLoop) loopActiveBg else loopInactiveBg, tween(250), label = "loopBg")
+                        val loopFg by animateColorAsState(
+                            if (isLoop) (dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onSecondaryContainer)
+                            else (dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurfaceVariant),
+                            tween(250), label = "loopFg"
+                        )
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val p = getPlayer() ?: return@PillSegmentButton
+                                val newMode = when (p.repeatMode) {
+                                    androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                                    androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                                    else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                                }
+                                p.repeatMode = newMode
+                            },
+                            position = PillPosition.MIDDLE,
+                            containerColor = loopBg,
+                            contentColor = loopFg,
+                            modifier = Modifier.weight(1f),
+                            width = null,
+                            height = 52.dp,
+                            cornerRadius = 26.dp,
+                            innerRadius = 6.dp
+                        ) {
+                            Icon(
+                                imageVector = if (currentRepeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                contentDescription = "Repeat",
+                                modifier = Modifier.size(24.dp)
                             )
+                        }
 
-                            // 3. Favorite
-                            SegmentedCapsuleBtn(
-                                icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                isActive = isLiked,
-                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.tertiaryContainer,
-                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onTertiaryContainer,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@SegmentedCapsuleBtn
-                                    if (currentTrackId.isEmpty()) return@SegmentedCapsuleBtn
-                                    val newLikeState = !isLiked
-                                    isLiked = newLikeState
-                                    if (newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
-                                            if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
-                                        } catch (_: Exception) {}
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
+                        // 3. Favorite
+                        val likeActiveBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.tertiaryContainer
+                        val likeInactiveBg = dynamicArtworkColors?.playerContainer ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f)
+                        val likeBg by animateColorAsState(if (isLiked) likeActiveBg else likeInactiveBg, tween(250), label = "likeBg")
+                        val likeFg by animateColorAsState(
+                            if (isLiked) (dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onTertiaryContainer)
+                            else (dynamicArtworkColors?.playerOnContainer ?: MaterialTheme.colorScheme.onSurfaceVariant),
+                            tween(250), label = "likeFg"
+                        )
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val currentTrackId = getPlayer()?.currentMediaItem?.mediaId ?: return@PillSegmentButton
+                                if (currentTrackId.isEmpty()) return@PillSegmentButton
+                                val newLikeState = !isLiked
+                                isLiked = newLikeState
+                                if (newLikeState) LikeCache.add(currentTrackId, title = trackTitle, artist = trackArtist) else LikeCache.remove(currentTrackId, title = trackTitle, artist = trackArtist)
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    try {
+                                        val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
+                                        if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            position = PillPosition.END,
+                            containerColor = likeBg,
+                            contentColor = likeFg,
+                            modifier = Modifier.weight(1f),
+                            width = null,
+                            height = 52.dp,
+                            cornerRadius = 26.dp,
+                            innerRadius = 6.dp
+                        ) {
+                            Icon(
+                                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
