@@ -41,7 +41,18 @@ object NetworkClient {
                         builder.header("Authorization", "Bearer $token")
                     }
 
-                    chain.proceed(builder.build())
+                    val response = chain.proceed(builder.build())
+                    if (response.code == 401) {
+                        val ctx = currentContext ?: context?.applicationContext
+                        if (ctx != null) {
+                            AuthManager.clearToken(ctx)
+                            val loginIntent = android.content.Intent(ctx, org.akanework.gramophone.ui.LoginActivity::class.java).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            }
+                            ctx.startActivity(loginIntent)
+                        }
+                    }
+                    response
                 }
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)

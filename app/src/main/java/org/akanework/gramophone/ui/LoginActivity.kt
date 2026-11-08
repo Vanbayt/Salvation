@@ -23,10 +23,12 @@ class LoginActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Проверка: Если токен уже есть, сразу идем в Main
-        if (AuthManager.getToken(this) != null) {
+        // Проверка: Если валидный токен уже есть и не истек, сразу идем в Main
+        if (AuthManager.isAuthorized(this)) {
             startMainActivity()
             return
+        } else {
+            AuthManager.clearToken(this)
         }
 
         setContentView(R.layout.activity_login)

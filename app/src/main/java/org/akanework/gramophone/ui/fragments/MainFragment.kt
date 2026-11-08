@@ -50,6 +50,7 @@ import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.HistoryManager
 import org.akanework.gramophone.logic.api.Album
 import org.akanework.gramophone.logic.api.Artist
+import org.akanework.gramophone.logic.api.BackendStatsSummary
 import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.api.PresetCard
 import org.akanework.gramophone.logic.api.Track
@@ -57,6 +58,7 @@ import org.akanework.gramophone.logic.recommendation.ContextManager
 import org.akanework.gramophone.ui.AppTab
 import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.PlayingEqIcon
+import org.akanework.gramophone.ui.fragments.stats.StatsFragment
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -72,6 +74,7 @@ class MainFragment : Fragment() {
     private var favoriteTracksState = mutableStateOf<List<Track>>(emptyList())
     private var contextPresetsState = mutableStateOf<List<PresetCard>>(emptyList())
     private var isPresetsLoading = mutableStateOf(false)
+    private var statsSummaryState = mutableStateOf<BackendStatsSummary?>(null)
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -90,11 +93,27 @@ class MainFragment : Fragment() {
         loadFavoriteArtists()
         loadFavoriteTracks()
         loadContextPresets()
+        loadStatsSummary()
     }
 
     override fun onResume() {
         super.onResume()
         loadContextPresets()
+        loadStatsSummary()
+    }
+
+    private fun loadStatsSummary() {
+        val ctx = context ?: return
+        NetworkClient.getApi(ctx).getStatsSummary("week").enqueue(object : Callback<BackendStatsSummary> {
+            override fun onResponse(call: Call<BackendStatsSummary>, response: Response<BackendStatsSummary>) {
+                if (response.isSuccessful && response.body() != null) {
+                    statsSummaryState.value = response.body()
+                }
+            }
+            override fun onFailure(call: Call<BackendStatsSummary>, t: Throwable) {
+                // Silently ignore
+            }
+        })
     }
 
     private fun getThemeColorScheme(): ColorScheme {
@@ -235,6 +254,23 @@ class MainFragment : Fragment() {
                                     }
                                 }
                             )
+                        }
+                    }
+
+                    // 3. STATS HIGHLIGHTS (Компактные блоки статистики за неделю: не сплошной Hero, а несколько мелких)
+                    if (statsSummaryState.value != null && (statsSummaryState.value?.totalPlaysCount ?: 0L) > 0L) {
+                        item {
+                            AnimatedVisibility(
+                                visible = isVisible,
+                                enter = fadeIn(tween(650)) + slideInVertically(tween(750)) { it / 3 }
+                            ) {
+                                ExpressiveHomeStatsSection(
+                                    summary = statsSummaryState.value,
+                                    onOpenStats = {
+                                        (requireActivity() as MainActivity).startFragment(StatsFragment())
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -807,6 +843,258 @@ class MainFragment : Fragment() {
                     onClick = onArtistsClick,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+    }
+
+    @Composable
+    fun ExpressiveHomeStatsSection(
+        summary: BackendStatsSummary?,
+        onOpenStats: () -> Unit
+    ) {
+        if (summary == null || summary.totalPlaysCount <= 0L) return
+
+        val totalMins = summary.totalListenedMs / (1000 * 60)
+        val hours = totalMins / 60
+        val mins = totalMins % 60
+        val timeStr = if (hours > 0) "$hours ч. $mins м." else "$mins мин."
+
+        val topArtist = summary.topArtists.firstOrNull()
+        val topTrack = summary.topTracks.firstOrNull()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        ) {
+            // Заголовок секции со стрелочкой перехода
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onOpenStats),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Insights,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Статистика недели",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "Вся стата",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // Ряд из 3 компактных мини-блоков
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Блок 1: Время / Треки
+                Surface(
+                    onClick = onOpenStats,
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 1.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(90.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(11.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "ВРЕМЯ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 9.5.sp,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${summary.totalPlaysCount} треков",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                // Блок 2: Топ артист
+                if (topArtist != null) {
+                    Surface(
+                        onClick = onOpenStats,
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 1.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(90.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(11.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "АРТИСТ #1",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 9.5.sp,
+                                        letterSpacing = 0.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = topArtist.artist,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${topArtist.playCount} раз",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Блок 3: Топ трек
+                if (topTrack != null) {
+                    Surface(
+                        onClick = onOpenStats,
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 1.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(90.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(11.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Audiotrack,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "ТРЕК #1",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 9.5.sp,
+                                        letterSpacing = 0.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = topTrack.title,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = topTrack.artist,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

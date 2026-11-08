@@ -5,7 +5,9 @@ import android.content.SharedPreferences
 import android.os.Build
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import android.util.Base64
 import android.util.Log
+import org.json.JSONObject
 
 object AuthManager {
     private const val PREFS_NAME = "secure_gramophone_prefs"
@@ -26,7 +28,6 @@ object AuthManager {
             )
         } catch (e: Exception) {
             Log.e("AUTH_DEBUG", "Хранилище повреждено! Пытаемся восстановить...", e)
-            // Если файл сломан - жестко удаляем его
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     context.deleteSharedPreferences(PREFS_NAME)
@@ -34,7 +35,6 @@ object AuthManager {
                     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
                 }
 
-                // Пробуем создать заново с чистого листа
                 EncryptedSharedPreferences.create(
                     PREFS_NAME,
                     masterKeyAlias,
@@ -49,12 +49,54 @@ object AuthManager {
         }
     }
 
+    /**
+     * Проверяет срок действия JWT токена по claim `exp`.
+     */
+    fun isTokenExpired(token: String?): Boolean {
+        if (token.isNullOrBlank()) return true
+        val parts = token.split(".")
+        if (parts.size < 2) return true
+        return try {
+            val payloadBytes = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            val json = JSONObject(String(payloadBytes, Charsets.UTF_8))
+            if (json.has("exp")) {
+                val expSeconds = json.getLong("exp")
+                val nowSeconds = System.currentTimeMillis() / 1000
+                // Добавляем буфер в 5 секунд на рассинхронизацию часов
+                nowSeconds >= (expSeconds - 5)
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.w("AuthManager", "Failed to decode/validate JWT token: ${e.message}")
+            true
+        }
+    }
+
+    /**
+     * Проверяет наличие валидного и неистекшего токена.
+     */
+    fun isAuthorized(context: Context): Boolean {
+        val token = getToken(context) ?: return false
+        return !isTokenExpired(token)
+    }
+
     fun getToken(context: Context): String? {
-        if (cachedToken != null) return cachedToken
+        if (cachedToken != null) {
+            if (isTokenExpired(cachedToken)) {
+                clearToken(context)
+                return null
+            }
+            return cachedToken
+        }
 
         val prefs = getSharedPrefs(context)
-        cachedToken = prefs?.getString(KEY_TOKEN, null)
-
+        val token = prefs?.getString(KEY_TOKEN, null)
+        if (token != null && isTokenExpired(token)) {
+            clearToken(context)
+            return null
+        }
+        cachedToken = token
         return cachedToken
     }
 

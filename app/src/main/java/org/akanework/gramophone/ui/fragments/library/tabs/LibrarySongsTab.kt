@@ -46,6 +46,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
@@ -54,6 +56,7 @@ import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.LibraryCacheManager
 import org.akanework.gramophone.logic.api.NetworkClient
 import org.akanework.gramophone.logic.api.Track
+import org.akanework.gramophone.logic.utils.SearchUtils
 import org.akanework.gramophone.ui.MainActivity
 import org.akanework.gramophone.ui.components.library.DesktopSongTableHeader
 import org.akanework.gramophone.ui.components.library.DesktopSongTableRow
@@ -255,12 +258,20 @@ fun LibrarySongsTab(
         Toast.makeText(context, "Добавлено в конец очереди", Toast.LENGTH_SHORT).show()
     }
 
+    var loadJob by remember { mutableStateOf<Job?>(null) }
+
     fun loadTracks(isInitial: Boolean = false, refresh: Boolean = false) {
-        if (isLoading) return
+        if (isInitial || refresh) {
+            loadJob?.cancel()
+            isLoading = false
+            isLastPage = false
+        } else if (isLoading || isLastPage) {
+            return
+        }
         isLoading = true
         if (refresh) isRefreshing = true
 
-        coroutineScope.launch(Dispatchers.IO) {
+        loadJob = coroutineScope.launch(Dispatchers.IO) {
             val isOfflineOnly = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context).getBoolean("offline_only_mode", false)
             if (isOfflineOnly) {
                 val offlineDb = org.akanework.gramophone.logic.offline.OfflineMusicDatabase.getInstance(context)
@@ -279,11 +290,8 @@ fun LibrarySongsTab(
                 val resultList = if (searchQuery.isBlank()) {
                     offlineTracksList
                 } else {
-                    val q = searchQuery.trim().lowercase()
                     offlineTracksList.filter {
-                        it.title.lowercase().contains(q) ||
-                        it.artist.lowercase().contains(q) ||
-                        (it.album?.lowercase()?.contains(q) == true)
+                        SearchUtils.matchesQuery(it.title, it.artist, it.album, searchQuery)
                     }
                 }
                 withContext(Dispatchers.Main) {
@@ -299,6 +307,7 @@ fun LibrarySongsTab(
 
             val skip = if (isInitial || refresh) 0 else tracks.size
 
+            var hasLocalMatches = false
             if (isInitial && searchQuery.isBlank()) {
                 val cached = LibraryCacheManager.loadCachedTracks(context, currentSortOption.key)
                 if (cached.isNotEmpty()) {
@@ -312,16 +321,16 @@ fun LibrarySongsTab(
                 val memory = LibraryCacheManager.getMemoryTracks(currentSortOption.key)
                 val base = if (!memory.isNullOrEmpty()) memory else LibraryCacheManager.loadCachedTracks(context, currentSortOption.key)
                 if (base.isNotEmpty()) {
-                    val q = searchQuery.trim().lowercase()
                     val immediateMatches = base.filter {
-                        it.title.lowercase().contains(q) ||
-                        it.artist.lowercase().contains(q) ||
-                        (it.album?.lowercase()?.contains(q) == true)
+                        SearchUtils.matchesQuery(it.title, it.artist, it.album, searchQuery)
                     }
-                    withContext(Dispatchers.Main) {
-                        tracks.clear()
-                        tracks.addAll(immediateMatches)
-                        totalTrackCount = immediateMatches.size
+                    if (immediateMatches.isNotEmpty()) {
+                        hasLocalMatches = true
+                        withContext(Dispatchers.Main) {
+                            tracks.clear()
+                            tracks.addAll(immediateMatches)
+                            totalTrackCount = immediateMatches.size
+                        }
                     }
                 }
             }
@@ -341,8 +350,10 @@ fun LibrarySongsTab(
 
                     withContext(Dispatchers.Main) {
                         if (isInitial || refresh) {
-                            tracks.clear()
-                            tracks.addAll(fetched)
+                            if (fetched.isNotEmpty() || !hasLocalMatches) {
+                                tracks.clear()
+                                tracks.addAll(fetched)
+                            }
                         } else {
                             tracks.addAll(fetched)
                         }
@@ -383,9 +394,16 @@ fun LibrarySongsTab(
                             }
                         }
                     }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        isLastPage = true
+                    }
                 }
             } catch (e: Exception) {
-                // Ignore network errors gracefully
+                if (e is CancellationException) throw e
+                withContext(Dispatchers.Main) {
+                    isLastPage = true
+                }
             } finally {
                 withContext(Dispatchers.Main) {
                     isLoading = false
@@ -403,11 +421,11 @@ fun LibrarySongsTab(
         loadTracks(isInitial = true)
     }
 
-    // Авто-подгрузка страниц при скролле
+    // Авто-подгрузка страниц при скролле (только если список не пуст и содержит хотя бы 1 полную страницу)
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            !isLoading && !isLastPage && lastVisible >= (tracks.size - PRELOAD_THRESHOLD)
+            !isLoading && !isLastPage && tracks.isNotEmpty() && tracks.size >= PAGE_LIMIT && lastVisible >= (tracks.size - PRELOAD_THRESHOLD)
         }
     }
 

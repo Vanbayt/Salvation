@@ -1191,7 +1191,7 @@ fun PixelLeadTrackCard(
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
-        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
@@ -1208,7 +1208,7 @@ fun PixelLeadTrackCard(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFFFFD700).copy(alpha = 0.18f),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier.height(26.dp)
                 ) {
                     Row(
@@ -1219,7 +1219,7 @@ fun PixelLeadTrackCard(
                         Icon(
                             imageVector = Icons.Rounded.EmojiEvents,
                             contentDescription = null,
-                            tint = Color(0xFFFFD700),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
@@ -1229,7 +1229,7 @@ fun PixelLeadTrackCard(
                                 fontSize = 10.5.sp,
                                 letterSpacing = 0.6.sp
                             ),
-                            color = Color(0xFFFFD700)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
@@ -1347,11 +1347,8 @@ fun PixelSubTrackRow(
         if (it.startsWith("/")) "http://185.196.41.31$it" else it
     }
 
-    val (badgeBg, badgeText) = when (rank) {
-        2 -> Color(0xFFC0C0C0).copy(alpha = 0.18f) to Color(0xFFC0C0C0)
-        3 -> Color(0xFFCD7F32).copy(alpha = 0.18f) to Color(0xFFCD7F32)
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val badgeBg = MaterialTheme.colorScheme.surfaceContainerHighest
+    val badgeText = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -1463,17 +1460,13 @@ fun PixelTopArtistCard(
         if (it.startsWith("/")) "http://185.196.41.31$it" else it
     }
 
-    val (badgeBg, badgeText) = when (rank) {
-        1 -> Color(0xFFFFD700).copy(alpha = 0.2f) to Color(0xFFFFD700)
-        2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f) to Color(0xFFC0C0C0)
-        3 -> Color(0xFFCD7F32).copy(alpha = 0.2f) to Color(0xFFCD7F32)
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val badgeBg = MaterialTheme.colorScheme.surfaceContainerHighest
+    val badgeText = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
-        border = if (rank == 1) BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.35f)) else null,
+        border = null,
         modifier = Modifier.width(140.dp)
     ) {
         Column(
@@ -1506,7 +1499,7 @@ fun PixelTopArtistCard(
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                border = if (rank == 1) BorderStroke(2.dp, Color(0xFFFFD700)) else null,
+                border = null,
                 modifier = Modifier.size(76.dp)
             ) {
                 if (!coverUrl.isNullOrEmpty()) {
@@ -1582,17 +1575,13 @@ fun PixelTopAlbumCard(
         if (it.startsWith("/")) "http://185.196.41.31$it" else it
     }
 
-    val (badgeBg, badgeText) = when (rank) {
-        1 -> Color(0xFFFFD700).copy(alpha = 0.2f) to Color(0xFFFFD700)
-        2 -> Color(0xFFC0C0C0).copy(alpha = 0.2f) to Color(0xFFC0C0C0)
-        3 -> Color(0xFFCD7F32).copy(alpha = 0.2f) to Color(0xFFCD7F32)
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val badgeBg = MaterialTheme.colorScheme.surfaceContainerHighest
+    val badgeText = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
-        border = if (rank == 1) BorderStroke(1.5.dp, Color(0xFFFFD700).copy(alpha = 0.4f)) else null,
+        border = null,
         modifier = Modifier.width(148.dp)
     ) {
         Column(
@@ -1625,7 +1614,7 @@ fun PixelTopAlbumCard(
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                border = if (rank == 1) BorderStroke(1.5.dp, Color(0xFFFFD700)) else null,
+                border = null,
                 modifier = Modifier.size(86.dp)
             ) {
                 if (!coverUrl.isNullOrEmpty()) {

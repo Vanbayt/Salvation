@@ -253,6 +253,15 @@ class MainActivity : BaseActivity() {
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (!org.akanework.gramophone.logic.api.AuthManager.isAuthorized(this)) {
+            org.akanework.gramophone.logic.api.AuthManager.clearToken(this)
+            val intent = Intent(this, LoginActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(intent)
+            finish()
+            return
+        }
         Log.i("MainActivity", "onCreate($intent)")
         installSplashScreen().setKeepOnScreenCondition { !ready }
         super.onCreate(savedInstanceState)
@@ -1972,12 +1981,13 @@ class MainActivity : BaseActivity() {
                 }
             }
 
-            // 2. MINI CONTROLS (Play/Pause, Next)
+            // 2. MINI CONTROLS (Play/Pause, Next) - Segmented Pill
             val miniControlsAlpha = (1f - fraction * 2.8f).coerceIn(0f, 1f)
             if (miniControlsAlpha > 0f) {
                 val miniEndPadding = miniStartX + 12.dp
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = miniTextY - 3.dp, end = miniEndPadding)
@@ -1986,48 +1996,57 @@ class MainActivity : BaseActivity() {
                             translationX = fraction * 20f
                         }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
-                            },
-                        contentAlignment = Alignment.Center
+                    val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
+
+                    // 1. Кнопка воспроизведения / паузы (START сегмент)
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            getPlayer()?.let { if (it.isPlaying) it.pause() else it.play() }
+                        },
+                        position = PillPosition.START,
+                        width = 46.dp,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ) {
-                        val isLoading = (org.akanework.gramophone.logic.utils.SmartPlaybackManager.isResolving || getPlayer()?.playbackState == androidx.media3.common.Player.STATE_BUFFERING) && !isPlaying
                         if (isLoading) {
                             androidx.compose.material3.CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(18.dp),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                strokeWidth = 2.5.dp
+                                strokeWidth = 2.2.dp
                             )
                         } else {
                             Icon(
                                 painterResource(id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                                 contentDescription = "Play/Pause",
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    IconButton(
+                    // 2. Кнопка следующего трека (END сегмент)
+                    PillSegmentButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             getPlayer()?.seekToNext()
                         },
-                        modifier = Modifier.size(42.dp)
+                        position = PillPosition.END,
+                        width = 42.dp,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ) {
                         Icon(
                             painterResource(id = R.drawable.ic_skip_next),
                             contentDescription = "Next",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -2937,6 +2956,15 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!org.akanework.gramophone.logic.api.AuthManager.isAuthorized(this)) {
+            org.akanework.gramophone.logic.api.AuthManager.clearToken(this)
+            val intent = Intent(this, LoginActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(intent)
+            finish()
+            return
+        }
         isForeground = true
         getPlayer()?.let { player -> updatePlayerUI(player) }
         progressHandler.removeCallbacks(progressRunnable)
