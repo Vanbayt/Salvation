@@ -13,12 +13,18 @@ data class PlaybackEvent(
     val title: String,
     val artist: String,
     val album: String? = null,
+    val albumId: String? = null,
+    val releaseYear: Int? = null,
     val coverUrl: String? = null,
     val durationMs: Long = 0L,
     val listenedMs: Long = 0L,
     val timestamp: Long = System.currentTimeMillis(),
     val isCompleted: Boolean = false,
     val contextSource: String? = null,
+    val repeatCount: Int = 0,
+    val rewindCount: Int = 0,
+    val skippedAtMs: Long? = null,
+    val sessionId: String? = null,
     val isSynced: Boolean = false
 )
 
@@ -39,19 +45,40 @@ data class TopArtistStat(
     val totalListenedMs: Long
 )
 
+data class TopAlbumStat(
+    val album: String,
+    val artist: String,
+    val coverUrl: String?,
+    val playCount: Long,
+    val totalListenedMs: Long
+)
+
+data class EraStat(
+    val era: String,
+    val count: Long,
+    val ratio: Float
+)
+
 data class StatsSummary(
     val period: String,
     val totalListenedMs: Long,
     val totalPlaysCount: Long,
     val uniqueTracksCount: Long,
     val uniqueArtistsCount: Long,
+    val uniqueAlbumsCount: Long = 0L,
     val topTracks: List<TopTrackStat>,
     val topArtists: List<TopArtistStat>,
+    val topAlbums: List<TopAlbumStat> = emptyList(),
+    val eras: List<EraStat> = emptyList(),
     val streakDays: Int,
     val peakHour: Int,
     val favoriteDayOfWeek: String,
     val dayDistribution: List<Float> = listOf(0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f),
-    val hourlyDistribution: List<Float> = List(24) { 0.05f }
+    val hourlyDistribution: List<Float> = List(24) { 0.05f },
+    val totalRewinds: Long = 0L,
+    val totalRepeats: Long = 0L,
+    val earlySkipsCount: Long = 0L,
+    val longTracksCount: Long = 0L
 )
 
 data class AffinityProfile(
@@ -83,12 +110,18 @@ class PlaybackStatsDatabase private constructor(context: Context) :
                 title TEXT NOT NULL,
                 artist TEXT NOT NULL,
                 album TEXT,
+                album_id TEXT,
+                release_year INTEGER,
                 cover_url TEXT,
                 duration_ms INTEGER NOT NULL DEFAULT 0,
                 listened_ms INTEGER NOT NULL DEFAULT 0,
                 timestamp INTEGER NOT NULL,
                 is_completed INTEGER NOT NULL DEFAULT 0,
                 context_source TEXT,
+                repeat_count INTEGER NOT NULL DEFAULT 0,
+                rewind_count INTEGER NOT NULL DEFAULT 0,
+                skipped_at_ms INTEGER,
+                session_id TEXT,
                 is_synced INTEGER NOT NULL DEFAULT 0
             );
             """.trimIndent()
@@ -99,7 +132,14 @@ class PlaybackStatsDatabase private constructor(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Миграции при необходимости
+        if (oldVersion < 2) {
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN album_id TEXT;") } catch (_: Exception) {}
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN release_year INTEGER;") } catch (_: Exception) {}
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN repeat_count INTEGER NOT NULL DEFAULT 0;") } catch (_: Exception) {}
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN rewind_count INTEGER NOT NULL DEFAULT 0;") } catch (_: Exception) {}
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN skipped_at_ms INTEGER;") } catch (_: Exception) {}
+            try { db.execSQL("ALTER TABLE playback_events ADD COLUMN session_id TEXT;") } catch (_: Exception) {}
+        }
     }
 
     fun insertEvent(event: PlaybackEvent): Long {
@@ -111,12 +151,18 @@ class PlaybackStatsDatabase private constructor(context: Context) :
                 put("title", event.title)
                 put("artist", event.artist)
                 put("album", event.album)
+                put("album_id", event.albumId)
+                put("release_year", event.releaseYear)
                 put("cover_url", event.coverUrl)
                 put("duration_ms", event.durationMs)
                 put("listened_ms", event.listenedMs)
                 put("timestamp", event.timestamp)
                 put("is_completed", if (event.isCompleted) 1 else 0)
                 put("context_source", event.contextSource)
+                put("repeat_count", event.repeatCount)
+                put("rewind_count", event.rewindCount)
+                put("skipped_at_ms", event.skippedAtMs)
+                put("session_id", event.sessionId)
                 put("is_synced", if (event.isSynced) 1 else 0)
             }
             db.insert("playback_events", null, values)
@@ -131,7 +177,7 @@ class PlaybackStatsDatabase private constructor(context: Context) :
         try {
             val db = readableDatabase
             val cursor = db.rawQuery(
-                "SELECT id, user_id, track_id, title, artist, album, cover_url, duration_ms, listened_ms, timestamp, is_completed, context_source FROM playback_events WHERE is_synced = 0 ORDER BY id ASC LIMIT ?",
+                "SELECT id, user_id, track_id, title, artist, album, album_id, release_year, cover_url, duration_ms, listened_ms, timestamp, is_completed, context_source, repeat_count, rewind_count, skipped_at_ms, session_id FROM playback_events WHERE is_synced = 0 ORDER BY id ASC LIMIT ?",
                 arrayOf(limit.toString())
             )
             cursor.use {
@@ -144,12 +190,18 @@ class PlaybackStatsDatabase private constructor(context: Context) :
                             title = it.getString(3),
                             artist = it.getString(4),
                             album = it.getString(5),
-                            coverUrl = it.getString(6),
-                            durationMs = it.getLong(7),
-                            listenedMs = it.getLong(8),
-                            timestamp = it.getLong(9),
-                            isCompleted = it.getInt(10) == 1,
-                            contextSource = it.getString(11),
+                            albumId = it.getString(6),
+                            releaseYear = if (it.isNull(7)) null else it.getInt(7),
+                            coverUrl = it.getString(8),
+                            durationMs = it.getLong(9),
+                            listenedMs = it.getLong(10),
+                            timestamp = it.getLong(11),
+                            isCompleted = it.getInt(12) == 1,
+                            contextSource = it.getString(13),
+                            repeatCount = it.getInt(14),
+                            rewindCount = it.getInt(15),
+                            skippedAtMs = if (it.isNull(16)) null else it.getLong(16),
+                            sessionId = it.getString(17),
                             isSynced = false
                         )
                     )
@@ -185,6 +237,12 @@ class PlaybackStatsDatabase private constructor(context: Context) :
         var uniqueTracksCount = 0L
         var uniqueArtistsCount = 0L
 
+        var uniqueAlbumsCount = 0L
+        var totalRewinds = 0L
+        var totalRepeats = 0L
+        var earlySkipsCount = 0L
+        var longTracksCount = 0L
+
         // 1. Агрегатные метрики
         try {
             val q = "SELECT COALESCE(SUM(listened_ms), 0), COUNT(*), COUNT(DISTINCT track_id), COUNT(DISTINCT artist) FROM playback_events WHERE user_id = ? $timeFilter"
@@ -194,6 +252,35 @@ class PlaybackStatsDatabase private constructor(context: Context) :
                     totalPlaysCount = cursor.getLong(1)
                     uniqueTracksCount = cursor.getLong(2)
                     uniqueArtistsCount = cursor.getLong(3)
+                }
+            }
+
+            val qAlbums = "SELECT COUNT(DISTINCT album) FROM playback_events WHERE user_id = ? AND album IS NOT NULL AND album != '' $timeFilter"
+            db.rawQuery(qAlbums, args).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    uniqueAlbumsCount = cursor.getLong(0)
+                }
+            }
+
+            val qBeh = "SELECT COALESCE(SUM(rewind_count), 0), COALESCE(SUM(repeat_count), 0) FROM playback_events WHERE user_id = ? $timeFilter"
+            db.rawQuery(qBeh, args).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    totalRewinds = cursor.getLong(0)
+                    totalRepeats = cursor.getLong(1)
+                }
+            }
+
+            val qSkips = "SELECT COUNT(*) FROM playback_events WHERE user_id = ? AND is_completed = 0 AND listened_ms < 25000 $timeFilter"
+            db.rawQuery(qSkips, args).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    earlySkipsCount = cursor.getLong(0)
+                }
+            }
+
+            val qLong = "SELECT COUNT(*) FROM playback_events WHERE user_id = ? AND duration_ms >= 420000 $timeFilter"
+            db.rawQuery(qLong, args).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    longTracksCount = cursor.getLong(0)
                 }
             }
         } catch (e: Exception) {
@@ -257,14 +344,87 @@ class PlaybackStatsDatabase private constructor(context: Context) :
             e.printStackTrace()
         }
 
-        // 4. Серия прослушиваний (Streak)
+        // 4. Топ 5 альбомов
+        val topAlbums = mutableListOf<TopAlbumStat>()
+        try {
+            val albumQuery = """
+                SELECT COALESCE(album, ''), artist, MAX(cover_url), COUNT(*) as play_cnt, SUM(listened_ms) as sum_time
+                FROM playback_events
+                WHERE user_id = ? AND album IS NOT NULL AND album != '' $timeFilter
+                GROUP BY album, artist
+                ORDER BY sum_time DESC, play_cnt DESC
+                LIMIT 5
+            """.trimIndent()
+            db.rawQuery(albumQuery, args).use { cursor ->
+                while (cursor.moveToNext()) {
+                    topAlbums.add(
+                        TopAlbumStat(
+                            album = cursor.getString(0),
+                            artist = cursor.getString(1),
+                            coverUrl = cursor.getString(2),
+                            playCount = cursor.getLong(3),
+                            totalListenedMs = cursor.getLong(4)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 5. Распределение по музыкальным эпохам
+        val eras = mutableListOf<EraStat>()
+        try {
+            val eraQuery = """
+                SELECT release_year, COUNT(*) as cnt
+                FROM playback_events
+                WHERE user_id = ? AND release_year IS NOT NULL AND release_year > 1900 $timeFilter
+                GROUP BY release_year
+            """.trimIndent()
+            val eraMap = mutableMapOf(
+                "70-е и старше" to 0L,
+                "80-е" to 0L,
+                "90-е" to 0L,
+                "2000-е" to 0L,
+                "2010-е" to 0L,
+                "2020-е" to 0L
+            )
+            var totalYearCount = 0L
+            db.rawQuery(eraQuery, args).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val y = cursor.getInt(0)
+                    val c = cursor.getLong(1)
+                    totalYearCount += c
+                    when {
+                        y < 1980 -> eraMap["70-е и старше"] = (eraMap["70-е и старше"] ?: 0L) + c
+                        y < 1990 -> eraMap["80-е"] = (eraMap["80-е"] ?: 0L) + c
+                        y < 2000 -> eraMap["90-е"] = (eraMap["90-е"] ?: 0L) + c
+                        y < 2010 -> eraMap["2000-е"] = (eraMap["2000-е"] ?: 0L) + c
+                        y < 2020 -> eraMap["2010-е"] = (eraMap["2010-е"] ?: 0L) + c
+                        else -> eraMap["2020-е"] = (eraMap["2020-е"] ?: 0L) + c
+                    }
+                }
+            }
+            val erasOrder = listOf("2020-е", "2010-е", "2000-е", "90-е", "80-е", "70-е и старше")
+            for (name in erasOrder) {
+                val cnt = eraMap[name] ?: 0L
+                if (cnt > 0L) {
+                    val ratio = if (totalYearCount > 0L) cnt.toFloat() / totalYearCount.toFloat() else 0f
+                    eras.add(EraStat(name, cnt, ratio))
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 6. Серия прослушиваний (Streak)
         val streak = calculateStreakDays(userId)
 
-        // 5. Пиковые часы и любимый день
+        // 7. Пиковые часы и любимый день
         val peakHour = calculatePeakHour(userId, since)
         val favoriteDay = calculateFavoriteDay(userId, since)
 
-        // 6. Распределение по дням недели (ПН..ВС) и по часам суток (0..23)
+        // 8. Распределение по дням недели (ПН..ВС) и по часам суток (0..23)
         val dayDistribution = calculateDayDistribution(userId, since)
         val hourlyDistribution = calculateHourlyDistribution(userId, since)
 
@@ -274,13 +434,20 @@ class PlaybackStatsDatabase private constructor(context: Context) :
             totalPlaysCount = totalPlaysCount,
             uniqueTracksCount = uniqueTracksCount,
             uniqueArtistsCount = uniqueArtistsCount,
+            uniqueAlbumsCount = uniqueAlbumsCount,
             topTracks = topTracks,
             topArtists = topArtists,
+            topAlbums = topAlbums,
+            eras = eras,
             streakDays = streak,
             peakHour = peakHour,
             favoriteDayOfWeek = favoriteDay,
             dayDistribution = dayDistribution,
-            hourlyDistribution = hourlyDistribution
+            hourlyDistribution = hourlyDistribution,
+            totalRewinds = totalRewinds,
+            totalRepeats = totalRepeats,
+            earlySkipsCount = earlySkipsCount,
+            longTracksCount = longTracksCount
         )
     }
 
@@ -620,7 +787,7 @@ class PlaybackStatsDatabase private constructor(context: Context) :
 
     companion object {
         private const val DATABASE_NAME = "salvation_playback_stats.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
 
         @Volatile
         private var instance: PlaybackStatsDatabase? = null

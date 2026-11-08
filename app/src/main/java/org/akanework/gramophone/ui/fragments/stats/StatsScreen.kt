@@ -43,8 +43,10 @@ import kotlinx.coroutines.withContext
 import org.akanework.gramophone.R
 import org.akanework.gramophone.logic.api.AuthManager
 import org.akanework.gramophone.logic.api.NetworkClient
+import org.akanework.gramophone.logic.stats.EraStat
 import org.akanework.gramophone.logic.stats.PlaybackStatsDatabase
 import org.akanework.gramophone.logic.stats.StatsSummary
+import org.akanework.gramophone.logic.stats.TopAlbumStat
 import org.akanework.gramophone.logic.stats.TopArtistStat
 import org.akanework.gramophone.logic.stats.TopTrackStat
 import org.akanework.gramophone.ui.MainActivity
@@ -58,10 +60,11 @@ fun StatsScreen(
     val activity = context as? MainActivity
     val coroutineScope = rememberCoroutineScope()
 
+    var selectedPeriod by remember { mutableStateOf("all") }
     var statsSummary by remember { mutableStateOf<StatsSummary?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    fun loadStats() {
+    fun loadStats(period: String = selectedPeriod) {
         isLoading = true
         coroutineScope.launch(Dispatchers.IO) {
             val token = AuthManager.getToken(context)
@@ -72,37 +75,51 @@ fun StatsScreen(
 
             // 1. Быстрая локальная загрузка из базы
             val db = PlaybackStatsDatabase.getInstance(context)
-            val localSummary = db.getStatsSummary(userId, "all")
+            val localSummary = db.getStatsSummary(userId, period)
 
             withContext(Dispatchers.Main) {
-                statsSummary = localSummary
-                isLoading = false
+                if (selectedPeriod == period) {
+                    statsSummary = localSummary
+                    isLoading = false
+                }
             }
 
             // 2. Фоновое обновление из Go-бэкенда при наличии сети
             try {
                 val api = NetworkClient.getApi(context)
-                val response = api.getStatsSummary("all").execute()
+                val response = api.getStatsSummary(period).execute()
                 if (response.isSuccessful) {
                     val body = response.body()
-                    if (body != null && body.totalPlaysCount > 0) {
+                    if (body != null && selectedPeriod == period) {
+                        val useServerDist = (body.totalPlaysCount >= localSummary.totalPlaysCount) && !body.dayDistribution.isNullOrEmpty()
                         val mergedSummary = StatsSummary(
-                            period = "all",
+                            period = period,
                             totalListenedMs = maxOf(localSummary.totalListenedMs, body.totalListenedMs),
                             totalPlaysCount = maxOf(localSummary.totalPlaysCount, body.totalPlaysCount),
                             uniqueTracksCount = maxOf(localSummary.uniqueTracksCount, body.uniqueTracksCount),
                             uniqueArtistsCount = maxOf(localSummary.uniqueArtistsCount, body.uniqueArtistsCount),
+                            uniqueAlbumsCount = maxOf(localSummary.uniqueAlbumsCount, body.uniqueAlbumsCount),
                             topTracks = if (body.topTracks.isNotEmpty()) body.topTracks.map {
                                 TopTrackStat(it.trackId, it.title, it.artist, it.album, it.coverUrl, it.playCount, it.totalListenedMs)
                             } else localSummary.topTracks,
                             topArtists = if (body.topArtists.isNotEmpty()) body.topArtists.map {
                                 TopArtistStat(it.artist, it.coverUrl, it.playCount, it.totalListenedMs)
                             } else localSummary.topArtists,
+                            topAlbums = if (body.topAlbums.isNotEmpty()) body.topAlbums.map {
+                                TopAlbumStat(it.album, it.artist, it.coverUrl, it.playCount, it.totalListenedMs)
+                            } else localSummary.topAlbums,
+                            eras = if (body.eras.isNotEmpty()) body.eras.map {
+                                EraStat(it.era, it.count, it.ratio)
+                            } else localSummary.eras,
                             streakDays = localSummary.streakDays,
-                            peakHour = if (localSummary.totalPlaysCount > 0) localSummary.peakHour else body.peakHour,
-                            favoriteDayOfWeek = if (localSummary.totalPlaysCount > 0) localSummary.favoriteDayOfWeek else body.favoriteDayOfWeek,
-                            dayDistribution = localSummary.dayDistribution,
-                            hourlyDistribution = localSummary.hourlyDistribution
+                            peakHour = if (body.totalPlaysCount > localSummary.totalPlaysCount) body.peakHour else localSummary.peakHour,
+                            favoriteDayOfWeek = if (body.totalPlaysCount > localSummary.totalPlaysCount) body.favoriteDayOfWeek else localSummary.favoriteDayOfWeek,
+                            dayDistribution = if (useServerDist) body.dayDistribution else localSummary.dayDistribution,
+                            hourlyDistribution = if (useServerDist && !body.hourlyDistribution.isNullOrEmpty()) body.hourlyDistribution else localSummary.hourlyDistribution,
+                            totalRewinds = maxOf(localSummary.totalRewinds, body.totalRewinds),
+                            totalRepeats = maxOf(localSummary.totalRepeats, body.totalRepeats),
+                            earlySkipsCount = maxOf(localSummary.earlySkipsCount, body.earlySkipsCount),
+                            longTracksCount = maxOf(localSummary.longTracksCount, body.longTracksCount)
                         )
                         withContext(Dispatchers.Main) {
                             statsSummary = mergedSummary
@@ -114,7 +131,7 @@ fun StatsScreen(
     }
 
     LaunchedEffect(Unit) {
-        loadStats()
+        loadStats("all")
     }
 
     fun playTrack(track: TopTrackStat) {
@@ -168,7 +185,7 @@ fun StatsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { loadStats() }) {
+                    IconButton(onClick = { loadStats(selectedPeriod) }) {
                         Icon(Icons.Rounded.Refresh, contentDescription = "Обновить")
                     }
                 },
@@ -186,6 +203,54 @@ fun StatsScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 220.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // 0. Селектор периодов (Filter Chips)
+            item(key = "stats_period_selector") {
+                val periods = listOf(
+                    "week" to "Неделя",
+                    "month" to "Месяц",
+                    "year" to "Год",
+                    "all" to "Всё время"
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    periods.forEach { (key, label) ->
+                        val isSelected = selectedPeriod == key
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable {
+                                    if (selectedPeriod != key) {
+                                        selectedPeriod = key
+                                        loadStats(key)
+                                    }
+                                }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // 1. Главная Hero Bento-карточка (PixelPlayer Hero Widget)
             item(key = "stats_hero_card") {
                 val summary = statsSummary
@@ -259,22 +324,22 @@ fun StatsScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
                                                 imageVector = Icons.Rounded.MusicNote,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = "${summary?.uniqueTracksCount ?: 0}",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -283,7 +348,7 @@ fun StatsScreen(
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "Уникальных треков",
+                                            text = "Треков",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -295,15 +360,15 @@ fun StatsScreen(
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Person,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
                                             Text(
                                                 text = "${summary?.uniqueArtistsCount ?: 0}",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -313,6 +378,35 @@ fun StatsScreen(
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = "Артистов",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Album,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "${summary?.uniqueAlbumsCount ?: 0}",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Альбомов",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -424,6 +518,155 @@ fun StatsScreen(
                             Text(
                                 text = peakSubtext,
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2.5 Поведенческая статистика (На репите, Перемотки, Эпики)
+            item(key = "stats_behavior_bento") {
+                val rewinds = statsSummary?.totalRewinds ?: 0L
+                val repeats = statsSummary?.totalRepeats ?: 0L
+                val epicTracks = statsSummary?.longTracksCount ?: 0L
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 1. На репите
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Repeat,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "НА РЕПИТЕ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.4.sp,
+                                    fontSize = 10.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$repeats",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Кругов",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // 2. Перемотки назад
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFF9800).copy(alpha = 0.15f),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.SkipPrevious,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF9800),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "ПЕРЕМОТКИ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.4.sp,
+                                    fontSize = 10.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$rewinds",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Возвратов",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // 3. Эпические треки
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF00E676).copy(alpha = 0.15f),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Timer,
+                                        contentDescription = null,
+                                        tint = Color(0xFF00E676),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "ЭПИКИ 7+ М",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.4.sp,
+                                    fontSize = 10.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$epicTracks",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Треков",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -553,7 +796,7 @@ fun StatsScreen(
                             .padding(horizontal = 16.dp)
                     ) {
                         Text(
-                            text = "Пока нет данных о прослушиваниях.\nВключайте любимые треки, чтобы собрать топ!",
+                            text = "Пока нет данных о прослушиваниях за этот период.\nВключайте любимые треки, чтобы собрать топ!",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -604,7 +847,120 @@ fun StatsScreen(
                 }
             }
 
-            // 6. Секция: АКТИВНОСТЬ ПО ЧАСАМ СУТОК (Pixel 24h Activity Wave)
+            // 6. Секция: ТОП АЛЬБОМОВ
+            val topAlbums = statsSummary?.topAlbums ?: emptyList()
+            if (topAlbums.isNotEmpty()) {
+                item(key = "stats_top_albums_section") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "ТОП АЛЬБОМОВ",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        topAlbums.forEachIndexed { idx, album ->
+                            PixelTopAlbumCard(rank = idx + 1, album = album)
+                        }
+                    }
+                }
+            }
+
+            // 7. Секция: МУЗЫКАЛЬНЫЕ ЭПОХИ
+            val eras = statsSummary?.eras ?: emptyList()
+            if (eras.isNotEmpty()) {
+                item(key = "stats_eras_section") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "МУЗЫКАЛЬНЫЕ ЭПОХИ",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            eras.forEach { era ->
+                                val eraColor = when (era.era) {
+                                    "2020-е" -> MaterialTheme.colorScheme.primary
+                                    "2010-е" -> Color(0xFF00B0FF)
+                                    "2000-е" -> Color(0xFF00E676)
+                                    "90-е" -> Color(0xFFFF9100)
+                                    "80-е" -> Color(0xFFFF4081)
+                                    else -> Color(0xFFE040FB)
+                                }
+
+                                val animRatio by animateFloatAsState(
+                                    targetValue = era.ratio.coerceIn(0f, 1f),
+                                    animationSpec = tween(600),
+                                    label = "eraProgress"
+                                )
+
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = era.era,
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${(era.ratio * 100).toInt()}% • ${era.count} ${getTracksCountString(era.count)}",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = eraColor
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(animRatio.coerceAtLeast(0.02f))
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(eraColor)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 8. Секция: АКТИВНОСТЬ ПО ЧАСАМ СУТОК (Pixel 24h Activity Wave)
             item(key = "stats_hourly_chart_section") {
                 val hourlyDist = statsSummary?.hourlyDistribution ?: List(24) { 0.1f }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -898,5 +1254,96 @@ private fun getDaysString(count: Int): String {
         lastDigit == 1 -> "день"
         lastDigit in 2..4 -> "дня"
         else -> "дней"
+    }
+}
+
+private fun getTracksCountString(count: Long): String {
+    val lastDigit = count % 10
+    val lastTwoDigits = count % 100
+    return when {
+        lastTwoDigits in 11..19 -> "треков"
+        lastDigit == 1L -> "трек"
+        lastDigit in 2..4 -> "трека"
+        else -> "треков"
+    }
+}
+
+@Composable
+fun PixelTopAlbumCard(
+    rank: Int,
+    album: TopAlbumStat
+) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.width(140.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val coverUrl = album.coverUrl?.let {
+                if (it.startsWith("/")) "http://185.196.41.31$it" else it
+            }
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.size(80.dp)
+            ) {
+                if (!coverUrl.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(coverUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.Album,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = album.album,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = album.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val totalMins = album.totalListenedMs / (1000 * 60)
+            Text(
+                text = "${album.playCount} ${getPlaysString(album.playCount)} • $totalMins мин.",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }

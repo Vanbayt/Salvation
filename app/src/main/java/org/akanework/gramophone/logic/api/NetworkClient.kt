@@ -17,13 +17,15 @@ object NetworkClient {
 
     private var retrofit: Retrofit? = null
     private var tokenStorage: TokenStorage? = null
+    @Volatile
+    private var currentContext: Context? = null
 
     fun setTokenStorage(storage: TokenStorage) {
         tokenStorage = storage
     }
 
     fun getApi(context: Context? = null): GramophoneApi {
-        val appContext = context?.applicationContext
+        context?.applicationContext?.let { currentContext = it }
         if (retrofit == null) {
             // Создаем перехватчик (Interceptor), который добавляет токен
             val client = OkHttpClient.Builder()
@@ -31,8 +33,9 @@ object NetworkClient {
                     val original = chain.request()
                     val builder = original.newBuilder()
 
-                    // Достаем токен через TokenStorage или fallback на AuthManager
-                    val token = tokenStorage?.getToken() ?: appContext?.let { AuthManager.getToken(it) }
+                    // Достаем токен через TokenStorage или fallback на AuthManager динамически
+                    val ctx = currentContext ?: context?.applicationContext
+                    val token = tokenStorage?.getToken() ?: ctx?.let { AuthManager.getToken(it) }
 
                     if (!token.isNullOrEmpty()) {
                         builder.header("Authorization", "Bearer $token")

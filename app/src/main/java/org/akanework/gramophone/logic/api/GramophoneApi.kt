@@ -215,12 +215,18 @@ data class PlaybackEventRequest(
     @SerializedName("title") val title: String,
     @SerializedName("artist") val artist: String,
     @SerializedName("album") val album: String? = null,
+    @SerializedName("album_id") val albumId: String? = null,
+    @SerializedName("release_year") val releaseYear: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
     @SerializedName("duration_ms") val durationMs: Long,
     @SerializedName("listened_ms") val listenedMs: Long,
     @SerializedName("timestamp") val timestamp: Long,
     @SerializedName("is_completed") val isCompleted: Boolean,
-    @SerializedName("context_source") val contextSource: String? = null
+    @SerializedName("context_source") val contextSource: String? = null,
+    @SerializedName("repeat_count") val repeatCount: Int = 0,
+    @SerializedName("rewind_count") val rewindCount: Int = 0,
+    @SerializedName("skipped_at_ms") val skippedAtMs: Long? = null,
+    @SerializedName("session_id") val sessionId: String? = null
 )
 
 @Keep
@@ -230,10 +236,19 @@ data class BackendStatsSummary(
     @SerializedName("total_plays_count") val totalPlaysCount: Long,
     @SerializedName("unique_tracks_count") val uniqueTracksCount: Long,
     @SerializedName("unique_artists_count") val uniqueArtistsCount: Long,
+    @SerializedName("unique_albums_count") val uniqueAlbumsCount: Long = 0,
     @SerializedName("top_tracks") val topTracks: List<BackendTopTrack>,
     @SerializedName("top_artists") val topArtists: List<BackendTopArtist>,
+    @SerializedName("top_albums") val topAlbums: List<BackendTopAlbum> = emptyList(),
+    @SerializedName("eras") val eras: List<BackendEra> = emptyList(),
     @SerializedName("peak_hour") val peakHour: Int = 20,
-    @SerializedName("favorite_day_of_week") val favoriteDayOfWeek: String = "Пятница"
+    @SerializedName("favorite_day_of_week") val favoriteDayOfWeek: String = "Пятница",
+    @SerializedName("day_distribution") val dayDistribution: List<Float>? = null,
+    @SerializedName("hourly_distribution") val hourlyDistribution: List<Float>? = null,
+    @SerializedName("total_rewinds") val totalRewinds: Long = 0,
+    @SerializedName("total_repeats") val totalRepeats: Long = 0,
+    @SerializedName("early_skips_count") val earlySkipsCount: Long = 0,
+    @SerializedName("long_tracks_count") val longTracksCount: Long = 0
 )
 
 @Keep
@@ -253,6 +268,22 @@ data class BackendTopArtist(
     @SerializedName("cover_url") val coverUrl: String? = null,
     @SerializedName("play_count") val playCount: Long,
     @SerializedName("total_listened_ms") val totalListenedMs: Long
+)
+
+@Keep
+data class BackendTopAlbum(
+    @SerializedName("album") val album: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("play_count") val playCount: Long,
+    @SerializedName("total_listened_ms") val totalListenedMs: Long
+)
+
+@Keep
+data class BackendEra(
+    @SerializedName("era") val era: String,
+    @SerializedName("count") val count: Long,
+    @SerializedName("ratio") val ratio: Float
 )
 
 @Keep

@@ -23,13 +23,36 @@ object StatsTracker {
     private var activeTitle: String? = null
     private var activeArtist: String? = null
     private var activeAlbum: String? = null
+    private var activeAlbumId: String? = null
+    private var activeReleaseYear: Int? = null
     private var activeCoverUrl: String? = null
     private var activeDurationMs: Long = 0L
     private var activeContextSource: String? = null
 
+    private var activeRewindCount: Int = 0
+    private var activeRepeatCount: Int = 0
+    private var currentSessionId: String? = null
+    private var lastActiveTimeMs: Long = 0L
+
     private var sessionStartTimeMs: Long = 0L
     private var accumulatedListenedMs: Long = 0L
     private var isPlaying: Boolean = false
+
+    private fun getOrUpdateSessionId(now: Long): String {
+        val sid = currentSessionId
+        if (sid == null || (now - lastActiveTimeMs > 15 * 60 * 1000L)) {
+            val newSid = java.util.UUID.randomUUID().toString()
+            currentSessionId = newSid
+            lastActiveTimeMs = now
+            return newSid
+        }
+        lastActiveTimeMs = now
+        return sid
+    }
+
+    fun onRewind() {
+        activeRewindCount++
+    }
 
     internal fun getUserId(context: Context): String {
         val token = AuthManager.getToken(context)
@@ -44,9 +67,24 @@ object StatsTracker {
     /**
      * Вызывается при переключении трека в ExoPlayer.
      */
-    fun onMediaItemTransition(context: Context, newMediaItem: MediaItem?, currentlyPlaying: Boolean) {
+    fun onMediaItemTransition(
+        context: Context,
+        newMediaItem: MediaItem?,
+        currentlyPlaying: Boolean,
+        isRepeat: Boolean = false
+    ) {
+        val isSameTrackRepeat = isRepeat || (newMediaItem != null && newMediaItem.mediaId == activeTrackId)
+        if (isSameTrackRepeat) {
+            activeRepeatCount++
+        }
+
         // 1. Фиксируем предыдущий трек, если он был
         commitCurrentSession(context, isCompleted = false)
+
+        if (!isSameTrackRepeat) {
+            activeRepeatCount = 0
+        }
+        activeRewindCount = 0
 
         // 2. Инициализируем новый трек
         if (newMediaItem != null) {
@@ -55,6 +93,15 @@ object StatsTracker {
             activeTitle = meta.title?.toString() ?: "Unknown Track"
             activeArtist = meta.artist?.toString() ?: "Unknown Artist"
             activeAlbum = meta.albumTitle?.toString()
+            activeAlbumId = meta.extras?.getString("album_id")
+                ?: meta.extras?.getLong(uk.akane.libphonograph.items.EXTRA_ALBUM_ID, -1L)?.let { if (it == -1L) null else it.toString() }
+
+            activeReleaseYear = meta.releaseYear
+                ?: meta.recordingYear
+                ?: meta.extras?.getLong(uk.akane.libphonograph.items.EXTRA_ALBUM_YEAR, -1L)?.let { if (it == -1L) null else it.toInt() }
+                ?: meta.extras?.getInt("release_year")?.let { if (it <= 0) null else it }
+                ?: meta.extras?.getInt("year")?.let { if (it <= 0) null else it }
+
             activeCoverUrl = meta.artworkUri?.toString()
             activeDurationMs = meta.extras?.getLong("DURATION") ?: 0L
             activeContextSource = meta.extras?.getString("PLAYING_FROM")
@@ -63,6 +110,7 @@ object StatsTracker {
             isPlaying = currentlyPlaying
             if (currentlyPlaying) {
                 sessionStartTimeMs = System.currentTimeMillis()
+                lastActiveTimeMs = sessionStartTimeMs
             }
         } else {
             resetActiveTrack()
@@ -90,6 +138,7 @@ object StatsTracker {
                 return
             }
             sessionStartTimeMs = now
+            lastActiveTimeMs = now
             isPlaying = true
         }
     }
@@ -109,6 +158,9 @@ object StatsTracker {
         val title = activeTitle
         val artist = activeArtist
         val listened = accumulatedListenedMs
+        val completed = isCompleted || (activeDurationMs > 0 && listened >= (activeDurationMs * 0.85))
+        val skippedAt = if (!completed && listened > 0) listened else null
+        val sid = getOrUpdateSessionId(now)
 
         if (!trackId.isNullOrBlank() && !title.isNullOrBlank() && !artist.isNullOrBlank()) {
             if (listened in 1000L..25000L && !isCompleted) {
@@ -126,12 +178,18 @@ object StatsTracker {
                 title = title,
                 artist = artist,
                 album = activeAlbum,
+                albumId = activeAlbumId,
+                releaseYear = activeReleaseYear,
                 coverUrl = activeCoverUrl,
                 durationMs = activeDurationMs,
                 listenedMs = listened,
                 timestamp = now,
-                isCompleted = isCompleted || (activeDurationMs > 0 && listened >= (activeDurationMs * 0.85)),
+                isCompleted = completed,
                 contextSource = activeContextSource,
+                repeatCount = activeRepeatCount,
+                rewindCount = activeRewindCount,
+                skippedAtMs = skippedAt,
+                sessionId = sid,
                 isSynced = false
             )
 
@@ -164,6 +222,9 @@ object StatsTracker {
         val title = activeTitle
         val artist = activeArtist
         val listened = accumulatedListenedMs
+        val completed = activeDurationMs > 0 && listened >= (activeDurationMs * 0.85)
+        val skippedAt = if (!completed && listened > 0) listened else null
+        val sid = getOrUpdateSessionId(now)
 
         if (!trackId.isNullOrBlank() && !title.isNullOrBlank() && !artist.isNullOrBlank() && listened >= 5000L) {
             val event = PlaybackEvent(
@@ -172,12 +233,18 @@ object StatsTracker {
                 title = title,
                 artist = artist,
                 album = activeAlbum,
+                albumId = activeAlbumId,
+                releaseYear = activeReleaseYear,
                 coverUrl = activeCoverUrl,
                 durationMs = activeDurationMs,
                 listenedMs = listened,
                 timestamp = now,
-                isCompleted = activeDurationMs > 0 && listened >= (activeDurationMs * 0.85),
+                isCompleted = completed,
                 contextSource = activeContextSource,
+                repeatCount = activeRepeatCount,
+                rewindCount = activeRewindCount,
+                skippedAtMs = skippedAt,
+                sessionId = sid,
                 isSynced = false
             )
 
@@ -207,9 +274,13 @@ object StatsTracker {
         activeTitle = null
         activeArtist = null
         activeAlbum = null
+        activeAlbumId = null
+        activeReleaseYear = null
         activeCoverUrl = null
         activeDurationMs = 0L
         activeContextSource = null
+        activeRewindCount = 0
+        activeRepeatCount = 0
         sessionStartTimeMs = 0L
         accumulatedListenedMs = 0L
         isPlaying = false
@@ -229,12 +300,18 @@ object StatsTracker {
                 title = it.title,
                 artist = it.artist,
                 album = it.album,
+                albumId = it.albumId,
+                releaseYear = it.releaseYear,
                 coverUrl = it.coverUrl,
                 durationMs = it.durationMs,
                 listenedMs = it.listenedMs,
                 timestamp = it.timestamp,
                 isCompleted = it.isCompleted,
-                contextSource = it.contextSource
+                contextSource = it.contextSource,
+                repeatCount = it.repeatCount,
+                rewindCount = it.rewindCount,
+                skippedAtMs = it.skippedAtMs,
+                sessionId = it.sessionId
             )
         }
 

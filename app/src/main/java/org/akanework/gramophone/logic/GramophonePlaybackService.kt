@@ -1356,7 +1356,8 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         org.akanework.gramophone.logic.stats.StatsTracker.onMediaItemTransition(
             this,
             mediaItem,
-            endedWorkaroundPlayer?.isPlaying == true
+            endedWorkaroundPlayer?.isPlaying == true,
+            isRepeat = (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
         )
 
         // 🔥 Бесконечная волна (автодогрузка при приближении к концу очереди)
@@ -1516,6 +1517,13 @@ class GramophonePlaybackService : MediaLibraryService(), MediaSessionService.Lis
         newPosition: Player.PositionInfo,
         reason: Int
     ) {
+        if (reason == Player.DISCONTINUITY_REASON_SEEK &&
+            oldPosition.mediaItemIndex == newPosition.mediaItemIndex &&
+            newPosition.positionMs < oldPosition.positionMs
+        ) {
+            org.akanework.gramophone.logic.stats.StatsTracker.onRewind()
+        }
+
         if (oldPosition.periodUid != newPosition.periodUid) {
             var changed = false
             downstreamFormat.toSet().forEach {
