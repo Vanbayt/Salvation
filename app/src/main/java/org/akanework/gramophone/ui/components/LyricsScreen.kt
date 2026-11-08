@@ -372,109 +372,55 @@ fun LyricsScreen(
                         )
                     }
 
-                    // Translation Toggle Button
-                    FilledTonalIconButton(
-                        onClick = {
-                            val next = !isAutoTranslateEnabled
-                            isAutoTranslateEnabled = next
-                            defaultPrefs.edit().putBoolean("lyrics_auto_translate", next).apply()
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (isAutoTranslateEnabled) headerPrimaryColor.copy(alpha = 0.25f) else Color.Transparent,
-                            contentColor = if (isAutoTranslateEnabled) headerPrimaryColor else headerOnCardColor.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.size(38.dp)
+                    // Segmented Controls: [ Translate (START) | Play/Pause (END) ]
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Translate,
-                            contentDescription = "Translate",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                        PillSegmentButton(
+                            onClick = {
+                                val next = !isAutoTranslateEnabled
+                                isAutoTranslateEnabled = next
+                                defaultPrefs.edit().putBoolean("lyrics_auto_translate", next).apply()
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            position = PillPosition.START,
+                            containerColor = if (isAutoTranslateEnabled) headerPrimaryColor.copy(alpha = 0.22f) else headerOnCardColor.copy(alpha = 0.10f),
+                            contentColor = if (isAutoTranslateEnabled) headerPrimaryColor else headerOnCardColor.copy(alpha = 0.65f),
+                            width = 40.dp,
+                            height = 38.dp,
+                            cornerRadius = 19.dp,
+                            innerRadius = 4.dp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Translate,
+                                contentDescription = "Translate",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Play/Pause Button
-                    FilledIconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onPlayPauseToggle()
-                        },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onPlayPauseToggle()
+                            },
+                            position = PillPosition.END,
                             containerColor = headerPrimaryColor,
-                            contentColor = headerOnPrimaryColor
-                        ),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = "Play/Pause",
-                            modifier = Modifier.size(20.dp)
-                        )
+                            contentColor = headerOnPrimaryColor,
+                            width = 40.dp,
+                            height = 38.dp,
+                            cornerRadius = 19.dp,
+                            innerRadius = 4.dp
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = "Play/Pause",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
-
-            // M3 Expressive Source Switcher Segmented Bar [ Все | LRCLIB | NetEase | Kugou ]
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val sources = listOf(
-                    LyricsSource.ALL to "Все",
-                    LyricsSource.LRCLIB to "LRCLIB",
-                    LyricsSource.NETEASE to "NetEase",
-                    LyricsSource.KUGOU to "Kugou"
-                )
-                sources.forEachIndexed { idx, (src, label) ->
-                    val isSelected = selectedSource == src
-                    val pos = when (idx) {
-                        0 -> PillPosition.START
-                        sources.lastIndex -> PillPosition.END
-                        else -> PillPosition.MIDDLE
-                    }
-                    val bg by animateColorAsState(
-                        if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
-                        tween(200), label = "srcBg"
-                    )
-                    val fg by animateColorAsState(
-                        if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        tween(200), label = "srcFg"
-                    )
-                    PillSegmentButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onSourceSelected(src)
-                        },
-                        position = pos,
-                        containerColor = bg,
-                        contentColor = fg,
-                        modifier = Modifier.weight(1f),
-                        width = null,
-                        height = 36.dp,
-                        cornerRadius = 18.dp,
-                        innerRadius = 4.dp
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 11.5.sp
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(2.dp))
 
             // Main Content Area
             Box(

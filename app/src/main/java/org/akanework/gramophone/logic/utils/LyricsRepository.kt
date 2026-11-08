@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.media3.common.Metadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -75,57 +76,75 @@ object LyricsRepository {
             return@withContext null
         }
 
-        val cacheKey = "${preferredSource.name}|$rawArtist|$rawTitle|$durationMs"
+        val cacheKey = "$rawArtist|$rawTitle|$durationMs"
         val cached = lyricsCache.get(cacheKey)
         if (cached != null) {
             return@withContext cached
         }
 
-        // Try clean first (most accurate and fastest), then raw if different
-        val titlesToTry = listOfNotNull(cleanTitle.ifEmpty { null }, rawTitle.ifEmpty { null }).distinct()
-        val artistsToTry = listOfNotNull(cleanArtist.ifEmpty { null }, rawArtist.ifEmpty { null }).distinct()
-
         var result: LyricsResult? = null
 
-        // 1. Try LRCLIB
-        if (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.LRCLIB) {
-            for (t in titlesToTry) {
-                for (a in artistsToTry) {
-                    val lrclibResult = fetchFromLrclib(a, t, durationMs, options)
-                    if (lrclibResult != null) {
-                        result = lrclibResult
-                        break
-                    }
-                }
-                if (result != null) break
+        // 1. Fast Path: Try LRCLIB with clean metadata (most accurate, <400ms)
+        if (cleanTitle.isNotEmpty()) {
+            val lrclibClean = fetchFromLrclib(cleanArtist, cleanTitle, durationMs, options)
+            if (lrclibClean != null) {
+                result = lrclibClean
             }
         }
 
-        // 2. Try NetEase Music
-        if (result == null && (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.NETEASE)) {
-            for (t in titlesToTry) {
-                for (a in artistsToTry) {
-                    val neteaseResult = fetchFromNetease(a, t, options)
-                    if (neteaseResult != null) {
-                        result = neteaseResult
-                        break
-                    }
-                }
-                if (result != null) break
+        // If not found and raw is different, try raw on LRCLIB
+        if ((result == null || !result.isSynced) && rawTitle != cleanTitle && rawTitle.isNotEmpty()) {
+            val lrclibRaw = fetchFromLrclib(rawArtist.ifEmpty { cleanArtist }, rawTitle, durationMs, options)
+            if (lrclibRaw != null && (result == null || lrclibRaw.isSynced)) {
+                result = lrclibRaw
             }
         }
 
-        // 3. Try Kugou Music
-        if (result == null && (preferredSource == LyricsSource.ALL || preferredSource == LyricsSource.KUGOU)) {
-            for (t in titlesToTry) {
-                for (a in artistsToTry) {
-                    val kugouResult = fetchFromKugou(a, t, durationMs, options)
-                    if (kugouResult != null) {
-                        result = kugouResult
-                        break
-                    }
+        // 2. If LRCLIB had nothing or only plain lyrics, query NetEase for synced lyrics
+        if (result == null || !result.isSynced) {
+            val artistToQuery = cleanArtist.ifEmpty { rawArtist }
+            val titleToQuery = cleanTitle.ifEmpty { rawTitle }
+            val neteaseResult = fetchFromNetease(artistToQuery, titleToQuery, options)
+            if (neteaseResult != null && (result == null || neteaseResult.isSynced)) {
+                result = neteaseResult
+            }
+        }
+
+        // 3. If still nothing or plain lyrics, query Kugou
+        if (result == null || !result.isSynced) {
+            val artistToQuery = cleanArtist.ifEmpty { rawArtist }
+            val titleToQuery = cleanTitle.ifEmpty { rawTitle }
+            val kugouResult = fetchFromKugou(artistToQuery, titleToQuery, durationMs, options)
+            if (kugouResult != null && (result == null || kugouResult.isSynced)) {
+                result = kugouResult
+            }
+        }
+
+        // Convert UnsyncedLyrics to SyncedLyrics with pacing so it animates and translates
+        if (result?.lyrics is SemanticLyrics.UnsyncedLyrics) {
+            val unsynced = result.lyrics as SemanticLyrics.UnsyncedLyrics
+            val rawLines = unsynced.unsyncedText.filter { it.first.trim().isNotBlank() && it.first.trim() != "null" }
+            if (rawLines.isNotEmpty()) {
+                val totalMs = if (durationMs > 10000L) durationMs else (rawLines.size * 3500L).coerceAtLeast(30000L)
+                val lineInterval = (totalMs / rawLines.size).coerceAtLeast(1000L)
+                val convertedLines = rawLines.mapIndexed { idx, (text, speaker) ->
+                    val start = (idx * lineInterval).toULong()
+                    val end = ((idx + 1) * lineInterval).toULong()
+                    SemanticLyrics.LyricLine(
+                        text = text,
+                        start = start,
+                        end = end,
+                        endIsImplicit = false,
+                        words = null,
+                        speaker = speaker,
+                        isTranslated = false,
+                        translation = null
+                    )
                 }
-                if (result != null) break
+                result = result.copy(
+                    lyrics = SemanticLyrics.SyncedLyrics(convertedLines),
+                    isSynced = false
+                )
             }
         }
 
@@ -145,21 +164,18 @@ object LyricsRepository {
             val linesToTranslate = syncedLyrics.text.filter { it.text.isNotBlank() && it.translation.isNullOrBlank() }
             if (linesToTranslate.isEmpty()) return
 
-            // If text is already predominantly Cyrillic (e.g. Russian song), skip translation
-            val russianLettersCount = linesToTranslate.sumOf { line ->
-                line.text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+            // Only translate lines that are not already predominantly Cyrillic
+            val nonRussianLines = linesToTranslate.filter { line ->
+                val cyrillicCount = line.text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+                val letterCount = line.text.count { it.isLetter() }
+                letterCount == 0 || (cyrillicCount.toFloat() / letterCount.toFloat()) < 0.40f
             }
-            val totalLettersCount = linesToTranslate.sumOf { line ->
-                line.text.count { it.isLetter() }
-            }
-            if (totalLettersCount > 0 && (russianLettersCount.toFloat() / totalLettersCount.toFloat()) > 0.35f) {
-                return
-            }
+            if (nonRussianLines.isEmpty()) return
 
-            // Batch into chunks of 15 lines max to avoid HTTP 414 URI Too Long
+            // Batch into chunks of 15 lines max for clean alignment and fast response
             val chunkSize = 15
-            for (chunkStart in linesToTranslate.indices step chunkSize) {
-                val chunk = linesToTranslate.subList(chunkStart, (chunkStart + chunkSize).coerceAtMost(linesToTranslate.size))
+            for (chunkStart in nonRussianLines.indices step chunkSize) {
+                val chunk = nonRussianLines.subList(chunkStart, (chunkStart + chunkSize).coerceAtMost(nonRussianLines.size))
                 translateChunk(chunk)
             }
         } catch (e: Exception) {
@@ -168,47 +184,90 @@ object LyricsRepository {
     }
 
     private fun translateChunk(chunk: List<SemanticLyrics.LyricLine>) {
-        try {
-            val batchText = StringBuilder()
-            chunk.forEach { line ->
-                batchText.append(line.text.replace("\n", " ").trim()).append("\n")
+        if (chunk.isEmpty()) return
+        val batchText = chunk.joinToString("\n") { it.text.replace("\n", " ").trim() }
+
+        // Primary: Google Translate client=at via POST (reliable, no 429 rate limit)
+        if (tryGoogleTranslatePost("at", batchText, chunk)) return
+
+        // Secondary fallback: Google Translate client=tw-ob via POST
+        if (tryGoogleTranslatePost("tw-ob", batchText, chunk)) return
+
+        // Tertiary fallback: MyMemory API line by line for remaining lines
+        for (line in chunk) {
+            if (line.translation.isNullOrBlank()) {
+                tryMyMemoryLine(line)
             }
+        }
+    }
 
-            val encoded = URLEncoder.encode(batchText.toString(), "UTF-8")
-            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=$encoded"
+    private fun tryGoogleTranslatePost(clientName: String, batchText: String, chunk: List<SemanticLyrics.LyricLine>): Boolean {
+        try {
+            val formBody = FormBody.Builder()
+                .add("q", batchText)
+                .build()
 
+            val url = "https://translate.googleapis.com/translate_a/single?client=$clientName&sl=auto&tl=ru&dt=t"
             val request = Request.Builder()
                 .url(url)
+                .post(formBody)
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                 .build()
 
             val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val jsonStr = response.body?.string() ?: return
-                val jsonArray = JSONArray(jsonStr)
-                val sentencesArray = jsonArray.optJSONArray(0) ?: return
+            if (!response.isSuccessful) return false
 
-                val translatedTextBuilder = StringBuilder()
-                for (i in 0 until sentencesArray.length()) {
-                    val sentence = sentencesArray.optJSONArray(i) ?: continue
-                    val transSegment = sentence.optString(0, "")
-                    translatedTextBuilder.append(transSegment)
-                }
+            val jsonStr = response.body?.string() ?: return false
+            if (jsonStr.startsWith("<")) return false // HTML error/captcha
 
-                val translatedLines = translatedTextBuilder.toString().split("\n")
-                var transIdx = 0
-                chunk.forEach { line ->
-                    if (transIdx < translatedLines.size) {
-                        val trans = translatedLines[transIdx].trim()
-                        if (trans.isNotEmpty() && trans.lowercase() != line.text.trim().lowercase()) {
-                            line.translation = trans
-                        }
-                        transIdx++
+            val jsonArray = JSONArray(jsonStr)
+            val sentencesArray = jsonArray.optJSONArray(0) ?: return false
+
+            val translatedTextBuilder = StringBuilder()
+            for (i in 0 until sentencesArray.length()) {
+                val sentence = sentencesArray.optJSONArray(i) ?: continue
+                val transSegment = sentence.optString(0, "")
+                translatedTextBuilder.append(transSegment)
+            }
+
+            val translatedLines = translatedTextBuilder.toString().split("\n")
+            var transIdx = 0
+            var anyAssigned = false
+            chunk.forEach { line ->
+                if (transIdx < translatedLines.size) {
+                    val trans = translatedLines[transIdx].trim()
+                    if (trans.isNotEmpty() && !trans.equals(line.text.trim(), ignoreCase = true)) {
+                        line.translation = trans
+                        anyAssigned = true
                     }
+                    transIdx++
+                }
+            }
+            return anyAssigned
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
+    private fun tryMyMemoryLine(line: SemanticLyrics.LyricLine) {
+        try {
+            val encoded = URLEncoder.encode(line.text.trim(), "UTF-8")
+            val url = "https://api.mymemory.translated.net/get?q=$encoded&langpair=auto|ru"
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", "SalvationApp/1.0")
+                .build()
+            val resp = client.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val jsonStr = resp.body?.string() ?: return
+                val json = JSONObject(jsonStr)
+                val trans = json.optJSONObject("responseData")?.optString("translatedText")?.trim() ?: ""
+                if (trans.isNotEmpty() && !trans.equals(line.text.trim(), ignoreCase = true)) {
+                    line.translation = trans
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            // ignore
         }
     }
 
