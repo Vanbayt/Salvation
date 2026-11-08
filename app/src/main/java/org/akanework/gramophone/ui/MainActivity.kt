@@ -102,6 +102,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.lerp
 import org.akanework.gramophone.ui.components.library.AudioQualityBadge
+import org.akanework.gramophone.ui.components.PillSegmentButton
+import org.akanework.gramophone.ui.components.PillPosition
 import coil3.request.allowHardware
 import coil3.request.SuccessResult
 import coil3.BitmapImage
@@ -1817,80 +1819,113 @@ class MainActivity : BaseActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilledTonalIconButton(
-                        onClick = onClose,
+                    // Слева: "СЕЙЧАС ИГРАЕТ" и источник в одной строке
+                    Surface(
                         shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, "Close", modifier = Modifier.size(28.dp))
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 8.dp)
-                    ) {
-                        Text(
-                            "СЕЙЧАС ИГРАЕТ",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.4.sp,
-                                fontSize = 10.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    org.akanework.gramophone.ui.fragments.QueueBottomSheetFragment().show(this@MainActivity.supportFragmentManager, "QUEUE_SHEET")
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_library),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = playingFrom,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.5.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            .padding(end = 12.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                org.akanework.gramophone.ui.fragments.QueueBottomSheetFragment().show(this@MainActivity.supportFragmentManager, "QUEUE_SHEET")
                             }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                text = "СЕЙЧАС ИГРАЕТ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.8.sp,
+                                    fontSize = 10.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.ic_library),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = playingFrom,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.5.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
-                    FilledTonalIconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
-                        },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.size(44.dp)
+
+                    // Справа: Segmented Pill Group (Текст + 3 точки) в стиле референса
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        Icon(Icons.Rounded.MoreVert, "Menu", modifier = Modifier.size(22.dp))
+                        // 1. Кнопка текста (Lyrics)
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val targetState = !showLyricsScreen
+                                showLyricsScreen = targetState
+                                if (targetState && currentLyricsResult == null && !isLyricsLoading) {
+                                    loadLyrics()
+                                }
+                            },
+                            position = PillPosition.START,
+                            containerColor = if (showLyricsScreen) {
+                                dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
+                            },
+                            contentColor = if (showLyricsScreen) {
+                                dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            width = 48.dp,
+                            height = 42.dp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Lyrics,
+                                contentDescription = "Текст песни",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        // 2. Кнопка опций (3 точки)
+                        PillSegmentButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                org.akanework.gramophone.ui.fragments.PlayerMenuBottomSheet().show(this@MainActivity.supportFragmentManager, "PLAYER_MENU_SHEET")
+                            },
+                            position = PillPosition.END,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            width = 48.dp,
+                            height = 42.dp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Меню",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -2478,23 +2513,6 @@ class MainActivity : BaseActivity() {
                                             val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(this@MainActivity)
                                             if (newLikeState) api.likeTrack(currentTrackId).execute() else api.unlikeTrack(currentTrackId).execute()
                                         } catch (_: Exception) {}
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            // 4. Lyrics
-                            SegmentedCapsuleBtn(
-                                icon = Icons.Rounded.Lyrics,
-                                isActive = showLyricsScreen,
-                                activeBg = dynamicArtworkColors?.playerActiveContainer ?: MaterialTheme.colorScheme.primaryContainer,
-                                activeFg = dynamicArtworkColors?.playerOnActiveContainer ?: MaterialTheme.colorScheme.onPrimaryContainer,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    val targetState = !showLyricsScreen
-                                    showLyricsScreen = targetState
-                                    if (targetState && currentLyricsResult == null && !isLyricsLoading) {
-                                        loadLyrics()
                                     }
                                 },
                                 modifier = Modifier.weight(1f)

@@ -43,6 +43,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import org.akanework.gramophone.ui.components.PillPosition
+import org.akanework.gramophone.ui.components.PillSegmentButton
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -154,10 +156,10 @@ fun LibraryScreen(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    // Кнопка поиска (Большая с круглой плашкой)
-                    FilledTonalIconButton(
+                    // 1. Кнопка поиска
+                    PillSegmentButton(
                         onClick = {
                             if (isSearchActive) {
                                 isSearchActive = false
@@ -167,32 +169,30 @@ fun LibraryScreen(
                                 isSearchActive = true
                             }
                         },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.size(48.dp)
+                        position = if (isSearchActive) PillPosition.STANDALONE else PillPosition.START,
+                        containerColor = if (isSearchActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (isSearchActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        width = 46.dp,
+                        height = 44.dp
                     ) {
                         Icon(
                             imageVector = if (isSearchActive) Icons.Rounded.Close else Icons.Rounded.Search,
                             contentDescription = if (isSearchActive) "Close Search" else "Search",
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    // Кнопка статистики и итогов года
+                    // 2. Кнопка статистики и итогов года
                     if (!isSearchActive) {
-                        FilledTonalIconButton(
+                        PillSegmentButton(
                             onClick = {
                                 activity?.startFragment(org.akanework.gramophone.ui.fragments.stats.StatsFragment.newInstance())
                             },
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier.size(48.dp)
+                            position = PillPosition.MIDDLE,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            width = 46.dp,
+                            height = 44.dp
                         ) {
                             Icon(
                                 painter = androidx.compose.ui.res.painterResource(id = org.akanework.gramophone.R.drawable.ic_equalizer),
@@ -202,23 +202,22 @@ fun LibraryScreen(
                         }
                     }
 
-                    // Кнопка настроек (Большая с круглой плашкой)
+                    // 3. Кнопка настроек
                     if (!isSearchActive) {
-                        FilledTonalIconButton(
+                        PillSegmentButton(
                             onClick = {
                                 activity?.startFragment(SettingsFragment())
                             },
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(48.dp)
+                            position = PillPosition.END,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            width = 46.dp,
+                            height = 44.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Settings,
                                 contentDescription = "Settings",
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }

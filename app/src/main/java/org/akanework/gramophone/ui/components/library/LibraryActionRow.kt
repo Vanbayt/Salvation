@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.CircularProgressIndicator
+import org.akanework.gramophone.ui.components.PillPosition
+import org.akanework.gramophone.ui.components.PillSegmentButton
 
 @Composable
 fun LibraryActionRow(
@@ -114,25 +116,25 @@ fun LibraryActionRow(
             }
         }
 
-        // Правая группа: Кнопка сортировки, прыжка к треку и скачивания
+        // Правая группа: Кнопка прыжка к треку, фильтрации и скачивания (в стиле референса)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            // Кнопка быстрого перехода к играющему треку
-            AnimatedVisibility(
-                visible = showLocateButton,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
-            ) {
-                FilledTonalIconButton(
+            val hasLocate = showLocateButton
+            val hasDownload = onDownloadClick != null
+
+            // 1. Кнопка быстрого перехода к играющему треку (Найти трек)
+            if (hasLocate) {
+                PillSegmentButton(
                     onClick = onLocateClick,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = colors.primaryContainer,
-                        contentColor = colors.onPrimaryContainer
-                    ),
-                    modifier = Modifier.size(38.dp)
+                    position = PillPosition.START,
+                    containerColor = colors.primaryContainer,
+                    contentColor = colors.onPrimaryContainer,
+                    width = 42.dp,
+                    height = 38.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MyLocation,
@@ -142,15 +144,22 @@ fun LibraryActionRow(
                 }
             }
 
-            // Кнопка открытия параметров сортировки
-            FilledTonalIconButton(
+            // 2. Кнопка параметров сортировки и фильтрации (Фильтрация)
+            val sortPos = when {
+                hasLocate && hasDownload -> PillPosition.MIDDLE
+                hasLocate && !hasDownload -> PillPosition.END
+                !hasLocate && hasDownload -> PillPosition.START
+                else -> PillPosition.STANDALONE
+            }
+            PillSegmentButton(
                 onClick = onSortClick,
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
-                    contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant
-                ),
-                modifier = Modifier.size(38.dp)
+                position = sortPos,
+                containerColor = if (isFilterActive) colors.primaryContainer else colors.surfaceContainerHigh,
+                contentColor = if (isFilterActive) colors.primary else colors.onSurfaceVariant,
+                width = 42.dp,
+                height = 38.dp,
+                cornerRadius = 20.dp,
+                innerRadius = 5.dp
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Sort,
@@ -159,23 +168,24 @@ fun LibraryActionRow(
                 )
             }
 
-            // Кнопка скачивания медиатеки (FLAC-style индикатор / Загрузка)
+            // 3. Кнопка скачивания медиатеки (Скачивание треков)
             if (onDownloadClick != null) {
-                FilledTonalIconButton(
+                PillSegmentButton(
                     onClick = onDownloadClick,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (isAllDownloaded) colors.primaryContainer else colors.surfaceContainerHigh,
-                        contentColor = if (isAllDownloaded) colors.primary else colors.onSurfaceVariant
-                    ),
-                    modifier = Modifier.size(38.dp)
+                    position = PillPosition.END,
+                    containerColor = if (isAllDownloaded) colors.primaryContainer else colors.surfaceContainerHigh,
+                    contentColor = if (isAllDownloaded) colors.primary else colors.onSurfaceVariant,
+                    width = 42.dp,
+                    height = 38.dp,
+                    cornerRadius = 20.dp,
+                    innerRadius = 5.dp
                 ) {
                     when {
                         isDownloading -> {
                             Box(contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
                                     progress = { downloadPercent / 100f },
-                                    modifier = Modifier.size(26.dp),
+                                    modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.5.dp,
                                     color = colors.primary
                                 )
@@ -194,7 +204,7 @@ fun LibraryActionRow(
                                 painter = androidx.compose.ui.res.painterResource(org.akanework.gramophone.R.drawable.ic_check_circle),
                                 contentDescription = "Медиатека скачана",
                                 tint = colors.primary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                         else -> {
