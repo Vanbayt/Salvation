@@ -1337,9 +1337,11 @@ fun PixelTopAlbumCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            val totalMins = album.totalListenedMs / (1000 * 60)
+            val totalHours = album.totalListenedMs / (1000 * 60 * 60)
+            val totalMins = (album.totalListenedMs / (1000 * 60)) % 60
+            val timeStr = if (totalHours > 0) "$totalHours ч. $totalMins м." else "$totalMins мин."
             Text(
-                text = "${album.playCount} ${getPlaysString(album.playCount)} • $totalMins мин.",
+                text = "${album.playCount} ${getPlaysString(album.playCount)} • $timeStr",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center

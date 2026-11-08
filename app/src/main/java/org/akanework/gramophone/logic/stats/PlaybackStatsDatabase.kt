@@ -344,18 +344,34 @@ class PlaybackStatsDatabase private constructor(context: Context) :
             e.printStackTrace()
         }
 
-        // 4. Топ 5 альбомов
+        // 4. Топ 5 альбомов: считаем сессии прослушивания (минимум 3 мин или 2 трека), а не каждый трек по отдельности
         val topAlbums = mutableListOf<TopAlbumStat>()
         try {
+            val albumArgs = if (since > 0) arrayOf(userId, since.toString(), userId, since.toString()) else arrayOf(userId, userId)
             val albumQuery = """
-                SELECT COALESCE(album, ''), artist, MAX(cover_url), COUNT(*) as play_cnt, SUM(listened_ms) as sum_time
-                FROM playback_events
-                WHERE user_id = ? AND album IS NOT NULL AND album != '' $timeFilter
-                GROUP BY album, artist
+                WITH album_qualifying_sessions AS (
+                    SELECT album, artist, COALESCE(session_id, strftime('%Y-%m-%d %H', datetime(timestamp/1000, 'unixepoch')) || ':' || album) as sid
+                    FROM playback_events
+                    WHERE user_id = ? AND album IS NOT NULL AND album != '' $timeFilter
+                    GROUP BY album, artist, sid
+                    HAVING SUM(listened_ms) >= 180000 OR COUNT(*) >= 2
+                )
+                SELECT 
+                    p.album,
+                    p.artist,
+                    MAX(p.cover_url),
+                    CASE WHEN COUNT(DISTINCT q.sid) > 0 THEN COUNT(DISTINCT q.sid) ELSE 1 END as play_cnt,
+                    SUM(p.listened_ms) as sum_time
+                FROM playback_events p
+                LEFT JOIN album_qualifying_sessions q 
+                    ON p.album = q.album AND p.artist = q.artist 
+                    AND COALESCE(p.session_id, strftime('%Y-%m-%d %H', datetime(p.timestamp/1000, 'unixepoch')) || ':' || p.album) = q.sid
+                WHERE p.user_id = ? AND p.album IS NOT NULL AND p.album != '' $timeFilter
+                GROUP BY p.album, p.artist
                 ORDER BY sum_time DESC, play_cnt DESC
                 LIMIT 5
             """.trimIndent()
-            db.rawQuery(albumQuery, args).use { cursor ->
+            db.rawQuery(albumQuery, albumArgs).use { cursor ->
                 while (cursor.moveToNext()) {
                     topAlbums.add(
                         TopAlbumStat(
