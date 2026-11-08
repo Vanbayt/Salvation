@@ -277,7 +277,7 @@ class PlaybackStatsDatabase private constructor(context: Context) :
                 }
             }
 
-            val qLong = "SELECT COUNT(*) FROM playback_events WHERE user_id = ? AND duration_ms >= 420000 $timeFilter"
+            val qLong = "SELECT COUNT(*) FROM playback_events WHERE user_id = ? AND (listened_ms >= 420000 OR (duration_ms >= 420 AND duration_ms < 100000) OR duration_ms >= 420000) $timeFilter"
             db.rawQuery(qLong, args).use { cursor ->
                 if (cursor.moveToFirst()) {
                     longTracksCount = cursor.getLong(0)

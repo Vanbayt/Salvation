@@ -102,8 +102,8 @@ object StatsTracker {
                 ?: meta.extras?.getInt("release_year")?.let { if (it <= 0) null else it }
                 ?: meta.extras?.getInt("year")?.let { if (it <= 0) null else it }
 
-            activeCoverUrl = meta.artworkUri?.toString()
-            activeDurationMs = meta.extras?.getLong("DURATION") ?: 0L
+            val rawDur = meta.extras?.getLong("DURATION") ?: 0L
+            activeDurationMs = if (rawDur in 1..99999) rawDur * 1000L else rawDur
             activeContextSource = meta.extras?.getString("PLAYING_FROM")
 
             accumulatedListenedMs = 0L
