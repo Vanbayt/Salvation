@@ -19,6 +19,16 @@ import org.akanework.gramophone.ui.fragments.BaseFragment
 
 class StatsFragment : BaseFragment(false) {
 
+    override fun onStart() {
+        super.onStart()
+        (requireActivity() as? MainActivity)?.isGlobalUiVisible = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (requireActivity() as? MainActivity)?.isGlobalUiVisible = true
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
