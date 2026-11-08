@@ -94,6 +94,16 @@ class ArtistFragment : Fragment() {
         return composeView
     }
 
+    override fun onStart() {
+        super.onStart()
+        (activity as? MainActivity)?.isBottomNavVisible = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (activity as? MainActivity)?.isBottomNavVisible = true
+    }
+
     private fun getThemeColorScheme(): ColorScheme {
         return org.akanework.gramophone.ui.theme.AppThemeHelper.getColorScheme(requireContext())
     }
@@ -1015,26 +1025,67 @@ fun ArtistDetailScreen(
             }
         }
 
-        // ВЕРХНИЙ ТУЛБАР
-        Row(
+        val isScrolledPastHero by remember {
+            derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 300 }
+        }
+        val topBarBg by animateColorAsState(
+            if (isScrolledPastHero) MaterialTheme.colorScheme.surface.copy(alpha = 0.94f) else Color.Transparent,
+            tween(250), label = "artistTopBarBg"
+        )
+
+        // ВЕРХНИЙ ТУЛБАР С ПЛАВНЫМ ПОЯВЛЕНИЕМ ЗАГОЛОВКА
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .align(Alignment.TopCenter),
+            color = topBarBg
         ) {
-            FilledTonalIconButton(
-                onClick = onBackClick,
-                modifier = Modifier.size(46.dp),
-                shape = CircleShape
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(22.dp)
-                )
+                FilledTonalIconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(44.dp),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (isScrolledPastHero) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Назад",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = isScrolledPastHero,
+                    enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { -it / 2 },
+                    exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 2 },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)
+                ) {
+                    Text(
+                        text = artist?.name ?: "",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (!isScrolledPastHero) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
 

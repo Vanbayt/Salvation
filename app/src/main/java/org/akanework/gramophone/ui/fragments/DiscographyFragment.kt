@@ -83,6 +83,16 @@ class DiscographyFragment : Fragment() {
         return composeView
     }
 
+    override fun onStart() {
+        super.onStart()
+        (activity as? MainActivity)?.isBottomNavVisible = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (activity as? MainActivity)?.isBottomNavVisible = true
+    }
+
     private fun getThemeColorScheme(): ColorScheme {
         return org.akanework.gramophone.ui.theme.AppThemeHelper.getColorScheme(requireContext())
     }

@@ -166,6 +166,8 @@ class MainActivity : BaseActivity() {
     // Стейты плеера
     private var miniPlayerVisible by mutableStateOf(false)
     var isGlobalUiVisible by mutableStateOf(true)
+    var isBottomNavVisible by mutableStateOf(true)
+    var requestOpenLyrics by mutableStateOf(false)
     private var trackTitle by mutableStateOf("")
     private var trackArtist by mutableStateOf("")
     private var coverUrl by mutableStateOf("")
@@ -212,11 +214,23 @@ class MainActivity : BaseActivity() {
     }
 
     private var collapsePlayerAction: (() -> Unit)? = null
+    private var expandPlayerAction: (() -> Unit)? = null
 
     fun collapsePlayer() {
         runOnUiThread {
             collapsePlayerAction?.invoke()
         }
+    }
+
+    fun expandPlayer() {
+        runOnUiThread {
+            expandPlayerAction?.invoke()
+        }
+    }
+
+    fun openLyrics() {
+        expandPlayer()
+        requestOpenLyrics = true
     }
 
     private var isForeground = false
@@ -380,6 +394,8 @@ class MainActivity : BaseActivity() {
 
                 val collapsedBottomSpace = if (isExpandedScreen) {
                     navBarBottom + 16.dp
+                } else if (!isBottomNavVisible) {
+                    navBarBottom + 10.dp
                 } else {
                     navBarBottom + navBarOffset + navBarHeight + gap
                 }
@@ -418,8 +434,18 @@ class MainActivity : BaseActivity() {
                             }
                         }
                     }
+                    expandPlayerAction = {
+                        coroutineScope.launch {
+                            try {
+                                scaffoldState.bottomSheetState.expand()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
                     onDispose {
                         collapsePlayerAction = null
+                        expandPlayerAction = null
                     }
                 }
 
@@ -752,7 +778,7 @@ class MainActivity : BaseActivity() {
                         }
                     } else {
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = isGlobalUiVisible,
+                            visible = isGlobalUiVisible && isBottomNavVisible,
                             modifier = Modifier.align(Alignment.BottomCenter),
                             enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
                             exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
@@ -1077,6 +1103,12 @@ class MainActivity : BaseActivity() {
         var showLyricsScreen by remember { mutableStateOf(false) }
         LaunchedEffect(showLyricsScreen) {
             onLyricsStateChange(showLyricsScreen)
+        }
+        LaunchedEffect(requestOpenLyrics) {
+            if (requestOpenLyrics) {
+                showLyricsScreen = true
+                requestOpenLyrics = false
+            }
         }
 
         var showAudioFidelitySheet by remember { mutableStateOf(false) }

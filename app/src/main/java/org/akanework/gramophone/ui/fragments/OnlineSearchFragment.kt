@@ -78,7 +78,7 @@ class OnlineSearchFragment : Fragment() {
     private data class GenreCategory(
         val title: String,
         val query: String,
-        val gradient: Brush,
+        val accentColor: Color,
         val iconRes: Int
     )
 
@@ -182,14 +182,14 @@ class OnlineSearchFragment : Fragment() {
 
         val genres = remember {
             listOf(
-                GenreCategory("Рок & Альтернатива", "Рок", Brush.linearGradient(listOf(Color(0xFFE53935), Color(0xFFFF7043))), R.drawable.ic_equalizer),
-                GenreCategory("Поп-музыка", "Поп", Brush.linearGradient(listOf(Color(0xFF8E24AA), Color(0xFFFF4081))), R.drawable.ic_favorite_filled),
-                GenreCategory("Электроника & EDM", "Электроника", Brush.linearGradient(listOf(Color(0xFF00897B), Color(0xFF00E5FF))), R.drawable.ic_equalizer),
-                GenreCategory("Хип-хоп & Рэп", "Рэп", Brush.linearGradient(listOf(Color(0xFFFF8F00), Color(0xFFFFD54F))), R.drawable.ic_equalizer),
-                GenreCategory("Инди & Lo-Fi", "Инди", Brush.linearGradient(listOf(Color(0xFF2E7D32), Color(0xFF81C784))), R.drawable.ic_favorite_filled),
-                GenreCategory("Джаз & Соул", "Джаз", Brush.linearGradient(listOf(Color(0xFF3949AB), Color(0xFF7986CB))), R.drawable.ic_library),
-                GenreCategory("Саундтреки & Кино", "OST", Brush.linearGradient(listOf(Color(0xFF455A64), Color(0xFF90A4AE))), R.drawable.ic_library),
-                GenreCategory("Метал & Драйв", "Метал", Brush.linearGradient(listOf(Color(0xFF37474F), Color(0xFFD32F2F))), R.drawable.ic_equalizer)
+                GenreCategory("Рок & Альтернатива", "Рок", Color(0xFFE53935), R.drawable.ic_equalizer),
+                GenreCategory("Поп-музыка", "Поп", Color(0xFFD81B60), R.drawable.ic_favorite_filled),
+                GenreCategory("Электроника & EDM", "Электроника", Color(0xFF00ACC1), R.drawable.ic_equalizer),
+                GenreCategory("Хип-хоп & Рэп", "Рэп", Color(0xFFFB8C00), R.drawable.ic_equalizer),
+                GenreCategory("Инди & Lo-Fi", "Инди", Color(0xFF43A047), R.drawable.ic_favorite_filled),
+                GenreCategory("Джаз & Соул", "Джаз", Color(0xFF5E35B1), R.drawable.ic_library),
+                GenreCategory("Саундтреки & Кино", "OST", Color(0xFF546E7A), R.drawable.ic_library),
+                GenreCategory("Метал & Драйв", "Метал", Color(0xFFD32F2F), R.drawable.ic_equalizer)
             )
         }
 
@@ -445,29 +445,42 @@ class OnlineSearchFragment : Fragment() {
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp)
         ) {
-            items(filters.size) { index ->
-                val selected = selectedIndex == index
-                FilterChip(
-                    selected = selected,
-                    onClick = { onSelect(index) },
-                    label = {
-                        Text(
-                            text = filters[index],
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        labelColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = null
+            itemsIndexed(filters) { index, title ->
+                val isSelected = selectedIndex == index
+                val tabContainerColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                    animationSpec = tween(durationMillis = 200),
+                    label = "searchPillTabColor"
                 )
+                val tabContentColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "searchPillTabTextColor"
+                )
+
+                Surface(
+                    shape = CircleShape,
+                    color = tabContainerColor,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onSelect(index) }
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.5.sp
+                        ),
+                        color = tabContentColor,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                    )
+                }
             }
         }
     }
@@ -833,43 +846,61 @@ class OnlineSearchFragment : Fragment() {
         onClick: () -> Unit,
         modifier: Modifier = Modifier
     ) {
-        Card(
+        Surface(
             onClick = onClick,
-            modifier = modifier.height(100.dp),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            modifier = modifier.height(76.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
+            tonalElevation = 1.dp
         ) {
-            Box(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(genre.gradient)
-                    .padding(14.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = genre.title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    ),
-                    modifier = Modifier.align(Alignment.TopStart)
-                )
-
                 Surface(
                     shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier
-                        .size(36.dp)
-                        .align(Alignment.BottomEnd)
+                    color = genre.accentColor.copy(alpha = 0.16f),
+                    modifier = Modifier.size(42.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(id = genre.iconRes),
                             contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            tint = genre.accentColor,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = genre.title,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Коллекция",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
         }

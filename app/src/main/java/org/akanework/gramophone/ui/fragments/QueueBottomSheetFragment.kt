@@ -49,6 +49,11 @@ import org.akanework.gramophone.ui.components.library.MiniEqualizerIndicator
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
+import android.widget.Toast
+import org.akanework.gramophone.ui.components.PillSegmentButton
+import org.akanework.gramophone.ui.components.PillPosition
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+
 class QueueBottomSheetFragment : BottomSheetDialogFragment() {
 
     override fun onCreateView(
@@ -66,6 +71,8 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
                     var currentMediaIndex by remember { mutableIntStateOf(player?.currentMediaItemIndex ?: -1) }
                     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
                     var mediaItemCount by remember { mutableIntStateOf(player?.mediaItemCount ?: 0) }
+                    var isShuffle by remember { mutableStateOf(player?.shuffleModeEnabled == true) }
+                    var repeatMode by remember { mutableIntStateOf(player?.repeatMode ?: Player.REPEAT_MODE_OFF) }
 
                     // Live Player Listener
                     DisposableEffect(player) {
@@ -83,6 +90,14 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
                             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                                 currentMediaIndex = player.currentMediaItemIndex
                                 mediaItemCount = player.mediaItemCount
+                            }
+
+                            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                                isShuffle = shuffleModeEnabled
+                            }
+
+                            override fun onRepeatModeChanged(newRepeatMode: Int) {
+                                repeatMode = newRepeatMode
                             }
                         }
                         player.addListener(listener)
@@ -118,6 +133,52 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
                         currentIndex = currentMediaIndex,
                         isPlaying = isPlaying,
                         playingFrom = playingFrom,
+                        isShuffle = isShuffle,
+                        repeatMode = repeatMode,
+                        onToggleShuffle = {
+                            val next = !(player?.shuffleModeEnabled ?: false)
+                            player?.shuffleModeEnabled = next
+                            isShuffle = next
+                        },
+                        onToggleRepeat = {
+                            val next = when (player?.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                            player?.repeatMode = next
+                            repeatMode = next
+                        },
+                        onSavePlaylist = {
+                            val trackIds = allItems.mapNotNull { it.mediaId.toIntOrNull() }
+                            if (trackIds.isNotEmpty()) {
+                                val context = requireContext()
+                                val title = "Очередь ${java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}"
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    try {
+                                        val api = org.akanework.gramophone.logic.api.NetworkClient.getApi(context)
+                                        val resp = api.createPlaylist(org.akanework.gramophone.logic.api.PlaylistCreateRequest(title = title)).execute()
+                                        if (resp.isSuccessful && resp.body() != null) {
+                                            val plId = resp.body()!!.id
+                                            for (tId in trackIds) {
+                                                try {
+                                                    api.addTrackToPlaylist(plId, org.akanework.gramophone.logic.api.PlaylistTrackAddRequest(tId)).execute()
+                                                } catch (_: Exception) {}
+                                            }
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                Toast.makeText(context, "Сохранено в плейлист «$title»", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            Toast.makeText(context, "Ошибка сохранения плейлиста", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(requireContext(), "Нет треков для сохранения", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         onClose = { dismiss() },
                         onItemClick = { index ->
                             player?.seekToDefaultPosition(index)
@@ -178,6 +239,8 @@ fun DesktopQueueView(
     var currentMediaIndex by remember { mutableIntStateOf(player.currentMediaItemIndex) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var mediaItemCount by remember { mutableIntStateOf(player.mediaItemCount) }
+    var isShuffle by remember { mutableStateOf(player.shuffleModeEnabled) }
+    var repeatMode by remember { mutableIntStateOf(player.repeatMode) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -191,6 +254,12 @@ fun DesktopQueueView(
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                 currentMediaIndex = player.currentMediaItemIndex
                 mediaItemCount = player.mediaItemCount
+            }
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                isShuffle = shuffleModeEnabled
+            }
+            override fun onRepeatModeChanged(newRepeatMode: Int) {
+                repeatMode = newRepeatMode
             }
         }
         player.addListener(listener)
@@ -224,6 +293,25 @@ fun DesktopQueueView(
         currentIndex = currentMediaIndex,
         isPlaying = isPlaying,
         playingFrom = playingFrom,
+        isShuffle = isShuffle,
+        repeatMode = repeatMode,
+        onToggleShuffle = {
+            val next = !player.shuffleModeEnabled
+            player.shuffleModeEnabled = next
+            isShuffle = next
+        },
+        onToggleRepeat = {
+            val next = when (player.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+            player.repeatMode = next
+            repeatMode = next
+        },
+        onSavePlaylist = {
+            // Desktop save playlist
+        },
         onClose = onClose,
         onItemClick = { targetIndex ->
             player.seekTo(targetIndex, 0L)
@@ -252,6 +340,11 @@ private fun QueueScreenContent(
     currentIndex: Int,
     isPlaying: Boolean,
     playingFrom: String,
+    isShuffle: Boolean,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
+    onSavePlaylist: () -> Unit,
     onClose: () -> Unit,
     onItemClick: (Int) -> Unit,
     onMoveMediaItem: (Int, Int) -> Unit,
@@ -330,11 +423,11 @@ private fun QueueScreenContent(
                     .background(colors.onSurfaceVariant.copy(alpha = 0.35f))
             )
 
-            // Header Row
+            // Header Row (Заголовок, источник и кнопка закрытия)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -342,8 +435,9 @@ private fun QueueScreenContent(
                     Text(
                         text = "Очередь",
                         style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 24.sp
+                            fontWeight = FontWeight.Black,
+                            fontSize = 26.sp,
+                            letterSpacing = (-0.5).sp
                         ),
                         color = colors.onSurface
                     )
@@ -377,74 +471,192 @@ private fun QueueScreenContent(
                     }
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FilledTonalIconButton(
+                    onClick = onClose,
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = colors.surfaceContainerHigh,
+                        contentColor = colors.onSurfaceVariant
+                    ),
+                    modifier = Modifier.size(42.dp)
                 ) {
-                    // Кнопка перехода к играющему треку
-                    if (currentIndex >= 0) {
-                        FilledTonalIconButton(
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Закрыть очередь",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Сегментированный тулбар действий (2 группы PillSegmentButton)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Группа 1: Воспроизведение [ Перемешать | Повтор ]
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    val shuffleBg by animateColorAsState(
+                        if (isShuffle) colors.primaryContainer else colors.surfaceContainerHigh,
+                        tween(200), label = "qShufBg"
+                    )
+                    val shuffleFg by animateColorAsState(
+                        if (isShuffle) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                        tween(200), label = "qShufFg"
+                    )
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleShuffle()
+                        },
+                        position = PillPosition.START,
+                        containerColor = shuffleBg,
+                        contentColor = shuffleFg,
+                        modifier = Modifier.weight(1f),
+                        width = null,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Rounded.Shuffle, contentDescription = "Перемешать", modifier = Modifier.size(17.dp))
+                            Text(
+                                text = "Микс",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            )
+                        }
+                    }
+
+                    val isLoop = repeatMode != Player.REPEAT_MODE_OFF
+                    val loopBg by animateColorAsState(
+                        if (isLoop) colors.secondaryContainer else colors.surfaceContainerHigh,
+                        tween(200), label = "qLoopBg"
+                    )
+                    val loopFg by animateColorAsState(
+                        if (isLoop) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                        tween(200), label = "qLoopFg"
+                    )
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleRepeat()
+                        },
+                        position = PillPosition.END,
+                        containerColor = loopBg,
+                        contentColor = loopFg,
+                        modifier = Modifier.weight(1f),
+                        width = null,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                contentDescription = "Повтор",
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Text(
+                                text = if (repeatMode == Player.REPEAT_MODE_ONE) "1 трек" else "Повтор",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            )
+                        }
+                    }
+                }
+
+                // Группа 2: Управление очередью [ Найти трек (опционально) | Сохранить | Очистить ]
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    val hasLocate = currentIndex >= 0
+                    if (hasLocate) {
+                        PillSegmentButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 coroutineScope.launch {
                                     listState.animateScrollToItem(0)
                                 }
                             },
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = colors.primaryContainer,
-                                contentColor = colors.onPrimaryContainer
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.MyLocation,
-                                contentDescription = "Scroll to Playing",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    // Кнопка очистки очереди
-                    if (items.isNotEmpty()) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onClearQueue()
-                            },
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = colors.surfaceContainerHigh,
-                                contentColor = colors.error
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.DeleteSweep,
-                                contentDescription = "Clear Queue",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    // Кнопка закрытия
-                    FilledTonalIconButton(
-                        onClick = onClose,
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            position = PillPosition.START,
                             containerColor = colors.surfaceContainerHigh,
-                            contentColor = colors.onSurfaceVariant
-                        ),
-                        modifier = Modifier.size(40.dp)
+                            contentColor = colors.primary,
+                            modifier = Modifier.weight(0.7f),
+                            width = null,
+                            height = 40.dp,
+                            cornerRadius = 20.dp,
+                            innerRadius = 5.dp
+                        ) {
+                            Icon(Icons.Rounded.MyLocation, contentDescription = "К текущему треку", modifier = Modifier.size(17.dp))
+                        }
+                    }
+
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSavePlaylist()
+                        },
+                        position = if (hasLocate) PillPosition.MIDDLE else PillPosition.START,
+                        containerColor = colors.surfaceContainerHigh,
+                        contentColor = colors.onSurface,
+                        modifier = Modifier.weight(1f),
+                        width = null,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Close Queue",
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Сохранить", modifier = Modifier.size(17.dp))
+                            Text(
+                                text = "Плейлист",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            )
+                        }
+                    }
+
+                    PillSegmentButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onClearQueue()
+                        },
+                        position = PillPosition.END,
+                        containerColor = colors.surfaceContainerHigh,
+                        contentColor = colors.error,
+                        modifier = Modifier.weight(1f),
+                        width = null,
+                        height = 40.dp,
+                        cornerRadius = 20.dp,
+                        innerRadius = 5.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Rounded.DeleteSweep, contentDescription = "Очистить", modifier = Modifier.size(17.dp))
+                            Text(
+                                text = "Очистить",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            )
+                        }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             HorizontalDivider(
                 color = colors.outlineVariant.copy(alpha = 0.25f),
@@ -480,20 +692,24 @@ private fun QueueScreenContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // 1. СЕЙЧАС ИГРАЕТ
+                    // 1. СЕЙЧАС ИГРАЕТ (Выразительная Bento-карточка)
                     if (currentItem != null) {
-                        item(key = "header_now_playing") {
-                            QueueSectionHeader(title = "СЕЙЧАС ИГРАЕТ")
-                        }
-
                         item(key = "current_playing_track_${currentItem.mediaId}") {
                             NowPlayingQueueCard(
                                 mediaItem = currentItem,
                                 isPlaying = isPlaying,
+                                playingFrom = playingFrom,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onClose()
                                 }
+                            )
+                        }
+
+                        item(key = "divider_after_now_playing") {
+                            HorizontalDivider(
+                                color = colors.outlineVariant.copy(alpha = 0.2f),
+                                modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
                             )
                         }
                     }
@@ -641,6 +857,7 @@ private fun QueueSectionHeader(
 private fun NowPlayingQueueCard(
     mediaItem: MediaItem,
     isPlaying: Boolean,
+    playingFrom: String,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -663,24 +880,25 @@ private fun NowPlayingQueueCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = colors.primaryContainer,
-        tonalElevation = 4.dp
+        shape = RoundedCornerShape(22.dp),
+        color = colors.surfaceContainerHigh,
+        border = androidx.compose.foundation.BorderStroke(1.2.dp, colors.primary.copy(alpha = 0.35f)),
+        tonalElevation = 3.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Обложка с эквалайзером
             Box(
                 modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.surfaceVariant),
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
                 if (coverUrl.isNotEmpty()) {
@@ -694,7 +912,7 @@ private fun NowPlayingQueueCard(
                     Icon(
                         imageVector = Icons.Rounded.MusicNote,
                         contentDescription = null,
-                        tint = colors.onPrimaryContainer,
+                        tint = colors.primary,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -708,7 +926,7 @@ private fun NowPlayingQueueCard(
                     ) {
                         MiniEqualizerIndicator(
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -717,6 +935,37 @@ private fun NowPlayingQueueCard(
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                Surface(
+                    shape = CircleShape,
+                    color = colors.primary.copy(alpha = 0.14f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "СЕЙЧАС ИГРАЕТ • $playingFrom",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 9.5.sp,
+                                letterSpacing = 0.6.sp
+                            ),
+                            color = colors.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -727,7 +976,7 @@ private fun NowPlayingQueueCard(
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 15.5.sp
                         ),
-                        color = colors.onPrimaryContainer,
+                        color = colors.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -746,7 +995,7 @@ private fun NowPlayingQueueCard(
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp
                     ),
-                    color = colors.onPrimaryContainer.copy(alpha = 0.8f),
+                    color = colors.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -757,7 +1006,7 @@ private fun NowPlayingQueueCard(
             Icon(
                 imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
                 contentDescription = null,
-                tint = colors.onPrimaryContainer,
+                tint = colors.primary,
                 modifier = Modifier.size(24.dp)
             )
         }
